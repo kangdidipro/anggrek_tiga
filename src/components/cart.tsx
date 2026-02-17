@@ -5,7 +5,6 @@ import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger, SheetFooter } from '@/components/ui/sheet';
 import { useCart } from '@/hooks/use-cart';
 import { formatPrice } from '@/lib/utils';
-import Image from 'next/image';
 import OrderForm from './order-form';
 import { Separator } from './ui/separator';
 import { ScrollArea } from './ui/scroll-area';
@@ -40,14 +39,6 @@ export default function Cart() {
               <div className="flex flex-col gap-4 py-4">
                 {cartItems.map(({ product, quantity }) => (
                   <div key={product.id} className="flex items-center gap-4">
-                    <Image
-                      src={product.image.url}
-                      alt={product.name}
-                      width={64}
-                      height={64}
-                      className="rounded-md object-cover"
-                      data-ai-hint={product.image.hint}
-                    />
                     <div className="flex-1">
                       <p className="font-medium">{product.name}</p>
                       <p className="text-sm text-muted-foreground">
