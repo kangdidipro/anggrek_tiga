@@ -35,39 +35,45 @@ export default function Cart() {
         </SheetHeader>
         {cartItems.length > 0 ? (
           <>
-            <ScrollArea className="flex-1 pr-4 -mr-6">
-              <div className="space-y-4 py-4">
-                {cartItems.map(({ product, quantity }) => (
-                  <div key={product.id} className="flex items-start gap-4 rounded-md border bg-card p-3 shadow-sm">
-                    <div className="flex-1">
-                      <p className="font-medium leading-tight">{product.name}</p>
-                      <p className="text-sm text-muted-foreground">
-                        {quantity} x {formatPrice(product.price)}
-                      </p>
+            <ScrollArea className="flex-1 pr-6 -mr-6">
+              <div className="py-4 space-y-6">
+                <div className="space-y-4">
+                  {cartItems.map(({ product, quantity }) => (
+                    <div key={product.id} className="flex items-start gap-4 rounded-md border bg-card p-3 shadow-sm">
+                      <div className="flex-1">
+                        <p className="font-medium leading-tight">{product.name}</p>
+                        <p className="text-sm text-muted-foreground">
+                          {quantity} x {formatPrice(product.price)}
+                        </p>
+                      </div>
+                      <p className="font-semibold text-right text-sm">{formatPrice(product.price * quantity)}</p>
                     </div>
-                    <p className="font-semibold text-right text-sm">{formatPrice(product.price * quantity)}</p>
-                  </div>
-                ))}
+                  ))}
+                </div>
+              
+                <Separator />
+              
+                <div className="space-y-2 text-sm">
+                    <div className="flex justify-between">
+                        <span>Subtotal</span>
+                        <span>{formatPrice(cartTotal)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                        <span>Ongkos Antar</span>
+                        <span>{formatPrice(deliveryFee)}</span>
+                    </div>
+                    <Separator />
+                    <div className="flex justify-between font-bold text-base">
+                        <span>Total</span>
+                        <span>{formatPrice(finalTotal)}</span>
+                    </div>
+                </div>
+
+                <Separator />
+
+                <OrderForm cartItems={cartItems} total={finalTotal} deliveryFee={deliveryFee} setSheetOpen={setOpen} />
               </div>
             </ScrollArea>
-            <Separator />
-            <div className="space-y-2 text-sm">
-                <div className="flex justify-between">
-                    <span>Subtotal</span>
-                    <span>{formatPrice(cartTotal)}</span>
-                </div>
-                <div className="flex justify-between">
-                    <span>Ongkos Antar</span>
-                    <span>{formatPrice(deliveryFee)}</span>
-                </div>
-                <Separator />
-                <div className="flex justify-between font-bold text-base">
-                    <span>Total</span>
-                    <span>{formatPrice(finalTotal)}</span>
-                </div>
-            </div>
-            <Separator />
-            <OrderForm cartItems={cartItems} total={finalTotal} deliveryFee={deliveryFee} setSheetOpen={setOpen} />
           </>
         ) : (
           <div className="flex flex-1 flex-col items-center justify-center gap-4 text-center">
@@ -75,7 +81,7 @@ export default function Cart() {
             <p className="text-muted-foreground">Keranjang belanja Anda kosong.</p>
           </div>
         )}
-        <SheetFooter className="mt-auto">
+        <SheetFooter className="mt-auto pt-4 border-t">
           {cartItems.length > 0 && (
             <Button variant="outline" className="w-full" onClick={clearCart}>
               <Trash2 className="mr-2 h-4 w-4" />
