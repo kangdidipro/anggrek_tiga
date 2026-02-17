@@ -16,6 +16,7 @@ import { useState } from 'react';
 import { useUser, useFirestore, errorEmitter, FirestorePermissionError } from '@/firebase';
 import { collection, writeBatch, doc } from 'firebase/firestore';
 import { useRouter } from 'next/navigation';
+import Image from 'next/image';
 
 const formSchema = z.object({
   name: z.string().min(2, { message: 'Nama harus diisi minimal 2 karakter.' }),
@@ -49,6 +50,8 @@ export default function OrderForm({ cartItems, total, deliveryFee, setSheetOpen 
       address: '',
     },
   });
+
+  const paymentMethod = form.watch('paymentMethod');
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
     if (!user || !firestore) {
@@ -208,6 +211,22 @@ export default function OrderForm({ cartItems, total, deliveryFee, setSheetOpen 
                       QRIS (Bayar Sekarang)
                     </FormLabel>
                   </FormItem>
+                  
+                  {paymentMethod === 'QRIS' && (
+                     <div className="p-4 flex flex-col items-center justify-center rounded-md border text-center bg-card">
+                        <p className="text-sm font-medium mb-2">Pindai untuk Membayar</p>
+                        <div className="relative w-[250px] aspect-[2/3]">
+                            <Image
+                                src="https://storage.googleapis.com/studio-hosting-assets/qris.png"
+                                alt="QRIS Code"
+                                fill
+                                className="object-contain rounded-md"
+                            />
+                        </div>
+                        <p className="mt-2 text-sm text-muted-foreground">UMKM06 - ANGGREK</p>
+                     </div>
+                  )}
+
                   <FormItem className="flex items-center space-x-3 space-y-0 rounded-md border p-4 has-[:checked]:border-primary">
                     <FormControl>
                       <RadioGroupItem value="COD" />
