@@ -111,5 +111,16 @@ const recommendTakjilFlow = ai.defineFlow(
 export async function getRecommendedTakjil(
   input: RecommendationInput
 ): Promise<RecommendationOutput> {
-  return recommendTakjilFlow(input);
+  if (!process.env.GEMINI_API_KEY) {
+    console.warn("GEMINI_API_KEY is not set in .env. Skipping AI recommendations.");
+    // Return an empty response to prevent crashing the app and hide the component.
+    return { recommendations: [] };
+  }
+  try {
+    return await recommendTakjilFlow(input);
+  } catch (error) {
+    console.error("An error occurred while fetching AI recommendations:", error);
+    // Also return an empty response on other errors during the flow execution.
+    return { recommendations: [] };
+  }
 }
