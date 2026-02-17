@@ -5,6 +5,7 @@ import { Toaster } from '@/components/ui/toaster';
 import { CartProvider } from '@/context/cart-provider';
 import Header from '@/components/header';
 import { FirebaseClientProvider } from '@/firebase/client-provider';
+import { AdminProvider } from '@/context/admin-provider';
 
 export const metadata: Metadata = {
   title: 'Ramadhan Takjil Order',
@@ -25,13 +26,15 @@ export default function RootLayout({
       </head>
       <body className={cn('min-h-screen bg-background font-body antialiased')}>
         <FirebaseClientProvider>
-          <CartProvider>
-            <div className="relative flex min-h-screen flex-col">
-              <Header />
-              <main className="flex-1">{children}</main>
-            </div>
-            <Toaster />
-          </CartProvider>
+          <AdminProvider>
+            <CartProvider>
+              <div className="relative flex min-h-screen flex-col">
+                <Header />
+                <main className="flex-1">{children}</main>
+              </div>
+              <Toaster />
+            </CartProvider>
+          </AdminProvider>
         </FirebaseClientProvider>
       </body>
     </html>

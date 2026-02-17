@@ -1,9 +1,18 @@
-import { Soup, ShoppingBag } from 'lucide-react';
+'use client';
+
+import { Soup, ShoppingBag, UserCog } from 'lucide-react';
 import Cart from '@/components/cart';
 import Link from 'next/link';
 import { Button } from './ui/button';
+import { usePathname } from 'next/navigation';
 
 export default function Header() {
+  const pathname = usePathname();
+
+  if (pathname.startsWith('/admin')) {
+    return null;
+  }
+
   return (
     <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="container flex h-16 items-center">
@@ -16,6 +25,12 @@ export default function Header() {
           </a>
         </div>
         <div className="flex flex-1 items-center justify-end space-x-2">
+          <Button variant="ghost" size="icon" asChild>
+            <Link href="/admin">
+              <UserCog className="h-5 w-5" />
+              <span className="sr-only">Admin Panel</span>
+            </Link>
+          </Button>
           <Button variant="outline" size="icon" asChild>
             <Link href="/orders">
               <ShoppingBag className="h-5 w-5" />

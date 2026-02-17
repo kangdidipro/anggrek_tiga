@@ -96,8 +96,10 @@ service cloud.firestore {
        * @principle     Enforces document ownership via path parameter for all operations.
        */
       match /orders/{orderId} {
+        // WARNING: `list` is open to any signed-in user for the admin panel prototype.
+        // In production, secure this with custom claims for an admin role (e.g., `request.auth.token.admin == true`).
+        allow list: if isSignedIn();
         allow get: if isOwner(customerId);
-        allow list: if isOwner(customerId);
         allow create: if isOwner(customerId) && request.resource.data.customerId == customerId;
         allow update: if isExistingOwner(customerId) && request.resource.data.customerId == resource.data.customerId;
         allow delete: if isExistingOwner(customerId);
@@ -110,8 +112,9 @@ service cloud.firestore {
          * @principle     Inherits ownership from the parent document's path.
          */
         match /orderItems/{orderItemId} {
+          // WARNING: `list` is open to any signed-in user for the admin panel prototype.
+          allow list: if isSignedIn();
           allow get: if isOwner(customerId);
-          allow list: if isOwner(customerId);
           allow create: if isOwner(customerId)
                            && request.resource.data.customerId == customerId
                            && request.resource.data.orderId == orderId;
