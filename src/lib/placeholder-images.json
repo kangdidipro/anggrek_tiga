@@ -1,3 +1,196 @@
 {
-  "placeholderImages": []
+  "placeholderImages": [
+    {
+      "id": "prod_1",
+      "description": "Nasi Bakar Ayam",
+      "imageUrl": "https://images.unsplash.com/photo-1698556410824-4059a7ba055d?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHwxfHxncmlsbGVkJTIwcmljZXxlbnwwfHx8fDE3NzEzMjI5MzR8MA&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "grilled rice"
+    },
+    {
+      "id": "prod_2",
+      "description": "Nasi Bakar Cakalang",
+      "imageUrl": "https://images.unsplash.com/photo-1724365956437-1b7e1ade4cf7?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHwxfHxmaXNoJTIwcmljZXxlbnwwfHx8fDE3NzEzMjI5MzR8MA&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "fish rice"
+    },
+    {
+      "id": "prod_3",
+      "description": "Nasi Kebuli Kari Ayam",
+      "imageUrl": "https://picsum.photos/seed/3/600/400",
+      "imageHint": "kebuli rice"
+    },
+    {
+      "id": "prod_4",
+      "description": "Nasi Lemak Telur Balodo",
+      "imageUrl": "https://images.unsplash.com/photo-1770966485209-e20d97337f1a?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHwxfHxsZW1hayUyMHJpY2V8ZW58MHx8fHwxNzcxMzIyOTM0fDA&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "lemak rice"
+    },
+    {
+      "id": "prod_5",
+      "description": "Bakso Urat",
+      "imageUrl": "https://images.unsplash.com/photo-1650173042834-0a77bfd13ef3?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHwxMHx8bWVhdGJhbGwlMjBzb3VwfGVufDB8fHx8MTc3MTMyMjkzNHww&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "meatball soup"
+    },
+    {
+      "id": "prod_7",
+      "description": "Soto Mie",
+      "imageUrl": "https://images.unsplash.com/photo-1653045582850-c5b74d34c395?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHw4fHxub29kbGUlMjBzb3VwfGVufDB8fHx8MTc3MTI2MDUzOHww&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "noodle soup"
+    },
+    {
+      "id": "prod_8",
+      "description": "Mie Aceh Goreng",
+      "imageUrl": "https://picsum.photos/seed/8/600/400",
+      "imageHint": "aceh noodle"
+    },
+    {
+      "id": "prod_9",
+      "description": "Mihun Goreng",
+      "imageUrl": "https://images.unsplash.com/photo-1636391886989-da35ee18cbdb?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHwzfHxmcmllZCUyMHZlcm1pY2VsbGl8ZW58MHx8fHwxNzcxMzIyOTM0fDA&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "fried vermicelli"
+    },
+    {
+      "id": "prod_10",
+      "description": "Mie golosor daun pisang",
+      "imageUrl": "https://images.unsplash.com/photo-1628885363743-fbf9c98d4196?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHwzfHx5ZWxsb3clMjBub29kbGV8ZW58MHx8fHwxNzcxMzIyOTM0fDA&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "yellow noodle"
+    },
+    {
+      "id": "prod_11",
+      "description": "Rice Bowl Daun Jeruk Chicken Pop Corn",
+      "imageUrl": "https://images.unsplash.com/photo-1536304993881-ff6e9eefa2a6?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHw1fHxyaWNlJTIwYm93bHxlbnwwfHx8fDE3NzEzMjI5MzR8MA&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "rice bowl"
+    },
+    {
+      "id": "prod_12",
+      "description": "Pempek Campur Telor kecil",
+      "imageUrl": "https://images.unsplash.com/photo-1545984929-f28d9e323a00?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHw1fHxmaXNoJTIwY2FrZXxlbnwwfHx8fDE3NzEzMjI5MzR8MA&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "fish cake"
+    },
+    {
+      "id": "prod_14",
+      "description": "Pempek Kapal Selem Besar",
+      "imageUrl": "https://picsum.photos/seed/14/600/400",
+      "imageHint": "submarine fishcake"
+    },
+    {
+      "id": "prod_15",
+      "description": "TEKWAN",
+      "imageUrl": "https://images.unsplash.com/photo-1652408414631-f09eae7cc1db?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHw2fHxmaXNoYmFsbCUyMHNvdXB8ZW58MHx8fHwxNzcxMzIyOTM1fDA&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "fishball soup"
+    },
+    {
+      "id": "prod_16",
+      "description": "Frozen Vacum Pempek kecil Campur isi 15",
+      "imageUrl": "https://images.unsplash.com/photo-1541780430498-619719c1cc40?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHw2fHxmcm96ZW4lMjBmaXNoY2FrZXxlbnwwfHx8fDE3NzEzMjI5MzV8MA&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "frozen fishcake"
+    },
+    {
+      "id": "prod_27",
+      "description": "Ayam Tangkap Goreng khas Aceh",
+      "imageUrl": "https://picsum.photos/seed/27/600/400",
+      "imageHint": "aceh chicken"
+    },
+    {
+      "id": "prod_32",
+      "description": "Rendang Padang",
+      "imageUrl": "https://images.unsplash.com/photo-1719329466280-30d8a22e7cb5?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHwxMHx8cmVuZGFuZyUyMGJlZWZ8ZW58MHx8fHwxNzcxMzIyOTM0fDA&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "rendang beef"
+    },
+    {
+      "id": "prod_40",
+      "description": "Bakwan Goreng",
+      "imageUrl": "https://images.unsplash.com/photo-1706263483885-476743c4b0a6?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHw1fHx2ZWdldGFibGUlMjBmcml0dGVyfGVufDB8fHx8MTc3MTMyMjkzNHww&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "vegetable fritter"
+    },
+    {
+      "id": "prod_41",
+      "description": "Tahu Bakso Goreng",
+      "imageUrl": "https://images.unsplash.com/photo-1563245370-63ffc97abdbd?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHw1fHx0b2Z1JTIwbWVhdGJhbGx8ZW58MHx8fHwxNzcxMzIyOTM1fDA&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "tofu meatball"
+    },
+    {
+      "id": "prod_42",
+      "description": "Tahu Isi Goreng",
+      "imageUrl": "https://images.unsplash.com/photo-1765295138774-5e1ae99b2103?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHwxMHx8c3R1ZmZlZCUyMHRvZnV8ZW58MHx8fHwxNzcxMzIyOTM1fDA&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "stuffed tofu"
+    },
+    {
+      "id": "prod_50",
+      "description": "Risol Mihun",
+      "imageUrl": "https://images.unsplash.com/photo-1669340781012-ae89fbac9fc3?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHwzfHxzcHJpbmclMjByb2xsfGVufDB8fHx8MTc3MTMyMjkzNHww&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "spring roll"
+    },
+    {
+      "id": "prod_52",
+      "description": "Pastel Sayur",
+      "imageUrl": "https://images.unsplash.com/photo-1762207654337-73ccc93a80c4?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHw0fHxlbXBhbmFkYSUyMHBhc3RyeXxlbnwwfHx8fDE3NzEzMjI5MzR8MA&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "empanada pastry"
+    },
+    {
+      "id": "prod_56",
+      "description": "Klepon Gula Merah",
+      "imageUrl": "https://images.unsplash.com/photo-1502472231352-10142bacaba2?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHwxMHx8c3dlZXQlMjByaWNlfGVufDB8fHx8MTc3MTMyMjkzNXww&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "sweet rice"
+    },
+    {
+      "id": "prod_57",
+      "description": "Kolak Pisang, Ubi, Kolang-kaling",
+      "imageUrl": "https://images.unsplash.com/photo-1695088956794-371da95092af?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHwyfHxzd2VldCUyMGNvbXBvdGV8ZW58MHx8fHwxNzcxMzIyOTM1fDA&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "sweet compote"
+    },
+    {
+      "id": "prod_58",
+      "description": "Kue Lumpur Labu Kuning",
+      "imageUrl": "https://images.unsplash.com/photo-1627385006598-6b7f89f20876?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHw4fHxtdWQlMjBjYWtlfGVufDB8fHx8MTc3MTMyMjkzNXww&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "mud cake"
+    },
+    {
+      "id": "prod_63",
+      "description": "Puding Susu Coklat",
+      "imageUrl": "https://images.unsplash.com/photo-1673551494277-92204546b504?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHwxfHxjaG9jb2xhdGUlMjBwdWRkaW5nfGVufDB8fHx8MTc3MTMyMjkzNHww&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "chocolate pudding"
+    },
+    {
+      "id": "prod_68",
+      "description": "Bubur Sumsum",
+      "imageUrl": "https://images.unsplash.com/photo-1735718622877-f3eb4665178d?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHwyfHxyaWNlJTIwcG9ycmlkZ2V8ZW58MHx8fHwxNzcxMzIyOTM0fDA&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "rice porridge"
+    },
+    {
+      "id": "prod_69",
+      "description": "Bubur Ketan Hitam",
+      "imageUrl": "https://images.unsplash.com/photo-1502825868325-37569f642e95?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHwxfHxibGFjayUyMHJpY2V8ZW58MHx8fHwxNzcxMzIyOTM0fDA&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "black rice"
+    },
+    {
+      "id": "prod_70",
+      "description": "Bubur Kacang Hijau",
+      "imageUrl": "https://images.unsplash.com/photo-1601627641019-925d87b28381?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHwzfHxtdW5nJTIwYmVhbnxlbnwwfHx8fDE3NzEzMjI5MzR8MA&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "mung bean"
+    },
+    {
+      "id": "prod_81",
+      "description": "Dadar Gulung Isi Kelapa",
+      "imageUrl": "https://images.unsplash.com/photo-1676295926798-c6b1d38b5cfd?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHw3fHxyb2xsZWQlMjBwYW5jYWtlfGVufDB8fHx8MTc3MTMyMjkzNHww&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "rolled pancake"
+    },
+    {
+      "id": "prod_90",
+      "description": "Donat Jadul Gula",
+      "imageUrl": "https://images.unsplash.com/photo-1702882239346-15d2b5afd99e?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHwyfHxzdWdhciUyMGRvbnV0fGVufDB8fHx8MTc3MTMyMjkzNHww&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "sugar donut"
+    },
+    {
+      "id": "prod_96",
+      "description": "Lontong Isi Oncom",
+      "imageUrl": "https://images.unsplash.com/photo-1507087580589-28522ba035a9?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHw2fHxyaWNlJTIwY2FrZXxlbnwwfHx8fDE3NzEzMjI5MzR8MA&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "rice cake"
+    },
+    {
+      "id": "prod_98",
+      "description": "Pisang Goreng",
+      "imageUrl": "https://images.unsplash.com/photo-1768701544427-460f0defe2ef?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHw4fHxmcmllZCUyMGJhbmFuYXxlbnwwfHx8fDE3NzEzMjI5MzV8MA&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "fried banana"
+    }
+  ]
 }
