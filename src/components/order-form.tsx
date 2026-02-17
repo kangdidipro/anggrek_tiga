@@ -9,11 +9,13 @@ import { Textarea } from '@/components/ui/textarea';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { useToast } from '@/hooks/use-toast';
-import { submitOrder } from '@/app/actions';
 import type { CartItem } from '@/lib/types';
 import { useCart } from '@/hooks/use-cart';
-import { Loader2, QrCode, Wallet } from 'lucide-react';
-import { useState } from 'react';
+import { Loader2, QrCode, Wallet, LogIn } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { useUser, useFirestore } from '@/firebase';
+import { collection, writeBatch, doc } from 'firebase/firestore';
+import { useRouter } from 'next/navigation';
 
 const formSchema = z.object({
   name: z.string().min(2, { message: 'Nama harus diisi minimal 2 karakter.' }),
@@ -34,6 +36,9 @@ export default function OrderForm({ cartItems, total, deliveryFee, setSheetOpen 
   const { toast } = useToast();
   const { clearCart } = useCart();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const { user, isUserLoading } = useUser();
+  const firestore = useFirestore();
+  const router = useRouter();
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -44,39 +49,95 @@ export default function OrderForm({ cartItems, total, deliveryFee, setSheetOpen 
       address: '',
     },
   });
+  
+  useEffect(() => {
+    if(user) {
+      form.reset({
+        name: user.displayName || '',
+        email: user.email || '',
+        phone: user.phoneNumber || '',
+        address: '',
+      });
+    }
+  }, [user, form]);
+
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
+    if (!user || !firestore) {
+        toast({
+            variant: "destructive",
+            title: "Anda Belum Login",
+            description: "Silakan login untuk melanjutkan pesanan.",
+        });
+        return;
+    }
     setIsSubmitting(true);
-    const orderPayload = {
-      ...values,
-      items: cartItems.map(item => ({
-        id: item.product.id,
-        name: item.product.name,
-        sku: item.product.sku,
-        quantity: item.quantity,
-        price: item.product.price,
-      })),
-      total,
-      deliveryFee,
-    };
     
     try {
-        await submitOrder(orderPayload);
+        const batch = writeBatch(firestore);
+
+        const orderRef = doc(collection(firestore, 'customers', user.uid, 'orders'));
+        const newOrder = {
+            customerId: user.uid,
+            orderDateTime: new Date().toISOString(),
+            totalAmount: total,
+            deliveryFee: deliveryFee,
+            paymentMethod: values.paymentMethod,
+            status: 'pending',
+            deliveryAddress: values.address,
+        };
+        batch.set(orderRef, newOrder);
+
+        cartItems.forEach(item => {
+            const orderItemRef = doc(collection(firestore, 'customers', user.uid, 'orders', orderRef.id, 'orderItems'));
+            const newOrderItem = {
+                orderId: orderRef.id,
+                menuItemId: item.product.id,
+                quantity: item.quantity,
+                priceAtOrder: item.product.price,
+                name: item.product.name, // Denormalized
+                sku: item.product.sku, // Denormalized
+            };
+            batch.set(orderItemRef, newOrderItem);
+        });
+
+        await batch.commit();
+        
         toast({
             title: "Pesanan Berhasil 🎉",
             description: "Pesanan Anda telah kami terima dan akan segera diproses.",
         });
         clearCart();
         setSheetOpen(false);
-    } catch (error) {
+        router.push('/order-success');
+    } catch (error: any) {
+        console.error("Order submission error:", error);
         toast({
             variant: "destructive",
             title: "Gagal Mengirim Pesanan",
-            description: "Terjadi kesalahan. Silakan coba lagi.",
+            description: error.message || "Terjadi kesalahan. Silakan coba lagi.",
         });
     } finally {
         setIsSubmitting(false);
     }
+  }
+
+  if (isUserLoading) {
+      return (
+        <div className="flex justify-center items-center p-8">
+            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        </div>
+      )
+  }
+
+  if (!user) {
+    return (
+        <div className="text-center p-4 border-dashed border-2 rounded-md bg-card">
+            <LogIn className="mx-auto h-8 w-8 text-muted-foreground" />
+            <p className="mt-2 text-sm font-medium">Silakan Login</p>
+            <p className="mt-1 text-sm text-muted-foreground">Anda perlu login untuk dapat mengirim pesanan.</p>
+        </div>
+    )
   }
 
   return (
@@ -171,7 +232,7 @@ export default function OrderForm({ cartItems, total, deliveryFee, setSheetOpen 
             </FormItem>
           )}
         />
-        <Button type="submit" className="w-full" size="lg" disabled={isSubmitting}>
+        <Button type="submit" className="w-full" size="lg" disabled={isSubmitting || !user}>
           {isSubmitting ? (
             <Loader2 className="mr-2 h-4 w-4 animate-spin" />
           ) : null}

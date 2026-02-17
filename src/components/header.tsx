@@ -1,5 +1,6 @@
 import { Soup } from 'lucide-react';
 import Cart from '@/components/cart';
+import UserNav from './user-nav';
 
 export default function Header() {
   return (
@@ -13,7 +14,8 @@ export default function Header() {
             </span>
           </a>
         </div>
-        <div className="flex flex-1 items-center justify-end">
+        <div className="flex flex-1 items-center justify-end space-x-4">
+          <UserNav />
           <Cart />
         </div>
       </div>

@@ -1,12 +1,6 @@
 import type { Product } from '@/lib/types';
-import * as fs from 'fs';
-import * as xlsx from 'xlsx';
 
-const dbPath = 'database.xlsx';
-const menuSheetName = 'daftar_menu';
-const ordersSheetName = 'Orders';
-
-const hardcodedProducts: Product[] = [
+export const products: Product[] = [
   // Nasi & Lauk
   { id: '1', name: 'Nasi Bakar Ayam', price: 12000, category: 'Nasi & Lauk', sku: 'NL-001' },
   { id: '2', name: 'Nasi Bakar Cakalang', price: 12000, category: 'Nasi & Lauk', sku: 'NL-002' },
@@ -51,74 +45,3 @@ const hardcodedProducts: Product[] = [
   { id: '69', name: 'Bubur Ketan Hitam', price: 6000, category: 'Bubur & Puding', sku: 'BP-003' },
   { id: '70', name: 'Bubur Kacang Hijau', price: 6000, category: 'Bubur & Puding', sku: 'BP-004' },
 ];
-
-function initializeMenuSheet(workbook: xlsx.WorkBook) {
-    const productSheetData = hardcodedProducts.map(p => ({
-        id: p.id,
-        name: p.name,
-        price: p.price,
-        category: p.category,
-        sku: p.sku,
-    }));
-    const worksheet = xlsx.utils.json_to_sheet(productSheetData);
-    xlsx.utils.book_append_sheet(workbook, worksheet, menuSheetName);
-}
-
-function getProducts(): Product[] {
-    try {
-        if (fs.existsSync(dbPath)) {
-            const workbook = xlsx.readFile(dbPath);
-            let worksheet = workbook.Sheets[menuSheetName];
-
-            if (!worksheet) {
-                // Menu sheet doesn't exist, so add it and save.
-                initializeMenuSheet(workbook);
-                xlsx.writeFile(workbook, dbPath);
-                return hardcodedProducts;
-            }
-
-            const data = xlsx.utils.sheet_to_json(worksheet) as any[];
-            if (data.length > 0) {
-                const parsedProducts = data.map(row => {
-                  // Basic validation
-                  if (row.id && row.name && row.price && row.category && row.sku) {
-                    return {
-                      id: String(row.id),
-                      name: String(row.name),
-                      price: Number(row.price),
-                      category: String(row.category),
-                      sku: String(row.sku),
-                    };
-                  }
-                  return null;
-                }).filter((p): p is Product => p !== null);
-                
-                if (parsedProducts.length > 0) {
-                  return parsedProducts;
-                }
-            }
-        }
-
-        // File does not exist, or sheet was empty. Create/re-create with default data.
-        const workbook = xlsx.utils.book_new();
-        initializeMenuSheet(workbook);
-
-        // Also ensure Orders sheet exists, as this might be the first time the file is created.
-        if (!workbook.Sheets[ordersSheetName]) {
-            const ordersWorksheet = xlsx.utils.json_to_sheet([], { header: [
-                'Order ID', 'Timestamp', 'Name', 'Email', 'Phone', 'Address', 
-                'Payment Method', 'Total', 'Delivery Fee', 'Items'
-            ]});
-            xlsx.utils.book_append_sheet(workbook, ordersWorksheet, ordersSheetName);
-        }
-
-        xlsx.writeFile(workbook, dbPath);
-        return hardcodedProducts;
-
-    } catch (error) {
-        console.error("Error with database.xlsx, falling back to hardcoded products.", error);
-        return hardcodedProducts;
-    }
-}
-
-export const products: Product[] = getProducts();
