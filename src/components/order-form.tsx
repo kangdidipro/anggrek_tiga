@@ -215,14 +215,13 @@ export default function OrderForm({ cartItems, total, deliveryFee, setSheetOpen 
                   {paymentMethod === 'QRIS' && (
                      <div className="p-4 flex flex-col items-center justify-center rounded-md border text-center bg-card">
                         <p className="text-sm font-medium mb-2">Pindai untuk Membayar</p>
-                        <div className="relative w-[250px] aspect-[2/3]">
-                            <Image
-                                src="https://storage.googleapis.com/studio-hosting-assets/qris.png"
-                                alt="QRIS Code"
-                                fill
-                                className="object-contain rounded-md"
-                            />
-                        </div>
+                        <Image
+                            src="https://storage.googleapis.com/studio-hosting-assets/qris.png"
+                            alt="QRIS Code"
+                            width={250}
+                            height={375}
+                            className="object-contain rounded-md"
+                        />
                         <p className="mt-2 text-sm text-muted-foreground">UMKM06 - ANGGREK</p>
                      </div>
                   )}
