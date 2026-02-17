@@ -215,7 +215,7 @@ export default function OrderForm({ cartItems, total, deliveryFee, setSheetOpen 
                      <div className="p-4 flex flex-col items-center justify-center rounded-md border text-center bg-card">
                         <p className="text-sm font-medium mb-2">Pindai untuk Membayar</p>
                         <img
-                            src="/qris.png"
+                            src="/qris.jpeg"
                             alt="QRIS Code"
                             width={250}
                             height={375}
