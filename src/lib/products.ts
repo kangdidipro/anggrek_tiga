@@ -1,5 +1,7 @@
 import type { Product } from '@/lib/types';
 import { PlaceHolderImages } from '@/lib/placeholder-images';
+import * as fs from 'fs';
+import * as xlsx from 'xlsx';
 
 const getImage = (id: string) => {
   const image = PlaceHolderImages.find((img) => img.id === id);
@@ -10,7 +12,11 @@ const getImage = (id: string) => {
   return { id: image.id, url: image.imageUrl, hint: image.imageHint };
 };
 
-export const products: Product[] = [
+const dbPath = 'database.xlsx';
+const menuSheetName = 'daftar_menu';
+const ordersSheetName = 'Orders';
+
+const hardcodedProducts: Product[] = [
   // Nasi & Lauk
   { id: '1', name: 'Nasi Bakar Ayam', price: 12000, category: 'Nasi & Lauk', image: getImage('prod_1') },
   { id: '2', name: 'Nasi Bakar Cakalang', price: 12000, category: 'Nasi & Lauk', image: getImage('prod_2') },
@@ -56,4 +62,73 @@ export const products: Product[] = [
   { id: '70', name: 'Bubur Kacang Hijau', price: 6000, category: 'Bubur & Puding', image: getImage('prod_70') },
 ];
 
-export const deliveryFee = 2500;
+function initializeMenuSheet(workbook: xlsx.WorkBook) {
+    const productSheetData = hardcodedProducts.map(p => ({
+        id: p.id,
+        name: p.name,
+        price: p.price,
+        category: p.category,
+        image_id: p.image.id
+    }));
+    const worksheet = xlsx.utils.json_to_sheet(productSheetData);
+    xlsx.utils.book_append_sheet(workbook, worksheet, menuSheetName);
+}
+
+function getProducts(): Product[] {
+    try {
+        if (fs.existsSync(dbPath)) {
+            const workbook = xlsx.readFile(dbPath);
+            let worksheet = workbook.Sheets[menuSheetName];
+
+            if (!worksheet) {
+                // Menu sheet doesn't exist, so add it and save.
+                initializeMenuSheet(workbook);
+                xlsx.writeFile(workbook, dbPath);
+                return hardcodedProducts;
+            }
+
+            const data = xlsx.utils.sheet_to_json(worksheet) as any[];
+            if (data.length > 0) {
+                const parsedProducts = data.map(row => {
+                  // Basic validation
+                  if (row.id && row.name && row.price && row.category && row.image_id) {
+                    return {
+                      id: String(row.id),
+                      name: String(row.name),
+                      price: Number(row.price),
+                      category: String(row.category),
+                      image: getImage(String(row.image_id)),
+                    };
+                  }
+                  return null;
+                }).filter((p): p is Product => p !== null);
+                
+                if (parsedProducts.length > 0) {
+                  return parsedProducts;
+                }
+            }
+        }
+
+        // File does not exist, or sheet was empty. Create/re-create with default data.
+        const workbook = xlsx.utils.book_new();
+        initializeMenuSheet(workbook);
+
+        // Also ensure Orders sheet exists, as this might be the first time the file is created.
+        if (!workbook.Sheets[ordersSheetName]) {
+            const ordersWorksheet = xlsx.utils.json_to_sheet([], { header: [
+                'Order ID', 'Timestamp', 'Name', 'Email', 'Phone', 'Address', 
+                'Payment Method', 'Total', 'Delivery Fee', 'Items'
+            ]});
+            xlsx.utils.book_append_sheet(workbook, ordersWorksheet, ordersSheetName);
+        }
+
+        xlsx.writeFile(workbook, dbPath);
+        return hardcodedProducts;
+
+    } catch (error) {
+        console.error("Error with database.xlsx, falling back to hardcoded products.", error);
+        return hardcodedProducts;
+    }
+}
+
+export const products: Product[] = getProducts();

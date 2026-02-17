@@ -9,7 +9,7 @@ import Image from 'next/image';
 import OrderForm from './order-form';
 import { Separator } from './ui/separator';
 import { ScrollArea } from './ui/scroll-area';
-import { deliveryFee } from '@/lib/products';
+import { deliveryFee } from '@/lib/constants';
 import { useState } from 'react';
 
 export default function Cart() {
