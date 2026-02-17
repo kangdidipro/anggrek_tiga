@@ -16,7 +16,6 @@ import { useState } from 'react';
 import { useUser, useFirestore, errorEmitter, FirestorePermissionError } from '@/firebase';
 import { collection, writeBatch, doc } from 'firebase/firestore';
 import { useRouter } from 'next/navigation';
-import Image from 'next/image';
 
 const formSchema = z.object({
   name: z.string().min(2, { message: 'Nama harus diisi minimal 2 karakter.' }),
@@ -215,7 +214,7 @@ export default function OrderForm({ cartItems, total, deliveryFee, setSheetOpen 
                   {paymentMethod === 'QRIS' && (
                      <div className="p-4 flex flex-col items-center justify-center rounded-md border text-center bg-card">
                         <p className="text-sm font-medium mb-2">Pindai untuk Membayar</p>
-                        <Image
+                        <img
                             src="https://storage.googleapis.com/studio-hosting-assets/qris.png"
                             alt="QRIS Code"
                             width={250}
