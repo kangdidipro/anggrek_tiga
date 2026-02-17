@@ -1,6 +1,6 @@
 'use client';
 
-import { ShoppingCart, Trash2 } from 'lucide-react';
+import { ShoppingCart, Trash2, Info } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger, SheetFooter } from '@/components/ui/sheet';
 import { useCart } from '@/hooks/use-cart';
@@ -10,6 +10,7 @@ import { Separator } from './ui/separator';
 import { ScrollArea } from './ui/scroll-area';
 import { deliveryFee } from '@/lib/constants';
 import { useState } from 'react';
+import { Alert, AlertDescription, AlertTitle } from './ui/alert';
 
 export default function Cart() {
   const { cartItems, totalItems, cartTotal, clearCart } = useCart();
@@ -70,6 +71,15 @@ export default function Cart() {
                 </div>
 
                 <Separator />
+
+                <Alert>
+                  <Info className="h-4 w-4" />
+                  <AlertTitle className="font-bold">Aturan Pemesanan</AlertTitle>
+                  <AlertDescription>
+                    <p>Pesanan hanya untuk diantar <strong>H+1</strong> dari tanggal pesanan.</p>
+                    <p>Batas waktu pemesanan adalah <strong>jam 4 sore</strong>.</p>
+                  </AlertDescription>
+                </Alert>
 
                 <OrderForm cartItems={cartItems} total={finalTotal} deliveryFee={deliveryFee} setSheetOpen={setOpen} />
               </div>
