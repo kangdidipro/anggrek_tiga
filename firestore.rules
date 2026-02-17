@@ -1,0 +1,143 @@
+/**
+ * # Firestore Security Rules: Ramadhan Takjil Order App
+ *
+ * ## Core Philosophy
+ * This ruleset enforces a strict user-ownership model. All customer-related data,
+ * including profiles and orders, is stored in a private data tree accessible only
+ * to the authenticated user who owns it. Publicly browsable data, like the menu,
+ * is stored in a separate, globally-readable collection. This approach ensures
+ * strong data privacy by default.
+ *
+ * ## Data Structure
+ * - `/customers/{customerId}`: A user's private profile. The `{customerId}` is the
+ *   user's Firebase Authentication UID.
+ * - `/customers/{customerId}/orders/{orderId}`: A subcollection containing all
+ *   orders placed by that specific user.
+ * - `/customers/{customerId}/orders/{orderId}/orderItems/{orderItemId}`: A nested
+ *   subcollection detailing the items within a specific order.
+ * - `/menuItems/{menuItemId}`: A top-level collection of all available menu items,
+ *   which is publicly readable by anyone.
+ *
+ * ## Key Security Decisions
+ * - **Strict Ownership**: A user can only access data under their own `/customers/{userId}` path.
+ * - **No User Listing**: Listing the top-level `/customers` collection is explicitly disallowed
+ *   to protect user privacy.
+ * - **Public Read-Only Menu**: The `/menuItems` collection is world-readable to allow anyone to
+ *   browse the menu, but all write operations are disabled for clients to protect data integrity.
+ * - **Denormalization for Authorization**: To create fast and secure rules, critical
+ *   authorization data (like `customerId`) is denormalized (copied) onto child documents
+ *   like Orders. This avoids slow and costly `get()` calls in rules. For example, an
+ *   Order document at `/customers/abc/orders/123` contains the field `customerId: "abc"`,
+ *   allowing rules to check ownership directly from the document's data.
+ * - **Structural Segregation**: Private user data (`/customers`) and public data (`/menuItems`)
+ *   are stored in separate top-level collections. This makes rules simpler and allows for
+ *   safe and efficient public list queries on the menu without exposing any private data.
+ */
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ------------------------------------------------------------------------
+    // Helper Functions
+    // ------------------------------------------------------------------------
+
+    /**
+     * Checks if the user is authenticated.
+     */
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    /**
+     * Checks if the currently authenticated user's UID matches the provided userId.
+     * This is the primary function for enforcing data ownership.
+     */
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    /**
+     * Checks if the authenticated user is the owner of an EXISTING document.
+     * CRITICAL: Used for all update and delete operations to prevent writes on
+     * non-existent paths and ensure the user has permission.
+     */
+    function isExistingOwner(userId) {
+      return isOwner(userId) && resource != null;
+    }
+
+    // ------------------------------------------------------------------------
+    // Collection Rules
+    // ------------------------------------------------------------------------
+
+    /**
+     * @description   Rules for a customer's profile document.
+     * @path          /customers/{customerId}
+     * @allow         (create, get, update, delete) A signed-in user for their OWN profile document.
+     * @deny          (list) Any user attempting to list all customer profiles.
+     * @deny          (get, update, delete) A user trying to access another user's profile.
+     * @principle     Restricts access to a user's own data tree and enforces relational integrity.
+     */
+    match /customers/{customerId} {
+      allow get: if isOwner(customerId);
+      allow list: if false; // Disallow listing all customers for privacy.
+      allow create: if isOwner(customerId)
+                       && request.resource.data.id == customerId
+                       && request.resource.data.googleAccountId == customerId;
+      allow update: if isExistingOwner(customerId)
+                       && request.resource.data.id == resource.data.id
+                       && request.resource.data.googleAccountId == resource.data.googleAccountId;
+      allow delete: if isExistingOwner(customerId);
+
+      /**
+       * @description   Rules for a customer's orders.
+       * @path          /customers/{customerId}/orders/{orderId}
+       * @allow         (create, get, list, update, delete) The customer who owns the order.
+       * @deny          (get, list, update, delete) A user trying to access another user's orders.
+       * @principle     Enforces document ownership via path parameter for all operations.
+       */
+      match /orders/{orderId} {
+        allow get: if isOwner(customerId);
+        allow list: if isOwner(customerId);
+        allow create: if isOwner(customerId) && request.resource.data.customerId == customerId;
+        allow update: if isExistingOwner(customerId) && request.resource.data.customerId == resource.data.customerId;
+        allow delete: if isExistingOwner(customerId);
+
+        /**
+         * @description   Rules for items within an order.
+         * @path          /customers/{customerId}/orders/{orderId}/orderItems/{orderItemId}
+         * @allow         (create, get, list, update, delete) The customer who owns the parent order.
+         * @deny          (get, list, update, delete) A user trying to access items in another user's order.
+         * @principle     Inherits ownership from the parent document's path.
+         */
+        match /orderItems/{orderItemId} {
+          allow get: if isOwner(customerId);
+          allow list: if isOwner(customerId);
+          allow create: if isOwner(customerId)
+                           && request.resource.data.customerId == customerId
+                           && request.resource.data.orderId == orderId;
+          allow update: if isExistingOwner(customerId)
+                           && request.resource.data.customerId == resource.data.customerId
+                           && request.resource.data.orderId == resource.data.orderId;
+          allow delete: if isExistingOwner(customerId);
+        }
+      }
+    }
+
+    /**
+     * @description   Rules for publicly available menu items.
+     * @path          /menuItems/{menuItemId}
+     * @allow         (get, list) Any user, including unauthenticated users, to browse the menu.
+     * @deny          (create, update, delete) All client-side write operations to protect menu integrity.
+     * @principle     Provides public read access while preventing modification from clients.
+     */
+    match /menuItems/{menuItemId} {
+      allow get: if true;
+      allow list: if true;
+      // CRITICAL: Cannot implement owner-only writes. The 'MenuItem' entity is missing an 'ownerId' or 'authorId' field.
+      // Writes are disabled for all clients. Data must be added/modified via the Firebase Console or a trusted Admin SDK.
+      allow create: if false; // TODO: Add admin/owner validation once the schema is updated with an ownership field.
+      allow update: if false; // TODO: Add admin/owner validation once the schema is updated with an ownership field.
+      allow delete: if false; // TODO: Add admin/owner validation once the schema is updated with an ownership field.
+    }
+  }
+}

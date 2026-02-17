@@ -1,0 +1,256 @@
+{
+  "entities": {
+    "Customer": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Customer",
+      "type": "object",
+      "description": "Represents a customer who places food orders, linked to their Google account for authentication.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the Customer entity."
+        },
+        "googleAccountId": {
+          "type": "string",
+          "description": "Unique identifier provided by the Google authentication system for the customer."
+        },
+        "name": {
+          "type": "string",
+          "description": "Full name of the customer as provided in the order form."
+        },
+        "email": {
+          "type": "string",
+          "description": "Email address of the customer, used for communication.",
+          "format": "email"
+        },
+        "phoneNumber": {
+          "type": "string",
+          "description": "Contact phone number or WhatsApp number of the customer."
+        },
+        "deliveryAddress": {
+          "type": "string",
+          "description": "The default delivery address for the customer."
+        }
+      },
+      "required": [
+        "id",
+        "googleAccountId",
+        "name",
+        "email",
+        "phoneNumber",
+        "deliveryAddress"
+      ]
+    },
+    "MenuItem": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "MenuItem",
+      "type": "object",
+      "description": "Represents a single food or drink item available on the Ramadhan Takjil menu.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the MenuItem entity, often corresponding to the SKU."
+        },
+        "name": {
+          "type": "string",
+          "description": "The name of the menu item (e.g., 'Nasi Bakar Ayam')."
+        },
+        "price": {
+          "type": "number",
+          "description": "The price of the menu item in Indonesian Rupiah (e.g., 12000)."
+        },
+        "sku": {
+          "type": "string",
+          "description": "Stock Keeping Unit (SKU) for the menu item, used for identification (e.g., RpSKU-1)."
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "price",
+        "sku"
+      ]
+    },
+    "Order": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Order",
+      "type": "object",
+      "description": "Represents a single customer order for Takjil items, including delivery and payment details.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the Order entity."
+        },
+        "customerId": {
+          "type": "string",
+          "description": "Reference to the Customer who placed this order. (Relationship: Customer 1:N Order)"
+        },
+        "orderDateTime": {
+          "type": "string",
+          "description": "The date and time when the order was placed.",
+          "format": "date-time"
+        },
+        "totalAmount": {
+          "type": "number",
+          "description": "The total monetary amount of the order, including all items and the delivery fee."
+        },
+        "deliveryFee": {
+          "type": "number",
+          "description": "The fixed delivery fee applied to this order (Rp. 2.500)."
+        },
+        "paymentMethod": {
+          "type": "string",
+          "description": "The chosen payment method for the order.",
+          "format": "enum",
+          "items": {
+            "type": "string"
+          }
+        },
+        "status": {
+          "type": "string",
+          "description": "The current processing status of the order.",
+          "format": "enum",
+          "items": {
+            "type": "string"
+          }
+        },
+        "deliveryAddress": {
+          "type": "string",
+          "description": "The full delivery address specified for this particular order (copied from customer at order time)."
+        }
+      },
+      "required": [
+        "id",
+        "customerId",
+        "orderDateTime",
+        "totalAmount",
+        "deliveryFee",
+        "paymentMethod",
+        "status",
+        "deliveryAddress"
+      ]
+    },
+    "OrderItem": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "OrderItem",
+      "type": "object",
+      "description": "Represents a specific menu item and its quantity within a larger order.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the OrderItem entity."
+        },
+        "orderId": {
+          "type": "string",
+          "description": "Reference to the Order this item belongs to. (Relationship: Order 1:N OrderItem)"
+        },
+        "menuItemId": {
+          "type": "string",
+          "description": "Reference to the MenuItem that was ordered. (Relationship: MenuItem 1:N OrderItem)"
+        },
+        "quantity": {
+          "type": "number",
+          "description": "The quantity of the specific menu item included in the order."
+        },
+        "priceAtOrder": {
+          "type": "number",
+          "description": "The price of the menu item at the time the order was placed, to ensure historical accuracy."
+        }
+      },
+      "required": [
+        "id",
+        "orderId",
+        "menuItemId",
+        "quantity",
+        "priceAtOrder"
+      ]
+    }
+  },
+  "auth": {
+    "providers": [
+      "password",
+      "anonymous"
+    ]
+  },
+  "firestore": {
+    "structure": [
+      {
+        "path": "/customers/{customerId}",
+        "definition": {
+          "entityName": "Customer",
+          "schema": {
+            "$ref": "#/backend/entities/Customer"
+          },
+          "description": "Stores individual customer profiles. The 'customerId' wildcard corresponds to the Firebase Authentication UID. The 'id' and 'googleAccountId' fields within the document are denormalized and MUST match the 'customerId' path parameter and request.auth.uid for authorization independence.",
+          "params": [
+            {
+              "name": "customerId",
+              "description": "The unique identifier for the customer, corresponding to Firebase Authentication UID."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/menuItems/{menuItemId}",
+        "definition": {
+          "entityName": "MenuItem",
+          "schema": {
+            "$ref": "#/backend/entities/MenuItem"
+          },
+          "description": "Contains all available food and drink items. This collection is globally readable by all users, ensuring a homogeneous security posture and secure list operations (QAPs).",
+          "params": [
+            {
+              "name": "menuItemId",
+              "description": "The unique identifier for a menu item."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/customers/{customerId}/orders/{orderId}",
+        "definition": {
+          "entityName": "Order",
+          "schema": {
+            "$ref": "#/backend/entities/Order"
+          },
+          "description": "Stores individual orders placed by a customer. The 'customerId' field within the document is denormalized and MUST match the 'customerId' path parameter and request.auth.uid for authorization independence, enabling robust and atomic security rules. 'deliveryAddress' is also denormalized from the customer's profile at order time.",
+          "params": [
+            {
+              "name": "customerId",
+              "description": "The unique identifier for the customer, corresponding to Firebase Authentication UID."
+            },
+            {
+              "name": "orderId",
+              "description": "The unique identifier for a specific order."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/customers/{customerId}/orders/{orderId}/orderItems/{orderItemId}",
+        "definition": {
+          "entityName": "OrderItem",
+          "schema": {
+            "$ref": "#/backend/entities/OrderItem"
+          },
+          "description": "Contains the specific items included in an order. The 'customerId' and 'orderId' fields are denormalized within the document to match the parent path parameters, ensuring authorization independence and simplifying security rules by eliminating get() calls for ownership checks. 'priceAtOrder' is also denormalized for historical accuracy.",
+          "params": [
+            {
+              "name": "customerId",
+              "description": "The unique identifier for the customer, corresponding to Firebase Authentication UID."
+            },
+            {
+              "name": "orderId",
+              "description": "The unique identifier for the parent order."
+            },
+            {
+              "name": "orderItemId",
+              "description": "The unique identifier for a specific item within an order."
+            }
+          ]
+        }
+      }
+    ],
+    "reasoning": "The Firestore data structure for the Ramadhan Takjil Order application prioritizes security, scalability, and debuggability by strictly adhering to the core design principles. The primary strategy employed is **Authorization Independence via Denormalization** (Mandate A) and **Structural Segregation** (Mandate B), combined with **Access Modeling** using hierarchical paths for user-owned data (Mandate C).\n\n**Authorization Independence:**\n1.  **Customer Profile (`/customers/{customerId}`):** The `customerId` wildcard directly corresponds to `request.auth.uid`. The `Customer` document's `id` and `googleAccountId` fields will also store this UID. This means that to check if a user can access their profile, rules only need to compare `request.auth.uid` with the `customerId` in the path, and optionally `resource.data.googleAccountId`. No `get()` operations on parent documents are required.\n2.  **Orders (`/customers/{customerId}/orders/{orderId}`):** Each `Order` document includes a `customerId` field. This denormalizes the ownership directly into the order document. Security rules for `Order` documents can therefore verify `request.auth.uid == customerId` (from the path) and `request.auth.uid == resource.data.customerId` without needing to perform a `get()` on the parent `/customers/{customerId}` document. This ensures atomic creation and updates and simplifies rules significantly.\n3.  **Order Items (`/customers/{customerId}/orders/{orderId}/orderItems/{orderItemId}`):** Similarly, each `OrderItem` document will denormalize both `customerId` and `orderId` fields. Rules for `OrderItem` documents can check `request.auth.uid == customerId` (from the path), `resource.data.customerId`, and `resource.data.orderId` directly against the path segments, completely eliminating cross-document `get()` calls for authorization.\n\n**QAPs (Queries as Authorization Primitives) and Structural Segregation:**\n1.  **Menu Items (`/menuItems/{menuItemId}`):** This collection is designed for **homogeneous security posture**. All menu items are publicly readable, allowing any user (authenticated or unauthenticated) to browse the menu. This makes `list` operations on `/menuItems` inherently secure and efficient, as rules can simply grant `read` access to all. There's no mixing of public and private data in this collection.\n2.  **Customer-Specific Data (`/customers/{customerId}/...`):** By nesting `orders` and `orderItems` under `/customers/{customerId}`, access is implicitly scoped to the authenticated user (`request.auth.uid`). A user can only `list` or `get` documents within their own `/customers/{request.auth.uid}/orders` or `/customers/{request.auth.uid}/orders/{orderId}/orderItems` subcollections. This prevents users from listing other customers' orders, effectively making `list` operations secure without complex filtering logic in rules. The path itself acts as a strong authorization primitive, aligning with the principle that 'rules are not filters'.\n\n**Overall, the structure:**\n*   Uses `request.auth.uid` as the primary identifier for customers and their data, making authorization direct.\n*   Employs clear, hierarchical paths for user-owned data (`/customers/{userId}/orders/{orderId}/orderItems/{orderItemId}`).\n*   Denormalizes critical authorization fields (`customerId`, `orderId`) into child documents to avoid expensive and insecure `get()` calls in security rules.\n*   Separates public (menu items) from private (customer orders) data to simplify rules and support efficient `list` queries.\n*   Adopts explicit state modeling for `Order.status` and predictable schemas to ensure data clarity and consistency."
+  }
+}
