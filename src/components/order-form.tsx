@@ -11,8 +11,8 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { useToast } from '@/hooks/use-toast';
 import type { CartItem } from '@/lib/types';
 import { useCart } from '@/hooks/use-cart';
-import { Loader2, QrCode, Wallet, LogIn } from 'lucide-react';
-import { useState, useEffect } from 'react';
+import { Loader2, QrCode, Wallet } from 'lucide-react';
+import { useState } from 'react';
 import { useUser, useFirestore } from '@/firebase';
 import { collection, writeBatch, doc } from 'firebase/firestore';
 import { useRouter } from 'next/navigation';
@@ -49,25 +49,13 @@ export default function OrderForm({ cartItems, total, deliveryFee, setSheetOpen 
       address: '',
     },
   });
-  
-  useEffect(() => {
-    if(user) {
-      form.reset({
-        name: user.displayName || '',
-        email: user.email || '',
-        phone: user.phoneNumber || '',
-        address: '',
-      });
-    }
-  }, [user, form]);
-
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
     if (!user || !firestore) {
         toast({
             variant: "destructive",
-            title: "Anda Belum Login",
-            description: "Silakan login untuk melanjutkan pesanan.",
+            title: "Gagal Mengirim Pesanan",
+            description: "Tidak dapat terhubung ke layanan. Silakan coba lagi.",
         });
         return;
     }
@@ -128,16 +116,6 @@ export default function OrderForm({ cartItems, total, deliveryFee, setSheetOpen 
             <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
         </div>
       )
-  }
-
-  if (!user) {
-    return (
-        <div className="text-center p-4 border-dashed border-2 rounded-md bg-card">
-            <LogIn className="mx-auto h-8 w-8 text-muted-foreground" />
-            <p className="mt-2 text-sm font-medium">Silakan Login</p>
-            <p className="mt-1 text-sm text-muted-foreground">Anda perlu login untuk dapat mengirim pesanan.</p>
-        </div>
-    )
   }
 
   return (
@@ -232,8 +210,8 @@ export default function OrderForm({ cartItems, total, deliveryFee, setSheetOpen 
             </FormItem>
           )}
         />
-        <Button type="submit" className="w-full" size="lg" disabled={isSubmitting || !user}>
-          {isSubmitting ? (
+        <Button type="submit" className="w-full" size="lg" disabled={isSubmitting || isUserLoading}>
+          {isSubmitting || isUserLoading ? (
             <Loader2 className="mr-2 h-4 w-4 animate-spin" />
           ) : null}
           Kirim Pesanan

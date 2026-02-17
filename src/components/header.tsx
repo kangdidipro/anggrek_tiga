@@ -1,6 +1,7 @@
-import { Soup } from 'lucide-react';
+import { Soup, ShoppingBag } from 'lucide-react';
 import Cart from '@/components/cart';
-import UserNav from './user-nav';
+import Link from 'next/link';
+import { Button } from './ui/button';
 
 export default function Header() {
   return (
@@ -14,8 +15,13 @@ export default function Header() {
             </span>
           </a>
         </div>
-        <div className="flex flex-1 items-center justify-end space-x-4">
-          <UserNav />
+        <div className="flex flex-1 items-center justify-end space-x-2">
+          <Button variant="outline" size="icon" asChild>
+            <Link href="/orders">
+              <ShoppingBag className="h-5 w-5" />
+              <span className="sr-only">Riwayat Pesanan</span>
+            </Link>
+          </Button>
           <Cart />
         </div>
       </div>

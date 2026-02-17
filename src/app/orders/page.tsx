@@ -79,9 +79,9 @@ export default function OrdersPage() {
         return (
             <div className="container flex flex-col items-center justify-center text-center py-24 min-h-[calc(100vh-10rem)]">
                 <ShoppingBag className="h-16 w-16 text-muted-foreground mb-4" />
-                <h1 className="text-2xl font-bold mb-2">Lihat Riwayat Pesanan Anda</h1>
+                <h1 className="text-2xl font-bold mb-2">Tidak dapat memuat riwayat pesanan.</h1>
                 <p className="text-muted-foreground mb-6 max-w-md">
-                    Silakan login untuk melihat semua pesanan yang pernah Anda buat.
+                   Terjadi kesalahan saat memuat data Anda. Silakan kembali ke menu utama dan coba lagi.
                 </p>
                 <Button asChild>
                     <Link href="/">Kembali ke Menu</Link>
@@ -96,7 +96,7 @@ export default function OrdersPage() {
                 <ShoppingBag className="h-16 w-16 text-muted-foreground mb-4" />
                 <h1 className="text-2xl font-bold mb-2">Anda Belum Punya Pesanan</h1>
                 <p className="text-muted-foreground mb-6">
-                    Sepertinya Anda belum memesan apa pun. Mari mulai belanja!
+                    Sepertinya Anda belum memesan apa pun. Riwayat pesanan Anda akan muncul di sini.
                 </p>
                 <Button asChild>
                     <Link href="/">Kembali ke Menu</Link>
