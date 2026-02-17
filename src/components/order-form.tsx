@@ -13,7 +13,7 @@ import type { CartItem } from '@/lib/types';
 import { useCart } from '@/hooks/use-cart';
 import { Loader2, QrCode, Wallet } from 'lucide-react';
 import { useState } from 'react';
-import { useUser, useFirestore } from '@/firebase';
+import { useUser, useFirestore, errorEmitter, FirestorePermissionError } from '@/firebase';
 import { collection, writeBatch, doc } from 'firebase/firestore';
 import { useRouter } from 'next/navigation';
 
@@ -61,36 +61,39 @@ export default function OrderForm({ cartItems, total, deliveryFee, setSheetOpen 
     }
     setIsSubmitting(true);
     
-    try {
-        const batch = writeBatch(firestore);
+    const batch = writeBatch(firestore);
 
-        const orderRef = doc(collection(firestore, 'customers', user.uid, 'orders'));
-        const newOrder = {
-            customerId: user.uid,
-            orderDateTime: new Date().toISOString(),
-            totalAmount: total,
-            deliveryFee: deliveryFee,
-            paymentMethod: values.paymentMethod,
-            status: 'pending',
-            deliveryAddress: values.address,
+    const orderRef = doc(collection(firestore, 'customers', user.uid, 'orders'));
+    const newOrder = {
+        customerId: user.uid,
+        orderDateTime: new Date().toISOString(),
+        totalAmount: total,
+        deliveryFee: deliveryFee,
+        paymentMethod: values.paymentMethod,
+        status: 'pending',
+        deliveryAddress: values.address,
+    };
+    batch.set(orderRef, newOrder);
+    
+    const orderItemsForError: any[] = [];
+
+    cartItems.forEach(item => {
+        const orderItemRef = doc(collection(firestore, 'customers', user.uid, 'orders', orderRef.id, 'orderItems'));
+        const newOrderItem = {
+            orderId: orderRef.id,
+            customerId: user.uid, // <-- FIX: Add customerId for security rules
+            menuItemId: item.product.id,
+            quantity: item.quantity,
+            priceAtOrder: item.product.price,
+            name: item.product.name, // Denormalized
+            sku: item.product.sku, // Denormalized
         };
-        batch.set(orderRef, newOrder);
+        batch.set(orderItemRef, newOrderItem);
+        orderItemsForError.push(newOrderItem);
+    });
 
-        cartItems.forEach(item => {
-            const orderItemRef = doc(collection(firestore, 'customers', user.uid, 'orders', orderRef.id, 'orderItems'));
-            const newOrderItem = {
-                orderId: orderRef.id,
-                menuItemId: item.product.id,
-                quantity: item.quantity,
-                priceAtOrder: item.product.price,
-                name: item.product.name, // Denormalized
-                sku: item.product.sku, // Denormalized
-            };
-            batch.set(orderItemRef, newOrderItem);
-        });
-
-        await batch.commit();
-        
+    batch.commit()
+      .then(() => {
         toast({
             title: "Pesanan Berhasil 🎉",
             description: "Pesanan Anda telah kami terima dan akan segera diproses.",
@@ -98,16 +101,26 @@ export default function OrderForm({ cartItems, total, deliveryFee, setSheetOpen 
         clearCart();
         setSheetOpen(false);
         router.push('/order-success');
-    } catch (error: any) {
-        console.error("Order submission error:", error);
-        toast({
-            variant: "destructive",
-            title: "Gagal Mengirim Pesanan",
-            description: error.message || "Terjadi kesalahan. Silakan coba lagi.",
-        });
-    } finally {
+      })
+      .catch((serverError) => {
+          // This will be caught by the FirebaseErrorListener and displayed in the dev overlay
+          const permissionError = new FirestorePermissionError({
+            path: `customers/${user.uid}/orders/${orderRef.id}`,
+            operation: 'write', // Using 'write' for a batch operation
+            requestResourceData: { order: newOrder, items: orderItemsForError },
+          });
+          errorEmitter.emit('permission-error', permissionError);
+
+          // Fallback toast for the user
+          toast({
+              variant: "destructive",
+              title: "Gagal Mengirim Pesanan",
+              description: "Missing or insufficient permissions.",
+          });
+      })
+      .finally(() => {
         setIsSubmitting(false);
-    }
+      });
   }
 
   if (isUserLoading) {
