@@ -1,25 +1,64 @@
+'use client';
+
+import { useState, useEffect } from 'react';
 import { getRecommendedTakjil, type RecommendationOutput } from '@/ai/flows/ai-takjil-recommendation';
 import { products } from '@/lib/products';
 import { Carousel, CarouselContent, CarouselItem, CarouselNext, CarouselPrevious } from '@/components/ui/carousel';
 import ProductCard from './product-card';
 import { Lightbulb } from 'lucide-react';
 import type { Product } from '@/lib/types';
+import { Skeleton } from './ui/skeleton';
 
-export default async function Recommendations() {
-  let aiResponse: RecommendationOutput | null = null;
-  
-  try {
-    if (process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY !== 'YOUR_API_KEY_HERE') {
-      aiResponse = await getRecommendedTakjil({});
-    }
-  } catch (error) {
-    console.error('Error fetching AI recommendations. Ensure your GEMINI_API_KEY is set correctly in .env file.', error);
-    // Gracefully fail without breaking the page.
-    return null;
+export default function Recommendations() {
+  const [aiResponse, setAiResponse] = useState<RecommendationOutput | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchRecommendations = async () => {
+      setIsLoading(true);
+      try {
+        const response = await getRecommendedTakjil({});
+        setAiResponse(response);
+      } catch (error) {
+        console.error('Error fetching AI recommendations. This may be due to a missing or invalid GEMINI_API_KEY.', error);
+        setAiResponse(null);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchRecommendations();
+  }, []);
+
+  if (isLoading) {
+    return (
+        <section className="container">
+            <div className="flex flex-col items-center gap-4 mb-8">
+                <Skeleton className="h-10 w-3/4 max-w-lg" />
+                <Skeleton className="h-6 w-1/2 max-w-md" />
+            </div>
+            <div className="relative">
+                <div className="flex -ml-1">
+                    <div className="w-full sm:basis-1/2 md:basis-1/3 lg:basis-1/4 p-1">
+                        <Skeleton className="h-[250px] w-full" />
+                    </div>
+                    <div className="w-full sm:basis-1/2 md:basis-1/3 lg:basis-1/4 p-1 hidden sm:block">
+                        <Skeleton className="h-[250px] w-full" />
+                    </div>
+                    <div className="w-full sm:basis-1/2 md:basis-1/3 lg:basis-1/4 p-1 hidden md:block">
+                        <Skeleton className="h-[250px] w-full" />
+                    </div>
+                    <div className="w-full sm:basis-1/2 md:basis-1/3 lg:basis-1/4 p-1 hidden lg:block">
+                        <Skeleton className="h-[250px] w-full" />
+                    </div>
+                </div>
+            </div>
+      </section>
+    );
   }
   
   if (!aiResponse || !aiResponse.recommendations || aiResponse.recommendations.length === 0) {
-    return null;
+    return null; // Don't render anything if no recommendations or on error
   }
 
   const recommendedProducts = aiResponse.recommendations
