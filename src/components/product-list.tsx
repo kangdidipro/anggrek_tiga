@@ -31,15 +31,16 @@ export default function ProductList({ products }: ProductListProps) {
     ), [products, searchTerm]);
 
   const productsByCategory = useMemo(() => groupProductsByCategory(filteredProducts), [filteredProducts]);
-  const categories = useMemo(() => Object.keys(productsByCategory), [productsByCategory]);
+  // Add 'Semua' to the list of categories
+  const categories = useMemo(() => ['Semua', ...Object.keys(productsByCategory)], [productsByCategory]);
   
-  const [activeTab, setActiveTab] = useState<string | undefined>(categories[0]);
+  // Set default tab to 'Semua'
+  const [activeTab, setActiveTab] = useState<string>('Semua');
 
   useEffect(() => {
-    if (categories.length > 0 && !categories.includes(activeTab || '')) {
-      setActiveTab(categories[0]);
-    } else if (categories.length === 0) {
-      setActiveTab(undefined);
+    // If active tab is not available after filtering, set it to 'Semua'
+    if (!categories.includes(activeTab)) {
+      setActiveTab('Semua');
     }
   }, [categories, activeTab]);
 
@@ -60,14 +61,27 @@ export default function ProductList({ products }: ProductListProps) {
         <Tabs 
           value={activeTab} 
           onValueChange={setActiveTab}
+          defaultValue="Semua"
           className="w-full"
         >
           <TabsList className="grid w-full grid-cols-2 md:grid-cols-3 lg:flex lg:flex-wrap lg:h-auto justify-center">
+            {/* We only show tabs for categories that have items, plus "Semua" */}
             {categories.map((category) => (
               <TabsTrigger key={category} value={category}>{category}</TabsTrigger>
             ))}
           </TabsList>
-          {categories.map((category) => (
+
+          {/* Content for "Semua" tab */}
+          <TabsContent value="Semua">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6 md:gap-8 pt-8">
+              {filteredProducts.map((product) => (
+                <ProductCard key={product.id} product={product} />
+              ))}
+            </div>
+          </TabsContent>
+
+          {/* Content for other category tabs */}
+          {Object.keys(productsByCategory).map((category) => (
             <TabsContent key={category} value={category}>
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6 md:gap-8 pt-8">
                 {productsByCategory[category].map((product) => (
