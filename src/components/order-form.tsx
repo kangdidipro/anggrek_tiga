@@ -214,13 +214,12 @@ export default function OrderForm({ cartItems, total, deliveryFee, setSheetOpen 
                   {paymentMethod === 'QRIS' && (
                      <div className="p-4 flex flex-col items-center justify-center rounded-md border text-center bg-card">
                         <p className="text-sm font-medium mb-2">Pindai untuk Membayar</p>
-                        <img
-                            src="https://storage.googleapis.com/studio-hosting-assets/qris.png"
-                            alt="QRIS Code"
-                            width={250}
-                            height={375}
-                            className="object-contain rounded-md"
-                        />
+                        <div className="w-[250px] h-auto bg-muted/50 flex items-center justify-center rounded-md border-2 border-dashed aspect-[2/3] p-4">
+                            <p className="text-muted-foreground text-center text-sm">
+                                Gambar QRIS tidak dapat dimuat.
+                                Harap periksa kembali URL gambar di dalam kode.
+                            </p>
+                        </div>
                         <p className="mt-2 text-sm text-muted-foreground">UMKM06 - ANGGREK</p>
                      </div>
                   )}
