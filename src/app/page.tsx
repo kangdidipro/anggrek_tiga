@@ -1,25 +1,9 @@
 import { products } from '@/lib/products';
-import type { Product } from '@/lib/types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import ProductCard from '@/components/product-card';
 import Recommendations from '@/components/recommendations';
-
-function groupProductsByCategory(products: Product[]): Record<string, Product[]> {
-  return products.reduce((acc, product) => {
-    const { category } = product;
-    if (!acc[category]) {
-      acc[category] = [];
-    }
-    acc[category].push(product);
-    return acc;
-  }, {} as Record<string, Product[]>);
-}
+import ProductList from '@/components/product-list';
 
 export default function Home() {
-  const productsByCategory = groupProductsByCategory(products);
-  const categories = Object.keys(productsByCategory);
-
   return (
     <div className="flex flex-col gap-12 md:gap-16">
       <section className="container pt-8 md:pt-12">
@@ -55,22 +39,8 @@ export default function Home() {
             </p>
         </div>
 
-        <Tabs defaultValue={categories[0]} className="w-full">
-          <TabsList className="grid w-full grid-cols-2 md:grid-cols-3 lg:flex lg:flex-wrap lg:h-auto justify-center">
-            {categories.map((category) => (
-              <TabsTrigger key={category} value={category}>{category}</TabsTrigger>
-            ))}
-          </TabsList>
-          {categories.map((category) => (
-            <TabsContent key={category} value={category}>
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6 md:gap-8 pt-8">
-                {productsByCategory[category].map((product) => (
-                  <ProductCard key={product.id} product={product} />
-                ))}
-              </div>
-            </TabsContent>
-          ))}
-        </Tabs>
+        <ProductList products={products} />
+
       </section>
 
       <footer className="bg-muted py-6 mt-12">
