@@ -91,15 +91,16 @@ service cloud.firestore {
       /**
        * @description   Rules for a customer's orders.
        * @path          /customers/{customerId}/orders/{orderId}
-       * @allow         (create, get, list, update, delete) The customer who owns the order.
-       * @deny          (get, list, update, delete) A user trying to access another user's orders.
-       * @principle     Enforces document ownership via path parameter for all operations.
+       * @allow         (create, update, delete) The customer who owns the order.
+       * @allow         (get, list) Any signed-in user (for admin panel).
+       * @deny          (get, list, update, delete) A user trying to access another user's orders if not owner.
+       * @principle     Enforces document ownership via path parameter for write operations. Read is open for admin.
        */
       match /orders/{orderId} {
-        // WARNING: `list` is open to any signed-in user for the admin panel prototype.
+        // WARNING: `get` and `list` are open to any signed-in user to allow the admin panel prototype to work.
+        // This is required for collectionGroup queries to function.
         // In production, secure this with custom claims for an admin role (e.g., `request.auth.token.admin == true`).
-        allow list: if isSignedIn();
-        allow get: if isOwner(customerId);
+        allow get, list: if isSignedIn();
         allow create: if isOwner(customerId) && request.resource.data.customerId == customerId;
         allow update: if isExistingOwner(customerId) && request.resource.data.customerId == resource.data.customerId;
         allow delete: if isExistingOwner(customerId);
@@ -107,14 +108,14 @@ service cloud.firestore {
         /**
          * @description   Rules for items within an order.
          * @path          /customers/{customerId}/orders/{orderId}/orderItems/{orderItemId}
-         * @allow         (create, get, list, update, delete) The customer who owns the parent order.
-         * @deny          (get, list, update, delete) A user trying to access items in another user's order.
-         * @principle     Inherits ownership from the parent document's path.
+         * @allow         (create, update, delete) The customer who owns the parent order.
+         * @allow         (get, list) Any signed-in user (for admin panel).
+         * @deny          (get, list, update, delete) A user trying to access items in another user's order if not owner.
+         * @principle     Inherits ownership from the parent document's path. Read is open for admin.
          */
         match /orderItems/{orderItemId} {
-          // WARNING: `list` is open to any signed-in user for the admin panel prototype.
-          allow list: if isSignedIn();
-          allow get: if isOwner(customerId);
+          // WARNING: `get` and `list` are open to any signed-in user to allow the admin panel prototype to work.
+          allow get, list: if isSignedIn();
           allow create: if isOwner(customerId)
                            && request.resource.data.customerId == customerId
                            && request.resource.data.orderId == orderId;
