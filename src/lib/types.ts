@@ -13,7 +13,7 @@ export type CartItem = {
 
 export type OrderPayload = {
   name: string;
-  email: string;
+  email?: string;
   phone: string;
   address: string;
   paymentMethod: 'QRIS' | 'COD';

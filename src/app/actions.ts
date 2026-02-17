@@ -8,7 +8,7 @@ import * as xlsx from 'xlsx';
 
 const orderSchema = z.object({
   name: z.string().min(1, 'Nama wajib diisi'),
-  email: z.string().email('Email tidak valid'),
+  email: z.string().email('Email tidak valid').or(z.literal('')).optional(),
   phone: z.string().min(10, 'Nomor HP tidak valid'),
   address: z.string().min(10, 'Alamat tidak valid'),
   paymentMethod: z.enum(['QRIS', 'COD']),
@@ -31,7 +31,7 @@ function saveOrderToExcel(payload: OrderPayload) {
     'Order ID': new Date().getTime().toString(),
     'Timestamp': new Date().toISOString(),
     'Name': payload.name,
-    'Email': payload.email,
+    'Email': payload.email || '',
     'Phone': payload.phone,
     'Address': payload.address,
     'Payment Method': payload.paymentMethod,

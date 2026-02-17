@@ -17,7 +17,7 @@ import { useState } from 'react';
 
 const formSchema = z.object({
   name: z.string().min(2, { message: 'Nama harus diisi minimal 2 karakter.' }),
-  email: z.string().email({ message: 'Format email tidak valid.' }),
+  email: z.string().email({ message: 'Format email tidak valid.' }).or(z.literal('')).optional(),
   phone: z.string().min(10, { message: 'Nomor HP/WA harus diisi minimal 10 digit.' }),
   address: z.string().min(10, { message: 'Alamat antar harus diisi minimal 10 karakter.' }),
   paymentMethod: z.enum(['QRIS', 'COD'], { required_error: 'Pilih metode pembayaran.' }),
@@ -100,7 +100,7 @@ export default function OrderForm({ cartItems, total, deliveryFee, setSheetOpen 
           name="email"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Email *</FormLabel>
+              <FormLabel>Email</FormLabel>
               <FormControl>
                 <Input placeholder="anda@email.com" {...field} disabled={isSubmitting} />
               </FormControl>
