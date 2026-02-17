@@ -89,7 +89,7 @@ export default function OrderForm({ cartItems, total, deliveryFee, setSheetOpen 
             <FormItem>
               <FormLabel>Nama Pemesan *</FormLabel>
               <FormControl>
-                <Input placeholder="John Doe" {...field} disabled={isSubmitting} />
+                <Input placeholder="Budi Kosasih" {...field} disabled={isSubmitting} />
               </FormControl>
               <FormMessage />
             </FormItem>
