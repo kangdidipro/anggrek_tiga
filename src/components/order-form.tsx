@@ -52,6 +52,7 @@ export default function OrderForm({ cartItems, total, deliveryFee, setSheetOpen 
       items: cartItems.map(item => ({
         id: item.product.id,
         name: item.product.name,
+        sku: item.product.sku,
         quantity: item.quantity,
         price: item.product.price,
       })),

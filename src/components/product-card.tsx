@@ -26,7 +26,11 @@ export default function ProductCard({ product }: ProductCardProps) {
   return (
     <Card className="flex flex-col h-full overflow-hidden transition-all duration-300 hover:shadow-xl hover:-translate-y-1">
       <CardContent className="p-4 flex-1 flex flex-col">
-        <CardTitle className="text-base font-bold leading-snug tracking-tight mt-4 mb-2 flex-1">
+        <div className="flex justify-between text-sm text-muted-foreground mb-2">
+          <span>No: {product.id}</span>
+          <span>SKU: {product.sku}</span>
+        </div>
+        <CardTitle className="text-base font-bold leading-snug tracking-tight mb-2 flex-1">
           {product.name}
         </CardTitle>
         <p className="text-lg font-semibold text-primary">{formatPrice(product.price)}</p>

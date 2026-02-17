@@ -15,6 +15,7 @@ const orderSchema = z.object({
   items: z.array(z.object({
     id: z.string(),
     name: z.string(),
+    sku: z.string(),
     quantity: z.number().min(1),
     price: z.number(),
   })).min(1, 'Keranjang tidak boleh kosong'),
@@ -36,7 +37,7 @@ function saveOrderToExcel(payload: OrderPayload) {
     'Payment Method': payload.paymentMethod,
     'Total': payload.total,
     'Delivery Fee': payload.deliveryFee,
-    'Items': payload.items.map(item => `${item.name} (x${item.quantity})`).join(', '),
+    'Items': payload.items.map(item => `${item.name} (SKU: ${item.sku}, x${item.quantity})`).join(', '),
   };
 
   const sheetName = 'Orders';

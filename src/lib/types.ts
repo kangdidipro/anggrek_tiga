@@ -3,6 +3,7 @@ export type Product = {
   name: string;
   price: number;
   category: string;
+  sku: string;
 };
 
 export type CartItem = {
@@ -19,6 +20,7 @@ export type OrderPayload = {
   items: {
     id: string;
     name: string;
+    sku: string;
     quantity: number;
     price: number;
   }[];
