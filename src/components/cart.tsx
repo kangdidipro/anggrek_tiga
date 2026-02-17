@@ -36,16 +36,16 @@ export default function Cart() {
         {cartItems.length > 0 ? (
           <>
             <ScrollArea className="flex-1 pr-4 -mr-6">
-              <div className="flex flex-col gap-4 py-4">
+              <div className="space-y-4 py-4">
                 {cartItems.map(({ product, quantity }) => (
-                  <div key={product.id} className="flex items-center gap-4">
+                  <div key={product.id} className="flex items-start gap-4 rounded-md border bg-card p-3 shadow-sm">
                     <div className="flex-1">
-                      <p className="font-medium">{product.name}</p>
+                      <p className="font-medium leading-tight">{product.name}</p>
                       <p className="text-sm text-muted-foreground">
                         {quantity} x {formatPrice(product.price)}
                       </p>
                     </div>
-                    <p className="font-medium">{formatPrice(product.price * quantity)}</p>
+                    <p className="font-semibold text-right text-sm">{formatPrice(product.price * quantity)}</p>
                   </div>
                 ))}
               </div>
