@@ -29,7 +29,7 @@ export default function Cart() {
           )}
         </Button>
       </SheetTrigger>
-      <SheetContent className="flex w-full flex-col sm:max-w-lg">
+      <SheetContent className="flex w-full flex-col sm:max-w-3xl">
         <SheetHeader>
           <SheetTitle>Keranjang Belanja</SheetTitle>
         </SheetHeader>
