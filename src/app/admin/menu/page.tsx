@@ -1,12 +1,12 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef } from 'react';
 import { useFirestore, useCollection, useMemoFirebase } from '@/firebase';
 import { collection, doc, deleteDoc, setDoc } from 'firebase/firestore';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Loader2, Plus, Pencil, Trash2, RefreshCcw, Search, X } from 'lucide-react';
+import { Loader2, Plus, Pencil, Trash2, RefreshCcw, Search, X, FileUp } from 'lucide-react';
 import { formatPrice } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
@@ -15,6 +15,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { products as initialProducts } from '@/lib/products';
 import type { Product, Vendor } from '@/lib/types';
+import * as XLSX from 'xlsx';
 
 export default function AdminMenuPage() {
   const firestore = useFirestore();
@@ -22,6 +23,8 @@ export default function AdminMenuPage() {
   const [isEditing, setIsEditing] = useState<Product | null>(null);
   const [isAdding, setIsAdding] = useState(false);
   const [isSeeding, setIsSeeding] = useState(false);
+  const [isExcelImporting, setIsExcelImporting] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   
   // Search and Filter States
   const [searchTerm, setSearchTerm] = useState('');
@@ -129,6 +132,62 @@ export default function AdminMenuPage() {
     }
   };
 
+  const handleExcelUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !firestore) return;
+
+    setIsExcelImporting(true);
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      try {
+        const data = new Uint8Array(event.target?.result as ArrayBuffer);
+        const workbook = XLSX.read(data, { type: 'array' });
+        const firstSheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[firstSheetName];
+        const jsonData = XLSX.utils.sheet_to_json(worksheet) as any[];
+
+        let importedCount = 0;
+
+        for (const row of jsonData) {
+          const name = row['Nama'] || row['Nama Menu'] || row['Name'];
+          const price = Number(row['Harga'] || row['Price']);
+          const sku = String(row['SKU'] || row['Kode Produk'] || '');
+          const category = row['Kategori'] || row['Category'] || 'Nasi & Lauk';
+          const vendor = row['Vendor'] || row['Mitra'] || (sku.includes('-') ? sku.split('-')[0] : '');
+
+          if (name && price && sku) {
+            const productData: Product = {
+              id: (Math.floor(Math.random() * 10000) + 1000).toString(),
+              name: String(name),
+              price: price,
+              sku: sku,
+              category: String(category),
+              vendor: String(vendor),
+            };
+            await setDoc(doc(firestore, 'menuItems', productData.id), productData);
+            importedCount++;
+          }
+        }
+
+        toast({
+          title: "Import Selesai",
+          description: `${importedCount} menu berhasil diimport dari Excel.`,
+        });
+      } catch (error) {
+        console.error("Excel import error:", error);
+        toast({
+          variant: "destructive",
+          title: "Gagal Import",
+          description: "Pastikan format file Excel benar (Nama, Harga, SKU wajib ada).",
+        });
+      } finally {
+        setIsExcelImporting(false);
+        if (fileInputRef.current) fileInputRef.current.value = '';
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  };
+
   const resetFilters = () => {
     setSearchTerm('');
     setNameFilter('all');
@@ -142,21 +201,32 @@ export default function AdminMenuPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <h1 className="text-3xl font-bold tracking-tight font-headline">Manajemen Menu</h1>
           <p className="text-muted-foreground">Tambah, ubah, atau hapus menu takjil yang tersedia.</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
+          <input
+            type="file"
+            accept=".xlsx, .xls"
+            className="hidden"
+            ref={fileInputRef}
+            onChange={handleExcelUpload}
+          />
+          <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()} disabled={isExcelImporting}>
+            {isExcelImporting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileUp className="mr-2 h-4 w-4" />}
+            Import Excel
+          </Button>
           {(!menuItems || menuItems.length === 0) && (
-            <Button variant="outline" onClick={seedDefaultMenu} disabled={isSeeding}>
+            <Button variant="outline" size="sm" onClick={seedDefaultMenu} disabled={isSeeding}>
               {isSeeding ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCcw className="mr-2 h-4 w-4" />}
               Gunakan Menu Default
             </Button>
           )}
           <Dialog open={isAdding} onOpenChange={setIsAdding}>
             <DialogTrigger asChild>
-              <Button>
+              <Button size="sm">
                 <Plus className="mr-2 h-4 w-4" /> Tambah Menu
               </Button>
             </DialogTrigger>
