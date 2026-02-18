@@ -7,7 +7,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
-import { Lock } from 'lucide-react';
+import { Lock, ArrowLeft } from 'lucide-react';
+import Link from 'next/link';
 
 export default function AdminLoginPage() {
   const [password, setPassword] = useState('');
@@ -30,7 +31,7 @@ export default function AdminLoginPage() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-muted/40">
+    <div className="flex min-h-screen items-center justify-center bg-muted/40 p-4">
       <Card className="w-full max-w-sm">
         <CardHeader className="text-center">
           <CardTitle className="text-2xl flex items-center justify-center gap-2">
@@ -45,7 +46,7 @@ export default function AdminLoginPage() {
             </span>
           </CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-4">
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="password">Password</Label>
@@ -62,6 +63,14 @@ export default function AdminLoginPage() {
               {isLoading ? 'Loading...' : 'Login'}
             </Button>
           </form>
+          <div className="text-center pt-2">
+            <Button variant="link" asChild className="text-muted-foreground hover:text-primary p-0 h-auto font-normal">
+              <Link href="/" className="flex items-center gap-2 justify-center">
+                <ArrowLeft className="h-4 w-4" />
+                Kembali ke Halaman Utama
+              </Link>
+            </Button>
+          </div>
         </CardContent>
       </Card>
     </div>
