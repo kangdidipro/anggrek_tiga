@@ -1,8 +1,8 @@
 'use client';
 
 import { useEffect, useState, useMemo } from 'react';
-import { useFirestore } from '@/firebase';
-import { collectionGroup, getDocs, query, where, Timestamp } from 'firebase/firestore';
+import { useFirestore, useUser } from '@/firebase';
+import { collectionGroup, getDocs, query } from 'firebase/firestore';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Loader2, FileDown } from 'lucide-react';
@@ -15,7 +15,6 @@ import { CalendarIcon } from 'lucide-react';
 import { Calendar } from '@/components/ui/calendar';
 import { format } from 'date-fns';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Input } from '@/components/ui/input';
 
 interface OrderItem {
   id: string;
@@ -42,6 +41,7 @@ const getVendorFromSku = (sku: string) => sku.split('-')[0];
 
 export default function AdminOrdersPage() {
   const firestore = useFirestore();
+  const { user, isUserLoading } = useUser();
   const [orders, setOrders] = useState<Order[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [date, setDate] = useState<Date | undefined>(new Date());
@@ -54,7 +54,9 @@ export default function AdminOrdersPage() {
 
   useEffect(() => {
     const fetchOrders = async () => {
-      if (!firestore) return;
+      // Tunggu hingga firestore tersedia DAN status autentikasi selesai dimuat
+      if (!firestore || isUserLoading || !user) return;
+      
       setIsLoading(true);
       try {
         const ordersQuery = query(collectionGroup(firestore, 'orders'));
@@ -78,7 +80,7 @@ export default function AdminOrdersPage() {
       }
     };
     fetchOrders();
-  }, [firestore]);
+  }, [firestore, user, isUserLoading]);
 
   const filteredOrders = useMemo(() => {
     return orders.filter(order => {
@@ -127,7 +129,7 @@ export default function AdminOrdersPage() {
     saveAs(data, `orders_${format(new Date(), 'yyyy-MM-dd')}.xlsx`);
   };
   
-  if (isLoading) {
+  if (isLoading || isUserLoading) {
     return <div className="flex h-full items-center justify-center"><Loader2 className="h-8 w-8 animate-spin" /></div>;
   }
 

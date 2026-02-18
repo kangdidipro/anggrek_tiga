@@ -1,8 +1,8 @@
 'use client';
 
 import { useEffect, useState, useMemo } from 'react';
-import { useFirestore } from '@/firebase';
-import { collectionGroup, getDocs, query, Timestamp } from 'firebase/firestore';
+import { useFirestore, useUser } from '@/firebase';
+import { collectionGroup, getDocs, query } from 'firebase/firestore';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Loader2, FileDown } from 'lucide-react';
@@ -37,13 +37,16 @@ type DailySummary = {
 
 export default function AdminSummaryPage() {
   const firestore = useFirestore();
+  const { user, isUserLoading } = useUser();
   const [orders, setOrders] = useState<Order[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [date, setDate] = useState<Date>(new Date());
 
   useEffect(() => {
     const fetchOrders = async () => {
-      if (!firestore) return;
+      // Tunggu hingga firestore tersedia DAN status autentikasi selesai dimuat
+      if (!firestore || isUserLoading || !user) return;
+      
       setIsLoading(true);
       try {
         const ordersQuery = query(collectionGroup(firestore, 'orders'));
@@ -67,7 +70,7 @@ export default function AdminSummaryPage() {
       }
     };
     fetchOrders();
-  }, [firestore]);
+  }, [firestore, user, isUserLoading]);
 
   const dailySummary: DailySummary[] = useMemo(() => {
     const todayOrders = orders.filter(order => new Date(order.orderDateTime).toDateString() === date.toDateString());
@@ -111,7 +114,7 @@ export default function AdminSummaryPage() {
     saveAs(dataBlob, `rekap_harian_${date.toISOString().split('T')[0]}.xlsx`);
   };
 
-  if (isLoading) {
+  if (isLoading || isUserLoading) {
     return <div className="flex h-full items-center justify-center"><Loader2 className="h-8 w-8 animate-spin" /></div>;
   }
   
