@@ -1,3 +1,4 @@
+
 {
   "entities": {
     "Customer": {
@@ -98,9 +99,22 @@
         "code": {
           "type": "string",
           "description": "Short code representing the vendor (e.g., 'NL')."
+        },
+        "email": {
+          "type": "string",
+          "format": "email",
+          "description": "Email address of the vendor for communication and reports."
+        },
+        "phoneNumber": {
+          "type": "string",
+          "description": "Contact phone or WhatsApp number of the vendor."
         }
       },
-      "required": ["id", "name", "code"]
+      "required": [
+        "id",
+        "name",
+        "code"
+      ]
     },
     "Order": {
       "$schema": "http://json-schema.org/draft-07/schema#",

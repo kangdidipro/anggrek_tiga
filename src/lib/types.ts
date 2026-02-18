@@ -1,3 +1,4 @@
+
 export type Product = {
   id: string;
   name: string;
@@ -11,6 +12,8 @@ export type Vendor = {
   id: string;
   name: string;
   code: string;
+  email?: string;
+  phoneNumber?: string;
 };
 
 export type CartItem = {

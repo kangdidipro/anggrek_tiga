@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useRef, useMemo } from 'react';
@@ -43,7 +44,9 @@ export default function AdminVendorsPage() {
     return vendors
       .filter(vendor => 
         vendor.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-        vendor.code.toLowerCase().includes(searchTerm.toLowerCase())
+        vendor.code.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (vendor.email && vendor.email.toLowerCase().includes(searchTerm.toLowerCase())) ||
+        (vendor.phoneNumber && vendor.phoneNumber.toLowerCase().includes(searchTerm.toLowerCase()))
       )
       .sort((a, b) => a.name.localeCompare(b.name));
   }, [vendors, searchTerm]);
@@ -67,6 +70,8 @@ export default function AdminVendorsPage() {
       id: isEditing?.id || (Math.floor(Math.random() * 1000) + 100).toString(),
       name: formData.get('name') as string,
       code: formData.get('code') as string,
+      email: (formData.get('email') as string) || '',
+      phoneNumber: (formData.get('phoneNumber') as string) || '',
     };
 
     try {
@@ -140,12 +145,16 @@ export default function AdminVendorsPage() {
         for (const row of jsonData) {
           const name = row['Nama Mitra'] || row['Nama'] || Object.values(row)[0];
           const code = row['Kode Mitra'] || row['Kode'] || Object.values(row)[1];
+          const email = row['Email'] || '';
+          const phone = row['No HP'] || row['Telepon'] || row['Phone'] || row['PhoneNumber'] || '';
 
           if (name && code && !existingCodes.has(String(code))) {
             const vendorData: Vendor = {
               id: (Math.floor(Math.random() * 10000) + 1000).toString(),
               name: String(name),
               code: String(code),
+              email: String(email),
+              phoneNumber: String(phone),
             };
             await setDoc(doc(firestore, 'vendors', vendorData.id), vendorData);
             importedCount++;
@@ -222,6 +231,14 @@ export default function AdminVendorsPage() {
                     <Label htmlFor="code">Kode Mitra (Singkatan)</Label>
                     <Input id="code" name="code" placeholder="Contoh: DB" required />
                   </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="email">Email Mitra</Label>
+                    <Input id="email" name="email" type="email" placeholder="mitra@email.com" />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="phoneNumber">No HP / WhatsApp</Label>
+                    <Input id="phoneNumber" name="phoneNumber" placeholder="08123456789" />
+                  </div>
                 </div>
                 <DialogFooter>
                   <Button type="submit" className="w-full">Simpan Mitra</Button>
@@ -235,7 +252,7 @@ export default function AdminVendorsPage() {
       <div className="relative max-w-sm">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
         <Input
-          placeholder="Cari nama atau kode mitra..."
+          placeholder="Cari nama, kode, email, atau no hp..."
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
           className="pl-10"
@@ -249,13 +266,15 @@ export default function AdminVendorsPage() {
               <TableRow>
                 <TableHead>Nama Mitra</TableHead>
                 <TableHead>Kode</TableHead>
+                <TableHead>Email</TableHead>
+                <TableHead>No HP</TableHead>
                 <TableHead className="text-right">Aksi</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {filteredVendors.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={3} className="text-center py-12 text-muted-foreground">
+                  <TableCell colSpan={5} className="text-center py-12 text-muted-foreground">
                     {searchTerm ? 'Tidak ada mitra yang cocok dengan pencarian.' : 'Belum ada mitra yang terdaftar.'}
                   </TableCell>
                 </TableRow>
@@ -264,6 +283,8 @@ export default function AdminVendorsPage() {
                   <TableRow key={vendor.id}>
                     <TableCell className="font-medium">{vendor.name}</TableCell>
                     <TableCell className="font-mono font-bold">{vendor.code}</TableCell>
+                    <TableCell>{vendor.email || '-'}</TableCell>
+                    <TableCell>{vendor.phoneNumber || '-'}</TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-2">
                         <Dialog open={isEditing?.id === vendor.id} onOpenChange={(open) => !open && setIsEditing(null)}>
@@ -286,6 +307,14 @@ export default function AdminVendorsPage() {
                                 <div className="grid gap-2">
                                   <Label htmlFor="edit-code">Kode Mitra (Singkatan)</Label>
                                   <Input id="edit-code" name="code" defaultValue={vendor.code} required />
+                                </div>
+                                <div className="grid gap-2">
+                                  <Label htmlFor="edit-email">Email Mitra</Label>
+                                  <Input id="edit-email" name="email" type="email" defaultValue={vendor.email} placeholder="mitra@email.com" />
+                                </div>
+                                <div className="grid gap-2">
+                                  <Label htmlFor="edit-phone">No HP / WhatsApp</Label>
+                                  <Input id="edit-phone" name="phoneNumber" defaultValue={vendor.phoneNumber} placeholder="08123456789" />
                                 </div>
                               </div>
                               <DialogFooter>
