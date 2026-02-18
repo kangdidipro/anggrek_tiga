@@ -173,7 +173,7 @@ export default function AdminOrdersPage() {
         order.items.map(item => ({
             'Tanggal Order': format(new Date(order.orderDateTime), 'yyyy-MM-dd HH:mm'),
             'Order ID': order.id,
-            'Vendor': getVendorFromSku(item.sku),
+            'Mitra': getVendorFromSku(item.sku),
             'Nama Item': item.name,
             'Jumlah': item.quantity,
             'Harga Satuan': item.priceAtOrder,
@@ -193,7 +193,7 @@ export default function AdminOrdersPage() {
 
   const exportToPDF = () => {
     const doc = new jsPDF();
-    const tableColumn = ["Tanggal", "ID", "Vendor", "Item", "Qty", "Total", "Alamat"];
+    const tableColumn = ["Tanggal", "ID", "Mitra", "Item", "Qty", "Total", "Alamat"];
     const tableRows = filteredOrders.flatMap(order => 
         order.items.map(item => [
             format(new Date(order.orderDateTime), 'dd/MM HH:mm'),
@@ -274,10 +274,10 @@ export default function AdminOrdersPage() {
                 </Popover>
                  <Select value={vendor} onValueChange={setVendor}>
                     <SelectTrigger className="w-[180px]">
-                        <SelectValue placeholder="Pilih Vendor" />
+                        <SelectValue placeholder="Pilih Mitra" />
                     </SelectTrigger>
                     <SelectContent>
-                        {allVendors.map(v => <SelectItem key={v} value={v}>{v === 'all' ? 'Semua Vendor' : v}</SelectItem>)}
+                        {allVendors.map(v => <SelectItem key={v} value={v}>{v === 'all' ? 'Semua Mitra' : v}</SelectItem>)}
                     </SelectContent>
                 </Select>
                 <div className="flex flex-wrap gap-2 items-center">
@@ -312,7 +312,7 @@ export default function AdminOrdersPage() {
       ) : (
         Object.entries(groupedByVendor).map(([vendorCode, vendorOrders]) => (
             <div key={vendorCode} className="mb-8">
-                <h2 className="text-xl font-bold mb-4 bg-primary/10 p-2 rounded px-4 text-primary">Vendor: {vendorCode}</h2>
+                <h2 className="text-xl font-bold mb-4 bg-primary/10 p-2 rounded px-4 text-primary">Mitra: {vendorCode}</h2>
                 <Accordion type="single" collapsible className="w-full space-y-4">
                   {vendorOrders.map((order) => (
                       <AccordionItem value={order.id} key={order.id} className="border-b-0">

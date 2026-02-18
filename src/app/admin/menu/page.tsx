@@ -153,7 +153,7 @@ export default function AdminMenuPage() {
           const price = Number(row['Harga'] || row['Price']);
           const sku = String(row['SKU'] || row['Kode Produk'] || '');
           const category = row['Kategori'] || row['Category'] || 'Nasi & Lauk';
-          const vendor = row['Vendor'] || row['Mitra'] || (sku.includes('-') ? sku.split('-')[0] : '');
+          const vendor = row['Mitra'] || row['Vendor'] || row['Mitra'] || (sku.includes('-') ? sku.split('-')[0] : '');
 
           if (name && price && sku) {
             const productData: Product = {
@@ -269,10 +269,10 @@ export default function AdminMenuPage() {
                       </Select>
                     </div>
                     <div className="grid gap-2">
-                      <Label htmlFor="vendor">Vendor / Penjual</Label>
+                      <Label htmlFor="vendor">Mitra / Penjual</Label>
                       <Select name="vendor" required>
                         <SelectTrigger>
-                          <SelectValue placeholder="Pilih Vendor" />
+                          <SelectValue placeholder="Pilih Mitra" />
                         </SelectTrigger>
                         <SelectContent>
                           {vendors && vendors.length > 0 ? (
@@ -343,13 +343,13 @@ export default function AdminMenuPage() {
           </div>
 
           <div className="space-y-2 w-[150px]">
-            <Label className="text-xs uppercase text-muted-foreground font-bold">Filter Vendor</Label>
+            <Label className="text-xs uppercase text-muted-foreground font-bold">Filter Mitra</Label>
             <Select value={vendorFilter} onValueChange={setVendorFilter}>
               <SelectTrigger>
-                <SelectValue placeholder="Semua Vendor" />
+                <SelectValue placeholder="Semua Mitra" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">Semua Vendor</SelectItem>
+                <SelectItem value="all">Semua Mitra</SelectItem>
                 {uniqueVendors.map(code => (
                   <SelectItem key={code} value={code}>{code}</SelectItem>
                 ))}
@@ -370,7 +370,7 @@ export default function AdminMenuPage() {
               <TableRow>
                 <TableHead>Nama</TableHead>
                 <TableHead>Kategori</TableHead>
-                <TableHead>Vendor</TableHead>
+                <TableHead>Mitra</TableHead>
                 <TableHead>SKU</TableHead>
                 <TableHead className="text-right">Harga</TableHead>
                 <TableHead className="text-right">Aksi</TableHead>
@@ -440,10 +440,10 @@ export default function AdminMenuPage() {
                                     </Select>
                                   </div>
                                   <div className="grid gap-2">
-                                    <Label htmlFor="edit-vendor">Vendor / Penjual</Label>
+                                    <Label htmlFor="edit-vendor">Mitra / Penjual</Label>
                                     <Select name="vendor" defaultValue={item.vendor} required>
                                       <SelectTrigger>
-                                        <SelectValue placeholder="Pilih Vendor" />
+                                        <SelectValue placeholder="Pilih Mitra" />
                                       </SelectTrigger>
                                       <SelectContent>
                                         {vendors && vendors.length > 0 ? (

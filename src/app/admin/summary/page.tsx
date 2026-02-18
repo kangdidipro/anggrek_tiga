@@ -164,7 +164,7 @@ export default function AdminSummaryPage() {
 
   const exportToExcel = () => {
     const dataForExport = filteredSummary.map(summary => ({
-        'Vendor': summary.vendor,
+        'Mitra': summary.vendor,
         'Total Pesanan': summary.totalOrders,
         'Total Pemesanan': summary.totalAmount,
         'Rincian Item, Harga & SKU': summary.items.map(i => `${i.name} [${i.sku}] (${formatPrice(i.price)} x ${i.quantity} = ${formatPrice(i.price * i.quantity)})`).join('\r\n'),
@@ -173,7 +173,7 @@ export default function AdminSummaryPage() {
 
     // Add Grand Total row to Excel
     dataForExport.push({
-      'Vendor': 'TOTAL KESELURUHAN',
+      'Mitra': 'TOTAL KESELURUHAN',
       'Total Pesanan': grandTotals.orders,
       'Total Pemesanan': grandTotals.amount,
       'Rincian Item, Harga & SKU': '',
@@ -186,7 +186,7 @@ export default function AdminSummaryPage() {
     
     // Auto-width adjustment
     const wscols = [
-        {wch: 15}, // Vendor
+        {wch: 15}, // Vendor/Mitra
         {wch: 15}, // Total Pesanan
         {wch: 20}, // Total Pemesanan
         {wch: 70}, // Rincian
@@ -201,7 +201,7 @@ export default function AdminSummaryPage() {
 
   const exportToPDF = () => {
     const doc = new jsPDF('l', 'mm', 'a4'); // Landscape orientation
-    const tableColumn = ["Vendor", "Pesanan", "Total", "Rincian Item, Harga & SKU", "Alamat Pengiriman"];
+    const tableColumn = ["Mitra", "Pesanan", "Total", "Rincian Item, Harga & SKU", "Alamat Pengiriman"];
     const tableRows = filteredSummary.map(summary => [
         summary.vendor,
         summary.totalOrders.toString(),
@@ -275,7 +275,7 @@ export default function AdminSummaryPage() {
                     <div className="relative flex-1 min-w-[240px]">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                         <Input 
-                            placeholder="Cari Vendor, Item, atau Alamat..." 
+                            placeholder="Cari Mitra, Item, atau Alamat..." 
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
                             className="pl-10"
@@ -295,12 +295,12 @@ export default function AdminSummaryPage() {
                     
                     <Select value={vendorFilter} onValueChange={setVendorFilter}>
                         <SelectTrigger className="w-[180px]">
-                            <SelectValue placeholder="Semua Vendor" />
+                            <SelectValue placeholder="Semua Mitra" />
                         </SelectTrigger>
                         <SelectContent>
                             {availableVendors.map(v => (
                                 <SelectItem key={v} value={v}>
-                                    {v === 'all' ? 'Semua Vendor' : v}
+                                    {v === 'all' ? 'Semua Mitra' : v}
                                 </SelectItem>
                             ))}
                         </SelectContent>
@@ -334,7 +334,7 @@ export default function AdminSummaryPage() {
                 <Table>
                     <TableHeader>
                         <TableRow>
-                            <TableHead>Vendor</TableHead>
+                            <TableHead>Mitra</TableHead>
                             <TableHead className="text-right">Pesanan</TableHead>
                             <TableHead className="text-right">Total</TableHead>
                             <TableHead>Rincian Item, Harga & SKU</TableHead>
