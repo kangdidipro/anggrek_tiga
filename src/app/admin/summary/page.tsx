@@ -5,11 +5,15 @@ import { useFirestore, useUser } from '@/firebase';
 import { collectionGroup, getDocs, query } from 'firebase/firestore';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Loader2, FileDown } from 'lucide-react';
+import { Loader2, FileDown, CalendarIcon } from 'lucide-react';
 import { formatPrice } from '@/lib/utils';
 import * as XLSX from 'xlsx';
 import { saveAs } from 'file-saver';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Calendar } from '@/components/ui/calendar';
+import { format } from 'date-fns';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 interface OrderItem {
   id: string;
@@ -40,11 +44,11 @@ export default function AdminSummaryPage() {
   const { user, isUserLoading } = useUser();
   const [orders, setOrders] = useState<Order[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [date, setDate] = useState<Date>(new Date());
+  const [date, setDate] = useState<Date | undefined>(new Date());
+  const [vendorFilter, setVendorFilter] = useState<string>('all');
 
   useEffect(() => {
     const fetchOrders = async () => {
-      // Tunggu hingga firestore tersedia DAN status autentikasi selesai dimuat
       if (!firestore || isUserLoading || !user) return;
       
       setIsLoading(true);
@@ -72,14 +76,25 @@ export default function AdminSummaryPage() {
     fetchOrders();
   }, [firestore, user, isUserLoading]);
 
+  const allVendors = useMemo(() => {
+    const vendorSet = new Set(orders.flatMap(o => o.items.map(i => getVendorFromSku(i.sku))));
+    return ['all', ...Array.from(vendorSet)];
+  }, [orders]);
+
   const dailySummary: DailySummary[] = useMemo(() => {
-    const todayOrders = orders.filter(order => new Date(order.orderDateTime).toDateString() === date.toDateString());
+    if (!date) return [];
+    
+    const targetDateOrders = orders.filter(order => new Date(order.orderDateTime).toDateString() === date.toDateString());
     
     const summaryMap: Record<string, { totalOrders: Set<string>; totalAmount: number; items: Record<string, number> }> = {};
 
-    todayOrders.forEach(order => {
+    targetDateOrders.forEach(order => {
         order.items.forEach(item => {
             const vendor = getVendorFromSku(item.sku);
+            
+            // Apply vendor filter
+            if (vendorFilter !== 'all' && vendor !== vendorFilter) return;
+
             if (!summaryMap[vendor]) {
                 summaryMap[vendor] = { totalOrders: new Set(), totalAmount: 0, items: {} };
             }
@@ -96,7 +111,7 @@ export default function AdminSummaryPage() {
         totalAmount: data.totalAmount,
         items: Object.entries(data.items).map(([name, quantity]) => ({ name, quantity })),
     }));
-  }, [orders, date]);
+  }, [orders, date, vendorFilter]);
 
   const exportToExcel = () => {
     const dataForExport = dailySummary.map(summary => ({
@@ -111,29 +126,55 @@ export default function AdminSummaryPage() {
     XLSX.utils.book_append_sheet(workbook, worksheet, "Rekap Harian");
     const excelBuffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
     const dataBlob = new Blob([excelBuffer], {type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;charset=UTF-8'});
-    saveAs(dataBlob, `rekap_harian_${date.toISOString().split('T')[0]}.xlsx`);
+    saveAs(dataBlob, `rekap_harian_${date ? date.toISOString().split('T')[0] : 'semua'}.xlsx`);
   };
 
   if (isLoading || isUserLoading) {
-    return <div className="flex h-full items-center justify-center"><Loader2 className="h-8 w-8 animate-spin" /></div>;
+    return <div className="flex h-full items-center justify-center p-24"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
   }
   
   return (
     <div className="space-y-6">
         <Card>
             <CardHeader>
-                <div className="flex justify-between items-start">
-                    <div>
-                        <CardTitle>Rekap Harian</CardTitle>
-                        <CardDescription>Rekapitulasi total pesanan per penjual untuk tanggal {date.toLocaleDateString('id-ID', { dateStyle: 'full' })}.</CardDescription>
-                    </div>
+                <CardTitle>Rekap Harian</CardTitle>
+                <CardDescription>
+                  Rekapitulasi total pesanan per penjual untuk tanggal {date ? format(date, 'eeee, d MMMM yyyy', { locale: require('date-fns/locale/id') }) : 'semua waktu'}.
+                </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+                <div className="flex flex-wrap gap-4 items-center mb-4">
+                    <Popover>
+                        <PopoverTrigger asChild>
+                            <Button variant={"outline"} className="w-[280px] justify-start text-left font-normal">
+                                <CalendarIcon className="mr-2 h-4 w-4" />
+                                {date ? format(date, "PPP") : <span>Pilih tanggal</span>}
+                            </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0">
+                            <Calendar mode="single" selected={date} onSelect={setDate} initialFocus />
+                        </PopoverContent>
+                    </Popover>
+
+                    <Select value={vendorFilter} onValueChange={setVendorFilter}>
+                        <SelectTrigger className="w-[180px]">
+                            <SelectValue placeholder="Pilih Vendor" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            {allVendors.map(v => (
+                                <SelectItem key={v} value={v}>
+                                    {v === 'all' ? 'Semua Vendor' : v}
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+
                     <Button onClick={exportToExcel} disabled={dailySummary.length === 0}>
                         <FileDown className="mr-2 h-4 w-4" />
                         Export Excel
                     </Button>
                 </div>
-            </CardHeader>
-            <CardContent>
+
                 <Table>
                     <TableHeader>
                         <TableRow>
@@ -145,7 +186,9 @@ export default function AdminSummaryPage() {
                     <TableBody>
                         {dailySummary.length === 0 ? (
                             <TableRow>
-                                <TableCell colSpan={3} className="text-center text-muted-foreground">Tidak ada transaksi hari ini.</TableCell>
+                                <TableCell colSpan={3} className="text-center text-muted-foreground py-10">
+                                  Tidak ada transaksi ditemukan untuk filter ini.
+                                </TableCell>
                             </TableRow>
                         ) : (
                             dailySummary.map(summary => (
