@@ -11,7 +11,8 @@ interface AdminContextType {
 
 export const AdminContext = createContext<AdminContextType | undefined>(undefined);
 
-const ADMIN_PASSWORD = 'Angrek3';
+// Menggunakan variabel lingkungan jika ada, jika tidak gunakan default 'Angrek3'
+const ADMIN_PASSWORD = process.env.NEXT_PUBLIC_ADMIN_PASSWORD || 'Angrek3';
 const SESSION_STORAGE_KEY = 'admin_auth';
 
 export function AdminProvider({ children }: { children: ReactNode }) {
