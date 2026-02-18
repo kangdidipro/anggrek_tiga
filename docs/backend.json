@@ -1,3 +1,4 @@
+
 {
   "entities": {
     "Customer": {
@@ -62,13 +63,18 @@
         "sku": {
           "type": "string",
           "description": "Stock Keeping Unit (SKU) for the menu item, used for identification (e.g., RpSKU-1)."
+        },
+        "category": {
+          "type": "string",
+          "description": "The category of the menu item (e.g., 'Nasi & Lauk', 'Pempek')."
         }
       },
       "required": [
         "id",
         "name",
         "price",
-        "sku"
+        "sku",
+        "category"
       ]
     },
     "Order": {

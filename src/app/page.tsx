@@ -1,9 +1,24 @@
-import { products } from '@/lib/products';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+
+'use client';
+
+import { useFirestore, useCollection, useMemoFirebase } from '@/firebase';
+import { collection } from 'firebase/firestore';
+import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import Recommendations from '@/components/recommendations';
 import ProductList from '@/components/product-list';
+import { Loader2 } from 'lucide-react';
+import type { Product } from '@/lib/types';
 
 export default function Home() {
+  const firestore = useFirestore();
+
+  const menuItemsQuery = useMemoFirebase(() => {
+    if (!firestore) return null;
+    return collection(firestore, 'menuItems');
+  }, [firestore]);
+
+  const { data: products, isLoading } = useCollection<Product>(menuItemsQuery);
+
   return (
     <div className="flex flex-col gap-12 md:gap-16">
       <section className="container pt-8 md:pt-12">
@@ -29,19 +44,26 @@ export default function Home() {
         </Card>
       </section>
 
-      <Recommendations />
-
-      <section id="menu" className="container">
-        <div className="flex flex-col items-center gap-4 mb-8">
-            <h2 className="text-3xl font-bold tracking-tighter sm:text-4xl md:text-5xl font-headline">Menu Takjil</h2>
-            <p className="max-w-[900px] text-muted-foreground md:text-xl/relaxed lg:text-base/relaxed xl:text-xl/relaxed text-center">
-              Pilih dari beragam hidangan lezat kami, mulai dari makanan utama hingga kue-kue manis.
-            </p>
-        </div>
-
-        <ProductList products={products} />
-
-      </section>
+      {isLoading ? (
+        <div className="flex justify-center p-12"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
+      ) : products && products.length > 0 ? (
+        <>
+          <Recommendations products={products} />
+          <section id="menu" className="container">
+            <div className="flex flex-col items-center gap-4 mb-8">
+                <h2 className="text-3xl font-bold tracking-tighter sm:text-4xl md:text-5xl font-headline">Menu Takjil</h2>
+                <p className="max-w-[900px] text-muted-foreground md:text-xl/relaxed lg:text-base/relaxed xl:text-xl/relaxed text-center">
+                  Pilih dari beragam hidangan lezat kami, mulai dari makanan utama hingga kue-kue manis.
+                </p>
+            </div>
+            <ProductList products={products} />
+          </section>
+        </>
+      ) : (
+        <section className="container text-center py-12">
+          <p className="text-muted-foreground">Belum ada menu yang tersedia saat ini.</p>
+        </section>
+      )}
 
       <footer className="bg-muted py-6 mt-12">
         <div className="container text-center text-muted-foreground text-sm">

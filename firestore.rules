@@ -1,3 +1,4 @@
+
 /**
  * # Firestore Security Rules: Ramadhan Takjil Order App
  *
@@ -70,11 +71,12 @@ service cloud.firestore {
     }
 
     /**
-     * Rules for publicly available menu items.
+     * Rules for menu items.
+     * Public can read. Admin (signed-in) can write for this prototype.
      */
     match /menuItems/{menuItemId} {
       allow read: if true;
-      allow write: if false; 
+      allow write: if isSignedIn(); 
     }
   }
 }
