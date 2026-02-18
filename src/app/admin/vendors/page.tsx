@@ -1,12 +1,12 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useMemo } from 'react';
 import { useFirestore, useCollection, useMemoFirebase } from '@/firebase';
 import { collection, doc, deleteDoc, setDoc } from 'firebase/firestore';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Loader2, Plus, Pencil, Trash2, RefreshCcw, FileUp } from 'lucide-react';
+import { Loader2, Plus, Pencil, Trash2, RefreshCcw, FileUp, Search } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
@@ -21,6 +21,7 @@ export default function AdminVendorsPage() {
   const [isAdding, setIsAdding] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
   const [isExcelImporting, setIsExcelImporting] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Fetch Vendors
@@ -36,6 +37,16 @@ export default function AdminVendorsPage() {
     return collection(firestore, 'menuItems');
   }, [firestore]);
   const { data: menuItems } = useCollection<Product>(menuItemsQuery);
+
+  const filteredVendors = useMemo(() => {
+    if (!vendors) return [];
+    return vendors
+      .filter(vendor => 
+        vendor.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+        vendor.code.toLowerCase().includes(searchTerm.toLowerCase())
+      )
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [vendors, searchTerm]);
 
   const handleDelete = async (id: string) => {
     if (!firestore) return;
@@ -127,7 +138,6 @@ export default function AdminVendorsPage() {
         const existingCodes = new Set(vendors?.map(v => v.code) || []);
 
         for (const row of jsonData) {
-          // Cari kolom Nama dan Kode (case insensitive)
           const name = row['Nama Mitra'] || row['Nama'] || Object.values(row)[0];
           const code = row['Kode Mitra'] || row['Kode'] || Object.values(row)[1];
 
@@ -168,12 +178,12 @@ export default function AdminVendorsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <h1 className="text-3xl font-bold tracking-tight font-headline">Master Mitra</h1>
           <p className="text-muted-foreground">Kelola daftar vendor atau mitra TakjilKu.</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <input
             type="file"
             accept=".xlsx, .xls"
@@ -181,19 +191,19 @@ export default function AdminVendorsPage() {
             ref={fileInputRef}
             onChange={handleExcelUpload}
           />
-          <Button variant="outline" onClick={() => fileInputRef.current?.click()} disabled={isExcelImporting}>
+          <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()} disabled={isExcelImporting}>
             {isExcelImporting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileUp className="mr-2 h-4 w-4" />}
             Import Excel
           </Button>
           {menuItems && menuItems.length > 0 && (
-            <Button variant="outline" onClick={handleImportFromMenu} disabled={isImporting}>
+            <Button variant="outline" size="sm" onClick={handleImportFromMenu} disabled={isImporting}>
               {isImporting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCcw className="mr-2 h-4 w-4" />}
               Import dari Menu
             </Button>
           )}
           <Dialog open={isAdding} onOpenChange={setIsAdding}>
             <DialogTrigger asChild>
-              <Button>
+              <Button size="sm">
                 <Plus className="mr-2 h-4 w-4" /> Tambah Mitra
               </Button>
             </DialogTrigger>
@@ -222,6 +232,16 @@ export default function AdminVendorsPage() {
         </div>
       </div>
 
+      <div className="relative max-w-sm">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+        <Input
+          placeholder="Cari nama atau kode mitra..."
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          className="pl-10"
+        />
+      </div>
+
       <Card>
         <CardContent className="p-0">
           <Table>
@@ -233,14 +253,14 @@ export default function AdminVendorsPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {!vendors || vendors.length === 0 ? (
+              {filteredVendors.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={3} className="text-center py-12 text-muted-foreground">
-                    Belum ada mitra yang terdaftar.
+                    {searchTerm ? 'Tidak ada mitra yang cocok dengan pencarian.' : 'Belum ada mitra yang terdaftar.'}
                   </TableCell>
                 </TableRow>
               ) : (
-                vendors.sort((a, b) => a.name.localeCompare(b.name)).map((vendor) => (
+                filteredVendors.map((vendor) => (
                   <TableRow key={vendor.id}>
                     <TableCell className="font-medium">{vendor.name}</TableCell>
                     <TableCell className="font-mono font-bold">{vendor.code}</TableCell>
