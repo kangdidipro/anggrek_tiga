@@ -1,5 +1,6 @@
 'use client';
 
+import { useState, useEffect } from 'react';
 import type { Product } from '@/lib/types';
 import { Card, CardContent, CardFooter, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -14,6 +15,11 @@ type ProductCardProps = {
 export default function ProductCard({ product }: ProductCardProps) {
   const { addToCart, updateItemQuantity, getItemQuantity } = useCart();
   const quantity = getItemQuantity(product.id);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const handleIncrease = () => {
     updateItemQuantity(product.id, quantity + 1);
@@ -36,7 +42,8 @@ export default function ProductCard({ product }: ProductCardProps) {
         <p className="text-lg font-semibold text-primary">{formatPrice(product.price)}</p>
       </CardContent>
       <CardFooter className="p-4 pt-0">
-        {quantity === 0 ? (
+        {/* Only show quantity controls after mounting to prevent hydration mismatch */}
+        {!mounted || quantity === 0 ? (
           <Button className="w-full" onClick={() => addToCart(product)}>
             <Plus className="mr-2 h-4 w-4" />
             Tambah
