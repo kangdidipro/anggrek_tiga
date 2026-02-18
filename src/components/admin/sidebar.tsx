@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
-import { ListOrdered, LayoutDashboard, LogOut, Soup } from 'lucide-react';
+import { ListOrdered, LayoutDashboard, LogOut, Soup, Home } from 'lucide-react';
 
 const navItems = [
   { href: '/admin/orders', label: 'List Order', icon: ListOrdered },
@@ -41,6 +41,16 @@ export default function AdminSidebar() {
             </Link>
           );
         })}
+        
+        <div className="pt-4 mt-4 border-t border-border/50">
+          <Link
+            href="/"
+            className="flex items-center gap-3 rounded-lg px-3 py-2 text-muted-foreground transition-all hover:text-primary hover:bg-muted/50"
+          >
+            <Home className="h-4 w-4" />
+            Lihat Website
+          </Link>
+        </div>
       </nav>
       <div className="p-4 mt-auto border-t">
         <Button variant="outline" className="w-full" onClick={logout}>
