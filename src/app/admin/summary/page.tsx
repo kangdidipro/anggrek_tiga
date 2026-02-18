@@ -59,7 +59,6 @@ export default function AdminSummaryPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const { toast } = useToast();
 
-  // Fetch Mitra for Lookup
   const vendorsQuery = useMemoFirebase(() => {
     if (!firestore) return null;
     return collection(firestore, 'vendors');
@@ -194,7 +193,6 @@ export default function AdminSummaryPage() {
         'Alamat Pengiriman': summary.addresses.join('\r\n'),
     }));
 
-    // Add Grand Total row to Excel
     dataForExport.push({
       'Mitra': 'TOTAL KESELURUHAN',
       'Total Pesanan': grandTotals.orders,
@@ -207,7 +205,6 @@ export default function AdminSummaryPage() {
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, "Rekap Harian");
     
-    // Auto-width adjustment
     const wscols = [
         {wch: 40}, // Mitra
         {wch: 15}, // Total Pesanan
@@ -223,7 +220,7 @@ export default function AdminSummaryPage() {
   };
 
   const exportToPDF = () => {
-    const doc = new jsPDF('l', 'mm', 'a4'); // Landscape orientation
+    const doc = new jsPDF('l', 'mm', 'a4');
     const tableColumn = ["Mitra", "Pesanan", "Total", "Rincian Item, Harga & SKU", "Alamat Pengiriman"];
     const tableRows = filteredSummary.map(summary => [
         getMitraDisplayName(summary.vendor),
@@ -233,7 +230,6 @@ export default function AdminSummaryPage() {
         summary.addresses.join('\n')
     ]);
 
-    // Add Grand Total row to PDF
     tableRows.push([
       "TOTAL KESELURUHAN",
       grandTotals.orders.toString(),
@@ -253,8 +249,8 @@ export default function AdminSummaryPage() {
         styles: { fontSize: 8, cellPadding: 2, overflow: 'linebreak' },
         columnStyles: {
             0: { cellWidth: 45 },
-            3: { cellWidth: 80 }, // Rincian column width
-            4: { cellWidth: 60 }  // Alamat column width
+            3: { cellWidth: 80 },
+            4: { cellWidth: 60 }
         }
     });
     doc.save(`rekap_harian_${date ? date.toISOString().split('T')[0] : 'semua'}.pdf`);
@@ -271,7 +267,6 @@ export default function AdminSummaryPage() {
     }
 
     setIsSending(true);
-    // Simulating email sending process
     await new Promise(resolve => setTimeout(resolve, 2000));
     
     setIsSending(false);
