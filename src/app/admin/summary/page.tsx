@@ -16,7 +16,7 @@ import { format } from 'date-fns';
 import { id } from 'date-fns/locale';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import jsPDF from 'jsPDF';
+import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
 interface OrderItem {
@@ -218,19 +218,6 @@ export default function AdminSummaryPage() {
                             <Calendar mode="single" selected={date} onSelect={setDate} initialFocus locale={id} />
                         </PopoverContent>
                     </Popover>
-
-                    <Select value={vendorFilter} onValueChange={setVendorFilter}>
-                        <SelectTrigger className="w-[180px]">
-                            <SelectValue placeholder="Pilih Vendor" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            {allVendors.map(v => (
-                                <SelectItem key={v} value={v}>
-                                    {v === 'all' ? 'Semua Vendor' : v}
-                                </SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
 
                     <div className="flex gap-2">
                         <Button variant="outline" size="sm" onClick={exportToExcel} disabled={dailySummary.length === 0}>
