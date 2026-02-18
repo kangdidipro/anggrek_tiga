@@ -15,15 +15,13 @@ service cloud.firestore {
     }
 
     // Aturan untuk pencarian lintas koleksi (Collection Group)
+    // Diperlukan agar kueri admin dan mitra dapat berjalan
     match /{path=**}/orders/{orderId} {
-      allow read, delete: if isSignedIn();
-      // Izinkan update status oleh Admin (pengguna yang terautentikasi)
-      allow update: if isSignedIn();
+      allow read, write: if isSignedIn();
     }
 
     match /{path=**}/orderItems/{orderItemId} {
-      allow read, delete: if isSignedIn();
-      allow write: if isSignedIn();
+      allow read, write: if isSignedIn();
     }
 
     match /customers/{customerId} {

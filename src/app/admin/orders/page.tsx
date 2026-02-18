@@ -100,11 +100,16 @@ export default function AdminOrdersPage() {
         const ordersWithItems: Order[] = ordersData.map(order => ({
             ...order,
             items: orderItemsData.filter(item => item.orderId === order.id)
-        })).sort((a, b) => new Date(b.orderDateTime).getTime() - new Date(a.orderDateTime).getTime());
+        })).filter(order => order.items.length > 0)
+          .sort((a, b) => new Date(b.orderDateTime).getTime() - new Date(a.orderDateTime).getTime());
 
         setOrders(ordersWithItems);
       } catch (error: any) {
         console.error("Error fetching orders:", error);
+        errorEmitter.emit('permission-error', new FirestorePermissionError({
+          path: 'collectionGroup(orders)',
+          operation: 'list',
+        }));
       } finally {
         setIsLoading(false);
       }
