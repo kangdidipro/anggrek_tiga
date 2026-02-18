@@ -14,16 +14,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { products as initialProducts } from '@/lib/products';
-import type { Product } from '@/lib/types';
-
-const VENDORS = [
-  { value: 'NL', label: 'Vendor NL (Nasi & Lauk)' },
-  { value: 'MS', label: 'Vendor MS (Mie & Soto)' },
-  { value: 'P', label: 'Vendor P (Pempek)' },
-  { value: 'JA', label: 'Vendor JA (Jajanan Asin)' },
-  { value: 'JM', label: 'Vendor JM (Jajanan Manis)' },
-  { value: 'BP', label: 'Vendor BP (Bubur & Puding)' },
-];
+import type { Product, Vendor } from '@/lib/types';
 
 export default function AdminMenuPage() {
   const firestore = useFirestore();
@@ -32,12 +23,19 @@ export default function AdminMenuPage() {
   const [isAdding, setIsAdding] = useState(false);
   const [isSeeding, setIsSeeding] = useState(false);
 
+  // Fetch Menu Items
   const menuItemsQuery = useMemoFirebase(() => {
     if (!firestore) return null;
     return collection(firestore, 'menuItems');
   }, [firestore]);
-
   const { data: menuItems, isLoading } = useCollection<Product>(menuItemsQuery);
+
+  // Fetch Vendors for Lookup
+  const vendorsQuery = useMemoFirebase(() => {
+    if (!firestore) return null;
+    return collection(firestore, 'vendors');
+  }, [firestore]);
+  const { data: vendors, isLoading: isVendorsLoading } = useCollection<Vendor>(vendorsQuery);
 
   const handleDelete = async (id: string) => {
     if (!firestore) return;
@@ -88,7 +86,7 @@ export default function AdminMenuPage() {
     }
   };
 
-  if (isLoading) {
+  if (isLoading || isVendorsLoading) {
     return <div className="flex h-full items-center justify-center p-24"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
   }
 
@@ -152,14 +150,18 @@ export default function AdminMenuPage() {
                     </div>
                     <div className="grid gap-2">
                       <Label htmlFor="vendor">Vendor / Penjual</Label>
-                      <Select name="vendor" defaultValue="NL" required>
+                      <Select name="vendor" required>
                         <SelectTrigger>
                           <SelectValue placeholder="Pilih Vendor" />
                         </SelectTrigger>
                         <SelectContent>
-                          {VENDORS.map((v) => (
-                            <SelectItem key={v.value} value={v.value}>{v.label}</SelectItem>
-                          ))}
+                          {vendors && vendors.length > 0 ? (
+                            vendors.map((v) => (
+                              <SelectItem key={v.id} value={v.code}>{v.name} ({v.code})</SelectItem>
+                            ))
+                          ) : (
+                            <SelectItem value="none" disabled>Belum ada mitra</SelectItem>
+                          )}
                         </SelectContent>
                       </Select>
                     </div>
@@ -255,9 +257,13 @@ export default function AdminMenuPage() {
                                         <SelectValue placeholder="Pilih Vendor" />
                                       </SelectTrigger>
                                       <SelectContent>
-                                        {VENDORS.map((v) => (
-                                          <SelectItem key={v.value} value={v.value}>{v.label}</SelectItem>
-                                        ))}
+                                        {vendors && vendors.length > 0 ? (
+                                          vendors.map((v) => (
+                                            <SelectItem key={v.id} value={v.code}>{v.name} ({v.code})</SelectItem>
+                                          ))
+                                        ) : (
+                                          <SelectItem value="none" disabled>Belum ada mitra</SelectItem>
+                                        )}
                                       </SelectContent>
                                     </Select>
                                   </div>

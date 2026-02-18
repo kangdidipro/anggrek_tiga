@@ -1,18 +1,10 @@
 
 /**
  * # Firestore Security Rules: Ramadhan Takjil Order App
- *
- * ## Core Philosophy
- * Enforces a strict user-ownership model while allowing an admin panel prototype
- * to function using collectionGroup queries.
  */
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-
-    // ------------------------------------------------------------------------
-    // Helper Functions
-    // ------------------------------------------------------------------------
 
     function isSignedIn() {
       return request.auth != null;
@@ -22,32 +14,17 @@ service cloud.firestore {
       return isSignedIn() && request.auth.uid == userId;
     }
 
-    // ------------------------------------------------------------------------
-    // Collection Group Rules (CRITICAL for Admin Panel)
-    // ------------------------------------------------------------------------
-    
-    /**
-     * @description Enables collectionGroup queries for 'orders' across the database.
-     * This is required for the admin dashboard to fetch and manage all orders.
-     */
     match /{path=**}/orders/{orderId} {
       allow read, delete: if isSignedIn();
     }
 
-    /**
-     * @description Enables collectionGroup queries for 'orderItems'.
-     */
     match /{path=**}/orderItems/{orderItemId} {
       allow read, delete: if isSignedIn();
     }
 
-    // ------------------------------------------------------------------------
-    // Specific Path Rules
-    // ------------------------------------------------------------------------
-
     match /customers/{customerId} {
       allow get: if isOwner(customerId);
-      allow list: if false; // Privacy: prevent listing all customers.
+      allow list: if false; 
       
       allow create: if isOwner(customerId)
                        && request.resource.data.id == customerId
@@ -59,9 +36,7 @@ service cloud.firestore {
       
       allow delete: if isOwner(customerId);
 
-      // Subcollections under a specific customer
       match /orders/{orderId} {
-        // Read/Delete is already allowed by the collectionGroup match above for signed-in users.
         allow write: if isOwner(customerId) && (request.resource.data.customerId == customerId || resource.data.customerId == customerId);
 
         match /orderItems/{orderItemId} {
@@ -70,13 +45,14 @@ service cloud.firestore {
       }
     }
 
-    /**
-     * Rules for menu items.
-     * Public can read. Admin (signed-in) can write for this prototype.
-     */
     match /menuItems/{menuItemId} {
       allow read: if true;
       allow write: if isSignedIn(); 
+    }
+
+    match /vendors/{vendorId} {
+      allow read: if true;
+      allow write: if isSignedIn();
     }
   }
 }

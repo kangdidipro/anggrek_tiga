@@ -7,6 +7,12 @@ export type Product = {
   vendor: string;
 };
 
+export type Vendor = {
+  id: string;
+  name: string;
+  code: string;
+};
+
 export type CartItem = {
   product: Product;
   quantity: number;
