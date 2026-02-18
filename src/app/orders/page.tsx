@@ -4,11 +4,14 @@ import { useUser, useFirestore, useCollection, useMemoFirebase, errorEmitter, Fi
 import { collection, query, orderBy, writeBatch, doc, getDocs } from 'firebase/firestore';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Loader2, ShoppingBag, Trash2 } from 'lucide-react';
+import { Loader2, ShoppingBag, Trash2, Clock, CheckCircle2 } from 'lucide-react';
 import Link from 'next/link';
 import { formatPrice } from '@/lib/utils';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { useState } from 'react';
+import { Badge } from '@/components/ui/badge';
+import { format } from 'date-fns';
+import { id } from 'date-fns/locale';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -21,19 +24,25 @@ import {
 } from '@/components/ui/alert-dialog';
 import { useToast } from '@/hooks/use-toast';
 
-// Define types for Order and OrderItem based on backend.json
+interface StatusLog {
+    status: string;
+    timestamp: string;
+}
+
 interface Order {
     id: string;
-    orderDateTime: string; // ISO string
+    customerId: string;
+    orderDateTime: string;
     totalAmount: number;
     status: string;
+    statusHistory?: StatusLog[];
     deliveryAddress: string;
-    items?: OrderItem[]; // This will be fetched separately
+    items?: OrderItem[];
 }
 
 interface OrderItem {
     id: string;
-    name: string; // Denormalized for display
+    name: string;
     quantity: number;
     priceAtOrder: number;
 }
@@ -122,6 +131,16 @@ export default function OrdersPage() {
             setOrderToDelete(null);
         }
     };
+
+    const getStatusBadgeColor = (status: string) => {
+        switch (status) {
+          case 'Dipesan': return 'bg-yellow-500 hover:bg-yellow-600';
+          case 'Diproses': return 'bg-blue-500 hover:bg-blue-600';
+          case 'Dikirim': return 'bg-purple-500 hover:bg-purple-600';
+          case 'Dibayar': return 'bg-green-600 hover:bg-green-700';
+          default: return 'bg-gray-500 hover:bg-gray-600';
+        }
+    };
     
     if (isUserLoading || (user && areOrdersLoading)) {
         return (
@@ -189,24 +208,61 @@ export default function OrdersPage() {
                                                         })}
                                                     </CardDescription>
                                                 </div>
-                                                <div className="text-right">
+                                                <div className="text-right flex flex-col items-end gap-2">
                                                     <p className="font-semibold text-base md:text-lg text-primary">{formatPrice(order.totalAmount)}</p>
-                                                    <p className="text-xs capitalize text-white font-medium px-2 py-0.5 rounded-full bg-blue-500">{order.status || 'Pending'}</p>
+                                                    <Badge className={getStatusBadgeColor(order.status || 'Dipesan')}>
+                                                        {order.status || 'Dipesan'}
+                                                    </Badge>
                                                 </div>
                                             </div>
                                         </AccordionTrigger>
                                 </CardHeader>
                                 <AccordionContent>
-                                        <CardContent className="p-4 pt-0">
+                                        <CardContent className="p-4 pt-0 space-y-6">
                                             <div className="border-t pt-4">
-                                            <h4 className="font-semibold mb-2 text-sm">Detail Item:</h4>
-                                            <OrderItemDetails customerId={user.uid} orderId={order.id} />
+                                                <h4 className="font-semibold mb-3 text-sm flex items-center gap-2">
+                                                    <Clock className="h-4 w-4" /> Status & Riwayat:
+                                                </h4>
+                                                <div className="bg-muted/30 rounded-lg p-3 space-y-3">
+                                                    {order.statusHistory && order.statusHistory.length > 0 ? (
+                                                        order.statusHistory.map((log, i) => (
+                                                            <div key={i} className="flex items-start gap-3 text-xs">
+                                                                <div className="mt-1">
+                                                                    <CheckCircle2 className="h-3 w-3 text-primary" />
+                                                                </div>
+                                                                <div className="flex-1">
+                                                                    <span className="font-bold">{log.status}</span>
+                                                                    <span className="text-muted-foreground ml-2">
+                                                                        {format(new Date(log.timestamp), 'dd MMM yyyy, HH:mm', { locale: id })}
+                                                                    </span>
+                                                                </div>
+                                                            </div>
+                                                        ))
+                                                    ) : (
+                                                        <div className="flex items-start gap-3 text-xs">
+                                                            <div className="mt-1">
+                                                                <CheckCircle2 className="h-3 w-3 text-primary" />
+                                                            </div>
+                                                            <div className="flex-1">
+                                                                <span className="font-bold">{order.status || 'Dipesan'}</span>
+                                                                <span className="text-muted-foreground ml-2">
+                                                                    {format(new Date(order.orderDateTime), 'dd MMM yyyy, HH:mm', { locale: id })}
+                                                                </span>
+                                                            </div>
+                                                        </div>
+                                                    )}
+                                                </div>
                                             </div>
-                                            <div className="border-t pt-4 mt-4">
+
+                                            <div className="border-t pt-4">
+                                                <h4 className="font-semibold mb-2 text-sm">Detail Item:</h4>
+                                                <OrderItemDetails customerId={user.uid} orderId={order.id} />
+                                            </div>
+                                            <div className="border-t pt-4">
                                                 <h4 className="font-semibold mb-2 text-sm">Alamat Pengiriman:</h4>
                                                 <p className="text-sm text-muted-foreground">{order.deliveryAddress}</p>
                                             </div>
-                                            <div className="border-t pt-4 mt-4 flex justify-end">
+                                            <div className="border-t pt-4 flex justify-end">
                                                 <Button variant="destructive" size="sm" onClick={() => setOrderToDelete(order)}>
                                                     <Trash2 className="h-4 w-4 mr-2" />
                                                     Hapus Pesanan

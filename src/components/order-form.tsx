@@ -66,13 +66,17 @@ export default function OrderForm({ cartItems, total, deliveryFee, setSheetOpen 
     const batch = writeBatch(firestore);
 
     const orderRef = doc(collection(firestore, 'customers', user.uid, 'orders'));
+    const now = new Date().toISOString();
     const newOrder = {
         customerId: user.uid,
-        orderDateTime: new Date().toISOString(),
+        orderDateTime: now,
         totalAmount: total,
         deliveryFee: deliveryFee,
         paymentMethod: values.paymentMethod,
-        status: 'pending',
+        status: 'Dipesan',
+        statusHistory: [
+          { status: 'Dipesan', timestamp: now }
+        ],
         deliveryAddress: values.address,
     };
     batch.set(orderRef, newOrder);
@@ -83,12 +87,12 @@ export default function OrderForm({ cartItems, total, deliveryFee, setSheetOpen 
         const orderItemRef = doc(collection(firestore, 'customers', user.uid, 'orders', orderRef.id, 'orderItems'));
         const newOrderItem = {
             orderId: orderRef.id,
-            customerId: user.uid, // <-- FIX: Add customerId for security rules
+            customerId: user.uid,
             menuItemId: item.product.id,
             quantity: item.quantity,
             priceAtOrder: item.product.price,
-            name: item.product.name, // Denormalized
-            sku: item.product.sku, // Denormalized
+            name: item.product.name,
+            sku: item.product.sku,
         };
         batch.set(orderItemRef, newOrderItem);
         orderItemsForError.push(newOrderItem);
@@ -105,15 +109,13 @@ export default function OrderForm({ cartItems, total, deliveryFee, setSheetOpen 
         router.push('/order-success');
       })
       .catch((serverError) => {
-          // This will be caught by the FirebaseErrorListener and displayed in the dev overlay
           const permissionError = new FirestorePermissionError({
             path: `customers/${user.uid}/orders/${orderRef.id}`,
-            operation: 'write', // Using 'write' for a batch operation
+            operation: 'write',
             requestResourceData: { order: newOrder, items: orderItemsForError },
           });
           errorEmitter.emit('permission-error', permissionError);
 
-          // Fallback toast for the user
           toast({
               variant: "destructive",
               title: "Gagal Mengirim Pesanan",

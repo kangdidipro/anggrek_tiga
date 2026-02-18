@@ -1,4 +1,3 @@
-
 {
   "entities": {
     "Customer": {
@@ -107,7 +106,7 @@
         },
         "phoneNumber": {
           "type": "string",
-          "description": "Contact phone or WhatsApp number of the vendor."
+          "description": "Contact phone number or WhatsApp number of the vendor."
         }
       },
       "required": [
@@ -154,9 +153,17 @@
         "status": {
           "type": "string",
           "description": "The current processing status of the order.",
-          "format": "enum",
+          "enum": ["Dipesan", "Diproses", "Dikirim", "Dibayar"]
+        },
+        "statusHistory": {
+          "type": "array",
+          "description": "The historical log of status changes for the order.",
           "items": {
-            "type": "string"
+            "type": "object",
+            "properties": {
+              "status": { "type": "string" },
+              "timestamp": { "type": "string", "format": "date-time" }
+            }
           }
         },
         "deliveryAddress": {

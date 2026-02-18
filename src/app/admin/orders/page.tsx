@@ -2,10 +2,10 @@
 
 import { useEffect, useState, useMemo } from 'react';
 import { useFirestore, useUser } from '@/firebase';
-import { collectionGroup, getDocs, query, writeBatch, doc } from 'firebase/firestore';
+import { collectionGroup, getDocs, query, writeBatch, doc, updateDoc, arrayUnion } from 'firebase/firestore';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Loader2, FileDown, CalendarIcon, Trash2, FileText, Mail, Search } from 'lucide-react';
+import { Loader2, FileDown, CalendarIcon, Trash2, FileText, Mail, Search, Clock, CheckCircle2 } from 'lucide-react';
 import { formatPrice } from '@/lib/utils';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import * as XLSX from 'xlsx';
@@ -19,6 +19,7 @@ import { useToast } from '@/hooks/use-toast';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -29,6 +30,11 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+
+interface StatusLog {
+  status: string;
+  timestamp: string;
+}
 
 interface OrderItem {
   id: string;
@@ -43,15 +49,18 @@ interface OrderItem {
 interface Order {
   id: string;
   customerId: string;
-  orderDateTime: string; // ISO string
+  orderDateTime: string;
   totalAmount: number;
   status: string;
+  statusHistory?: StatusLog[];
   deliveryAddress: string;
   paymentMethod: string;
   items: OrderItem[];
 }
 
 const getVendorFromSku = (sku: string) => sku.split('-')[0];
+
+const ORDER_STATUSES = ["Dipesan", "Diproses", "Dikirim", "Dibayar"];
 
 export default function AdminOrdersPage() {
   const firestore = useFirestore();
@@ -65,6 +74,7 @@ export default function AdminOrdersPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [orderToDelete, setOrderToDelete] = useState<Order | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isUpdatingStatus, setIsUpdatingStatus] = useState<string | null>(null);
   const { toast } = useToast();
   
   const allVendors = useMemo(() => {
@@ -131,6 +141,46 @@ export default function AdminOrdersPage() {
     return groups;
   }, [filteredOrders]);
 
+  const handleUpdateStatus = async (order: Order, newStatus: string) => {
+    if (!firestore || isUpdatingStatus) return;
+    setIsUpdatingStatus(order.id);
+
+    const now = new Date().toISOString();
+    const orderRef = doc(firestore, 'customers', order.customerId, 'orders', order.id);
+
+    try {
+      await updateDoc(orderRef, {
+        status: newStatus,
+        statusHistory: arrayUnion({ status: newStatus, timestamp: now })
+      });
+
+      setOrders(prev => prev.map(o => {
+        if (o.id === order.id) {
+          return {
+            ...o,
+            status: newStatus,
+            statusHistory: [...(o.statusHistory || []), { status: newStatus, timestamp: now }]
+          };
+        }
+        return o;
+      }));
+
+      toast({
+        title: "Status Diperbarui",
+        description: `Pesanan #${order.id.substring(0, 7)} sekarang: ${newStatus}`,
+      });
+    } catch (error) {
+      console.error("Error updating status:", error);
+      toast({
+        variant: "destructive",
+        title: "Gagal Update",
+        description: "Terjadi kesalahan saat memperbarui status.",
+      });
+    } finally {
+      setIsUpdatingStatus(null);
+    }
+  };
+
   const handleDeleteOrder = async () => {
     if (!orderToDelete || !firestore) return;
 
@@ -138,13 +188,11 @@ export default function AdminOrdersPage() {
     try {
         const batch = writeBatch(firestore);
 
-        // Hapus semua item dalam order
         orderToDelete.items.forEach(item => {
             const itemRef = doc(firestore, 'customers', orderToDelete.customerId, 'orders', orderToDelete.id, 'orderItems', item.id);
             batch.delete(itemRef);
         });
 
-        // Hapus dokumen order itu sendiri
         const orderRef = doc(firestore, 'customers', orderToDelete.customerId, 'orders', orderToDelete.id);
         batch.delete(orderRef);
 
@@ -179,6 +227,7 @@ export default function AdminOrdersPage() {
             'Harga Satuan': item.priceAtOrder,
             'Total Harga': item.quantity * item.priceAtOrder,
             'Metode Bayar': order.paymentMethod,
+            'Status': order.status,
             'Alamat': order.deliveryAddress,
         }))
     );
@@ -193,7 +242,7 @@ export default function AdminOrdersPage() {
 
   const exportToPDF = () => {
     const doc = new jsPDF();
-    const tableColumn = ["Tanggal", "ID", "Mitra", "Item", "Qty", "Total", "Alamat"];
+    const tableColumn = ["Tanggal", "ID", "Mitra", "Item", "Qty", "Total", "Status"];
     const tableRows = filteredOrders.flatMap(order => 
         order.items.map(item => [
             format(new Date(order.orderDateTime), 'dd/MM HH:mm'),
@@ -202,7 +251,7 @@ export default function AdminOrdersPage() {
             item.name,
             item.quantity.toString(),
             formatPrice(item.priceAtOrder * item.quantity),
-            order.deliveryAddress.substring(0, 20) + '...'
+            order.status
         ])
     );
 
@@ -229,7 +278,6 @@ export default function AdminOrdersPage() {
     }
 
     setIsSending(true);
-    // Simulating email sending process
     await new Promise(resolve => setTimeout(resolve, 2000));
     
     setIsSending(false);
@@ -237,6 +285,16 @@ export default function AdminOrdersPage() {
         title: "Laporan Terkirim",
         description: `Daftar pesanan telah dikirim ke ${targetEmail}.`,
     });
+  };
+
+  const getStatusBadgeColor = (status: string) => {
+    switch (status) {
+      case 'Dipesan': return 'bg-yellow-500 hover:bg-yellow-600';
+      case 'Diproses': return 'bg-blue-500 hover:bg-blue-600';
+      case 'Dikirim': return 'bg-purple-500 hover:bg-purple-600';
+      case 'Dibayar': return 'bg-green-600 hover:bg-green-700';
+      default: return 'bg-gray-500 hover:bg-gray-600';
+    }
   };
   
   if (isLoading || isUserLoading) {
@@ -316,7 +374,7 @@ export default function AdminOrdersPage() {
                 <Accordion type="single" collapsible className="w-full space-y-4">
                   {vendorOrders.map((order) => (
                       <AccordionItem value={order.id} key={order.id} className="border-b-0">
-                      <Card className="shadow-sm">
+                      <Card className="shadow-sm overflow-hidden">
                           <CardHeader className="p-4">
                                   <AccordionTrigger className="w-full p-0 hover:no-underline">
                                       <div className="flex justify-between items-center w-full">
@@ -328,15 +386,59 @@ export default function AdminOrdersPage() {
                                                   {new Date(order.orderDateTime).toLocaleString('id-ID')}
                                               </CardDescription>
                                           </div>
-                                          <div className="text-right flex flex-col items-end gap-1">
+                                          <div className="text-right flex flex-col items-end gap-2">
                                               <p className="font-semibold text-base md:text-lg text-primary">{formatPrice(order.totalAmount)}</p>
-                                               <p className="text-[10px] md:text-xs capitalize text-white font-medium px-2 py-0.5 rounded-full bg-blue-500">{order.status || 'Pending'}</p>
+                                              <Badge className={getStatusBadgeColor(order.status || 'Dipesan')}>
+                                                {order.status || 'Dipesan'}
+                                              </Badge>
                                           </div>
                                       </div>
                                   </AccordionTrigger>
                           </CardHeader>
                           <AccordionContent>
-                                  <CardContent className="p-4 pt-0">
+                                  <CardContent className="p-4 pt-0 space-y-6">
+                                      <div className="border-t pt-4">
+                                        <h4 className="font-semibold mb-3 text-sm text-muted-foreground uppercase tracking-wider flex items-center gap-2">
+                                          <Clock className="h-4 w-4" /> Update Status & Riwayat:
+                                        </h4>
+                                        <div className="flex flex-col md:flex-row gap-4 mb-4">
+                                          <div className="flex-1 max-w-xs">
+                                            <Select 
+                                              disabled={isUpdatingStatus === order.id} 
+                                              value={order.status} 
+                                              onValueChange={(val) => handleUpdateStatus(order, val)}
+                                            >
+                                              <SelectTrigger>
+                                                <SelectValue placeholder="Ubah Status" />
+                                              </SelectTrigger>
+                                              <SelectContent>
+                                                {ORDER_STATUSES.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                                              </SelectContent>
+                                            </Select>
+                                          </div>
+                                        </div>
+                                        {/* Riwayat Status */}
+                                        <div className="bg-muted/30 rounded-lg p-3 space-y-3">
+                                          {order.statusHistory && order.statusHistory.length > 0 ? (
+                                            order.statusHistory.map((log, i) => (
+                                              <div key={i} className="flex items-start gap-3 text-xs">
+                                                <div className="mt-1">
+                                                  <CheckCircle2 className="h-3 w-3 text-primary" />
+                                                </div>
+                                                <div className="flex-1">
+                                                  <span className="font-bold">{log.status}</span>
+                                                  <span className="text-muted-foreground ml-2">
+                                                    {format(new Date(log.timestamp), 'dd MMM yyyy, HH:mm', { locale: id })}
+                                                  </span>
+                                                </div>
+                                              </div>
+                                            ))
+                                          ) : (
+                                            <p className="text-xs text-muted-foreground italic">Belum ada catatan riwayat status.</p>
+                                          )}
+                                        </div>
+                                      </div>
+
                                       <div className="border-t pt-4">
                                       <h4 className="font-semibold mb-2 text-sm text-muted-foreground uppercase tracking-wider">Item Pesanan:</h4>
                                        <div className="space-y-2 pt-2">
@@ -351,11 +453,11 @@ export default function AdminOrdersPage() {
                                           ))}
                                       </div>
                                       </div>
-                                      <div className="border-t pt-4 mt-4">
+                                      <div className="border-t pt-4">
                                           <h4 className="font-semibold mb-2 text-sm text-muted-foreground uppercase tracking-wider">Alamat Pengiriman:</h4>
                                           <p className="text-sm text-muted-foreground">{order.deliveryAddress}</p>
                                       </div>
-                                      <div className="border-t pt-4 mt-4 flex justify-end">
+                                      <div className="border-t pt-4 flex justify-end">
                                           <Button 
                                               variant="destructive" 
                                               size="sm" 
