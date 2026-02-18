@@ -32,6 +32,7 @@ interface OrderItem {
 interface Order {
   id: string;
   orderDateTime: string; // ISO string
+  deliveryAddress: string;
   items: OrderItem[];
 }
 
@@ -41,7 +42,8 @@ type DailySummary = {
     vendor: string;
     totalOrders: number;
     totalAmount: number;
-    items: { name: string, quantity: number }[];
+    items: { name: string, quantity: number, sku: string }[];
+    addresses: string[];
 }
 
 export default function AdminSummaryPage() {
@@ -94,7 +96,12 @@ export default function AdminSummaryPage() {
     
     const targetDateOrders = orders.filter(order => new Date(order.orderDateTime).toDateString() === date.toDateString());
     
-    const summaryMap: Record<string, { totalOrders: Set<string>; totalAmount: number; items: Record<string, number> }> = {};
+    const summaryMap: Record<string, { 
+      totalOrders: Set<string>; 
+      totalAmount: number; 
+      items: Record<string, { name: string, quantity: number, sku: string }>;
+      addresses: Set<string>;
+    }> = {};
 
     targetDateOrders.forEach(order => {
         order.items.forEach(item => {
@@ -104,12 +111,20 @@ export default function AdminSummaryPage() {
             if (vendorFilter !== 'all' && vendor !== vendorFilter) return;
 
             if (!summaryMap[vendor]) {
-                summaryMap[vendor] = { totalOrders: new Set(), totalAmount: 0, items: {} };
+                summaryMap[vendor] = { totalOrders: new Set(), totalAmount: 0, items: {}, addresses: new Set() };
             }
             summaryMap[vendor].totalOrders.add(order.id);
+            if (order.deliveryAddress) {
+              summaryMap[vendor].addresses.add(order.deliveryAddress);
+            }
             const itemTotal = item.quantity * item.priceAtOrder;
             summaryMap[vendor].totalAmount += itemTotal;
-            summaryMap[vendor].items[item.name] = (summaryMap[vendor].items[item.name] || 0) + item.quantity;
+            
+            const itemKey = item.sku;
+            if (!summaryMap[vendor].items[itemKey]) {
+                summaryMap[vendor].items[itemKey] = { name: item.name, quantity: 0, sku: item.sku };
+            }
+            summaryMap[vendor].items[itemKey].quantity += item.quantity;
         });
     });
 
@@ -117,7 +132,8 @@ export default function AdminSummaryPage() {
         vendor,
         totalOrders: data.totalOrders.size,
         totalAmount: data.totalAmount,
-        items: Object.entries(data.items).map(([name, quantity]) => ({ name, quantity })),
+        items: Object.values(data.items),
+        addresses: Array.from(data.addresses)
     }));
   }, [orders, date, vendorFilter]);
 
@@ -133,7 +149,8 @@ export default function AdminSummaryPage() {
         'Vendor': summary.vendor,
         'Total Pesanan': summary.totalOrders,
         'Total Pemesanan': summary.totalAmount,
-        'Rincian Item': summary.items.map(i => `${i.name} (x${i.quantity})`).join(', '),
+        'Rincian Item': summary.items.map(i => `${i.name} [${i.sku}] (x${i.quantity})`).join(', '),
+        'Alamat Pengiriman': summary.addresses.join('; '),
     }));
 
     // Add Grand Total row to Excel
@@ -141,7 +158,8 @@ export default function AdminSummaryPage() {
       'Vendor': 'TOTAL KESELURUHAN',
       'Total Pesanan': grandTotals.orders,
       'Total Pemesanan': grandTotals.amount,
-      'Rincian Item': '-'
+      'Rincian Item': '-',
+      'Alamat Pengiriman': '-'
     });
 
     const worksheet = XLSX.utils.json_to_sheet(dataForExport);
@@ -154,12 +172,13 @@ export default function AdminSummaryPage() {
 
   const exportToPDF = () => {
     const doc = new jsPDF();
-    const tableColumn = ["Vendor", "Total Pesanan", "Total Pemesanan", "Rincian Item"];
+    const tableColumn = ["Vendor", "Pesanan", "Total", "Item & SKU", "Alamat"];
     const tableRows = dailySummary.map(summary => [
         summary.vendor,
         summary.totalOrders.toString(),
         formatPrice(summary.totalAmount),
-        summary.items.map(i => `${i.name} (x${i.quantity})`).join(', ')
+        summary.items.map(i => `${i.name} [${i.sku}] (x${i.quantity})`).join(', '),
+        summary.addresses.join(', ')
     ]);
 
     // Add Grand Total row to PDF
@@ -167,6 +186,7 @@ export default function AdminSummaryPage() {
       "TOTAL KESELURUHAN",
       grandTotals.orders.toString(),
       formatPrice(grandTotals.amount),
+      "-",
       "-"
     ]);
 
@@ -177,7 +197,8 @@ export default function AdminSummaryPage() {
         startY: 20,
         theme: 'striped',
         headStyles: { fillColor: [255, 140, 0] },
-        footStyles: { fillColor: [255, 140, 0], textColor: [255, 255, 255], fontStyle: 'bold' }
+        footStyles: { fillColor: [255, 140, 0], textColor: [255, 255, 255], fontStyle: 'bold' },
+        styles: { fontSize: 7 }
     });
     doc.save(`rekap_harian_${date ? date.toISOString().split('T')[0] : 'semua'}.pdf`);
   };
@@ -259,15 +280,16 @@ export default function AdminSummaryPage() {
                     <TableHeader>
                         <TableRow>
                             <TableHead>Vendor</TableHead>
-                            <TableHead className="text-right">Total Pesanan</TableHead>
-                            <TableHead className="text-right">Total Pemesanan</TableHead>
-                            <TableHead>Rincian Item</TableHead>
+                            <TableHead className="text-right">Pesanan</TableHead>
+                            <TableHead className="text-right">Total</TableHead>
+                            <TableHead>Rincian Item & SKU</TableHead>
+                            <TableHead>Alamat Pengiriman</TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
                         {dailySummary.length === 0 ? (
                             <TableRow>
-                                <TableCell colSpan={4} className="text-center text-muted-foreground py-10">
+                                <TableCell colSpan={5} className="text-center text-muted-foreground py-10">
                                   Tidak ada transaksi ditemukan untuk filter ini.
                                 </TableCell>
                             </TableRow>
@@ -280,10 +302,20 @@ export default function AdminSummaryPage() {
                                     <TableCell>
                                         <ul className="text-xs space-y-1">
                                             {summary.items.map((item, idx) => (
-                                                <li key={idx} className="flex justify-between gap-4">
-                                                    <span>{item.name}</span>
-                                                    <span className="font-semibold text-muted-foreground">x{item.quantity}</span>
+                                                <li key={idx} className="flex justify-between gap-4 border-b border-muted last:border-0 pb-1">
+                                                    <div>
+                                                      <span className="block font-medium">{item.name}</span>
+                                                      <span className="text-[10px] text-muted-foreground">SKU: {item.sku}</span>
+                                                    </div>
+                                                    <span className="font-bold text-primary">x{item.quantity}</span>
                                                 </li>
+                                            ))}
+                                        </ul>
+                                    </TableCell>
+                                    <TableCell className="max-w-[200px]">
+                                        <ul className="text-[10px] list-disc pl-4 space-y-1 text-muted-foreground">
+                                            {summary.addresses.map((addr, idx) => (
+                                                <li key={idx} className="truncate" title={addr}>{addr}</li>
                                             ))}
                                         </ul>
                                     </TableCell>
@@ -297,7 +329,7 @@ export default function AdminSummaryPage() {
                                 <TableCell className="font-bold">TOTAL KESELURUHAN</TableCell>
                                 <TableCell className="text-right font-bold">{grandTotals.orders}</TableCell>
                                 <TableCell className="text-right font-bold text-primary">{formatPrice(grandTotals.amount)}</TableCell>
-                                <TableCell></TableCell>
+                                <TableCell colSpan={2}></TableCell>
                             </TableRow>
                         </TableFooter>
                     )}
