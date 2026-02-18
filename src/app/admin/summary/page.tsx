@@ -9,14 +9,14 @@ import { Loader2, FileDown, CalendarIcon, FileText, Mail } from 'lucide-react';
 import { formatPrice } from '@/lib/utils';
 import * as XLSX from 'xlsx';
 import { saveAs } from 'file-saver';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { format } from 'date-fns';
 import { id } from 'date-fns/locale';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import jsPDF from 'jspdf';
+import jsPDF from 'jsPDF';
 import autoTable from 'jspdf-autotable';
 
 interface OrderItem {
@@ -119,6 +119,13 @@ export default function AdminSummaryPage() {
     }));
   }, [orders, date, vendorFilter]);
 
+  const grandTotals = useMemo(() => {
+    return dailySummary.reduce((acc, curr) => ({
+      orders: acc.orders + curr.totalOrders,
+      amount: acc.amount + curr.totalAmount
+    }), { orders: 0, amount: 0 });
+  }, [dailySummary]);
+
   const exportToExcel = () => {
     const dataForExport = dailySummary.map(summary => ({
         'Vendor': summary.vendor,
@@ -126,6 +133,14 @@ export default function AdminSummaryPage() {
         'Total Pemesanan': summary.totalAmount,
         'Rincian Item': summary.items.map(i => `${i.name} (x${i.quantity})`).join(', '),
     }));
+
+    // Add Grand Total row to Excel
+    dataForExport.push({
+      'Vendor': 'TOTAL KESELURUHAN',
+      'Total Pesanan': grandTotals.orders,
+      'Total Pemesanan': grandTotals.amount,
+      'Rincian Item': '-'
+    });
 
     const worksheet = XLSX.utils.json_to_sheet(dataForExport);
     const workbook = XLSX.utils.book_new();
@@ -145,13 +160,22 @@ export default function AdminSummaryPage() {
         summary.items.map(i => `${i.name} (x${i.quantity})`).join(', ')
     ]);
 
+    // Add Grand Total row to PDF
+    tableRows.push([
+      "TOTAL KESELURUHAN",
+      grandTotals.orders.toString(),
+      formatPrice(grandTotals.amount),
+      "-"
+    ]);
+
     doc.text(`Rekap Harian Takjil - ${date ? format(date, 'd MMMM yyyy', { locale: id }) : 'Semua'}`, 14, 15);
     autoTable(doc, {
         head: [tableColumn],
         body: tableRows,
         startY: 20,
         theme: 'striped',
-        headStyles: { fillColor: [255, 140, 0] }
+        headStyles: { fillColor: [255, 140, 0] },
+        footStyles: { fillColor: [255, 140, 0], textColor: [255, 255, 255], fontStyle: 'bold' }
     });
     doc.save(`rekap_harian_${date ? date.toISOString().split('T')[0] : 'semua'}.pdf`);
   };
@@ -260,6 +284,16 @@ export default function AdminSummaryPage() {
                             ))
                         )}
                     </TableBody>
+                    {dailySummary.length > 0 && (
+                        <TableFooter>
+                            <TableRow className="bg-primary/5">
+                                <TableCell className="font-bold">TOTAL KESELURUHAN</TableCell>
+                                <TableCell className="text-right font-bold">{grandTotals.orders}</TableCell>
+                                <TableCell className="text-right font-bold text-primary">{formatPrice(grandTotals.amount)}</TableCell>
+                                <TableCell></TableCell>
+                            </TableRow>
+                        </TableFooter>
+                    )}
                 </Table>
             </CardContent>
         </Card>
