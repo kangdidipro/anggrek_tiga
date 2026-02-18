@@ -5,7 +5,7 @@ import { useFirestore, useUser } from '@/firebase';
 import { collectionGroup, getDocs, query } from 'firebase/firestore';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Loader2, FileDown, CalendarIcon, FileText, Mail } from 'lucide-react';
+import { Loader2, FileDown, CalendarIcon, FileText, Mail, Search } from 'lucide-react';
 import { formatPrice } from '@/lib/utils';
 import * as XLSX from 'xlsx';
 import { saveAs } from 'file-saver';
@@ -55,6 +55,7 @@ export default function AdminSummaryPage() {
   const [targetEmail, setTargetEmail] = useState('');
   const [date, setDate] = useState<Date | undefined>(new Date());
   const [vendorFilter, setVendorFilter] = useState('all');
+  const [searchTerm, setSearchTerm] = useState('');
   const { toast } = useToast();
 
   useEffect(() => {
@@ -136,9 +137,23 @@ export default function AdminSummaryPage() {
   }, [dailySummary]);
 
   const filteredSummary = useMemo(() => {
-    if (vendorFilter === 'all') return dailySummary;
-    return dailySummary.filter(s => s.vendor === vendorFilter);
-  }, [dailySummary, vendorFilter]);
+    let result = dailySummary;
+    
+    if (vendorFilter !== 'all') {
+      result = result.filter(s => s.vendor === vendorFilter);
+    }
+    
+    if (searchTerm.trim() !== '') {
+        const lowerSearch = searchTerm.toLowerCase();
+        result = result.filter(s => 
+            s.vendor.toLowerCase().includes(lowerSearch) ||
+            s.items.some(item => item.name.toLowerCase().includes(lowerSearch)) ||
+            s.addresses.some(addr => addr.toLowerCase().includes(lowerSearch))
+        );
+    }
+    
+    return result;
+  }, [dailySummary, vendorFilter, searchTerm]);
 
   const grandTotals = useMemo(() => {
     return filteredSummary.reduce((acc, curr) => ({
@@ -242,9 +257,18 @@ export default function AdminSummaryPage() {
             </CardHeader>
             <CardContent className="space-y-4">
                 <div className="flex flex-wrap gap-4 items-center mb-4">
+                    <div className="relative flex-1 min-w-[240px]">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                        <Input 
+                            placeholder="Cari Vendor, Item, atau Alamat..." 
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                            className="pl-10"
+                        />
+                    </div>
                     <Popover>
                         <PopoverTrigger asChild>
-                            <Button variant={"outline"} className="w-[280px] justify-start text-left font-normal">
+                            <Button variant={"outline"} className="w-[240px] justify-start text-left font-normal">
                                 <CalendarIcon className="mr-2 h-4 w-4" />
                                 {date ? format(date, "PPP", { locale: id }) : <span>Pilih tanggal</span>}
                             </Button>
