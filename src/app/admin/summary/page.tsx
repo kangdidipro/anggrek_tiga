@@ -18,6 +18,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useToast } from '@/hooks/use-toast';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { Input } from '@/components/ui/input';
 
 interface OrderItem {
   id: string;
@@ -49,6 +50,7 @@ export default function AdminSummaryPage() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSending, setIsSending] = useState(false);
+  const [targetEmail, setTargetEmail] = useState('');
   const [date, setDate] = useState<Date | undefined>(new Date());
   const [vendorFilter, setVendorFilter] = useState<string>('all');
   const { toast } = useToast();
@@ -181,6 +183,15 @@ export default function AdminSummaryPage() {
   };
 
   const sendToEmail = async () => {
+    if (!targetEmail || !targetEmail.includes('@')) {
+        toast({
+            variant: "destructive",
+            title: "Email Tidak Valid",
+            description: "Silakan masukkan alamat email yang benar.",
+        });
+        return;
+    }
+
     setIsSending(true);
     // Simulating email sending process
     await new Promise(resolve => setTimeout(resolve, 2000));
@@ -188,7 +199,7 @@ export default function AdminSummaryPage() {
     setIsSending(false);
     toast({
         title: "Laporan Terkirim",
-        description: `Rekap harian telah dikirim ke email admin.`,
+        description: `Rekap harian telah dikirim ke ${targetEmail}.`,
     });
   };
 
@@ -219,7 +230,7 @@ export default function AdminSummaryPage() {
                         </PopoverContent>
                     </Popover>
 
-                    <div className="flex gap-2">
+                    <div className="flex flex-wrap gap-2 items-center">
                         <Button variant="outline" size="sm" onClick={exportToExcel} disabled={dailySummary.length === 0}>
                             <FileDown className="mr-2 h-4 w-4" />
                             Excel
@@ -228,10 +239,19 @@ export default function AdminSummaryPage() {
                             <FileText className="mr-2 h-4 w-4" />
                             PDF
                         </Button>
-                        <Button variant="default" size="sm" onClick={sendToEmail} disabled={dailySummary.length === 0 || isSending}>
-                            {isSending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Mail className="mr-2 h-4 w-4" />}
-                            Email
-                        </Button>
+                        <div className="flex items-center gap-1 border rounded-md p-1 bg-muted/20">
+                            <Input 
+                                type="email" 
+                                placeholder="Email Tujuan" 
+                                className="h-8 w-40 text-xs border-0 bg-transparent focus-visible:ring-0" 
+                                value={targetEmail}
+                                onChange={(e) => setTargetEmail(e.target.value)}
+                            />
+                            <Button variant="default" size="sm" className="h-8" onClick={sendToEmail} disabled={dailySummary.length === 0 || isSending || !targetEmail.includes('@')}>
+                                {isSending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Mail className="mr-2 h-4 w-4" />}
+                                Email
+                            </Button>
+                        </div>
                     </div>
                 </div>
 

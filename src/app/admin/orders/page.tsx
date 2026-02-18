@@ -18,6 +18,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useToast } from '@/hooks/use-toast';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { Input } from '@/components/ui/input';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -58,6 +59,7 @@ export default function AdminOrdersPage() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSending, setIsSending] = useState(false);
+  const [targetEmail, setTargetEmail] = useState('');
   const [date, setDate] = useState<Date | undefined>(new Date());
   const [vendor, setVendor] = useState<string>('all');
   const [orderToDelete, setOrderToDelete] = useState<Order | null>(null);
@@ -209,6 +211,15 @@ export default function AdminOrdersPage() {
   };
 
   const sendToEmail = async () => {
+    if (!targetEmail || !targetEmail.includes('@')) {
+        toast({
+            variant: "destructive",
+            title: "Email Tidak Valid",
+            description: "Silakan masukkan alamat email yang benar.",
+        });
+        return;
+    }
+
     setIsSending(true);
     // Simulating email sending process
     await new Promise(resolve => setTimeout(resolve, 2000));
@@ -216,7 +227,7 @@ export default function AdminOrdersPage() {
     setIsSending(false);
     toast({
         title: "Laporan Terkirim",
-        description: `Daftar pesanan telah dikirim ke email admin.`,
+        description: `Daftar pesanan telah dikirim ke ${targetEmail}.`,
     });
   };
   
@@ -252,7 +263,7 @@ export default function AdminOrdersPage() {
                         {allVendors.map(v => <SelectItem key={v} value={v}>{v === 'all' ? 'Semua Vendor' : v}</SelectItem>)}
                     </SelectContent>
                 </Select>
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2 items-center">
                     <Button variant="outline" size="sm" onClick={exportToExcel} disabled={filteredOrders.length === 0}>
                         <FileDown className="mr-2 h-4 w-4" />
                         Excel
@@ -261,10 +272,19 @@ export default function AdminOrdersPage() {
                         <FileText className="mr-2 h-4 w-4" />
                         PDF
                     </Button>
-                    <Button variant="default" size="sm" onClick={sendToEmail} disabled={filteredOrders.length === 0 || isSending}>
-                        {isSending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Mail className="mr-2 h-4 w-4" />}
-                        Email
-                    </Button>
+                    <div className="flex items-center gap-1 border rounded-md p-1 bg-muted/20">
+                        <Input 
+                            type="email" 
+                            placeholder="Email Tujuan" 
+                            className="h-8 w-40 text-xs border-0 bg-transparent focus-visible:ring-0" 
+                            value={targetEmail}
+                            onChange={(e) => setTargetEmail(e.target.value)}
+                        />
+                        <Button variant="default" size="sm" className="h-8" onClick={sendToEmail} disabled={filteredOrders.length === 0 || isSending || !targetEmail.includes('@')}>
+                            {isSending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Mail className="mr-2 h-4 w-4" />}
+                            Email
+                        </Button>
+                    </div>
                 </div>
             </div>
         </CardContent>
