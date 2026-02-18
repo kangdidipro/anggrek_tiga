@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useRef, useMemo } from 'react';
@@ -7,13 +6,14 @@ import { collection, doc, deleteDoc, setDoc } from 'firebase/firestore';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Loader2, Plus, Pencil, Trash2, RefreshCcw, FileUp, Search, ExternalLink, Copy } from 'lucide-react';
+import { Loader2, Plus, Pencil, Trash2, RefreshCcw, FileUp, FileDown, Search, ExternalLink, Copy } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import type { Vendor, Product } from '@/lib/types';
 import * as XLSX from 'xlsx';
+import { saveAs } from 'file-saver';
 import Link from 'next/link';
 
 export default function AdminVendorsPage() {
@@ -182,6 +182,35 @@ export default function AdminVendorsPage() {
     reader.readAsArrayBuffer(file);
   };
 
+  const exportToExcel = () => {
+    if (!filteredVendors || filteredVendors.length === 0) return;
+
+    const dataForExport = filteredVendors.map(vendor => ({
+      'Nama Mitra': vendor.name,
+      'Kode': vendor.code,
+      'Email': vendor.email || '-',
+      'No HP': vendor.phoneNumber || '-',
+      'Link Pesanan': `${window.location.origin}/mitra/${vendor.code}`
+    }));
+
+    const worksheet = XLSX.utils.json_to_sheet(dataForExport);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Daftar Mitra");
+    
+    const wscols = [
+        {wch: 35}, // Nama Mitra
+        {wch: 15}, // Kode
+        {wch: 30}, // Email
+        {wch: 20}, // No HP
+        {wch: 60}  // Link Pesanan
+    ];
+    worksheet['!cols'] = wscols;
+
+    const excelBuffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
+    const dataBlob = new Blob([excelBuffer], {type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;charset=UTF-8'});
+    saveAs(dataBlob, `master_mitra_${new Date().toISOString().split('T')[0]}.xlsx`);
+  };
+
   const copyToClipboard = (code: string) => {
     const url = `${window.location.origin}/mitra/${code}`;
     navigator.clipboard.writeText(url);
@@ -213,6 +242,10 @@ export default function AdminVendorsPage() {
           <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()} disabled={isExcelImporting}>
             {isExcelImporting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileUp className="mr-2 h-4 w-4" />}
             Import Excel
+          </Button>
+          <Button variant="outline" size="sm" onClick={exportToExcel} disabled={filteredVendors.length === 0}>
+            <FileDown className="mr-2 h-4 w-4" />
+            Export Excel
           </Button>
           {menuItems && menuItems.length > 0 && (
             <Button variant="outline" size="sm" onClick={handleImportFromMenu} disabled={isImporting}>
