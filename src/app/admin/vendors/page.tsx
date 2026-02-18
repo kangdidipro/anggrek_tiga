@@ -6,25 +6,33 @@ import { collection, doc, deleteDoc, setDoc } from 'firebase/firestore';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Loader2, Plus, Pencil, Trash2 } from 'lucide-react';
+import { Loader2, Plus, Pencil, Trash2, RefreshCcw } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import type { Vendor } from '@/lib/types';
+import type { Vendor, Product } from '@/lib/types';
 
 export default function AdminVendorsPage() {
   const firestore = useFirestore();
   const { toast } = useToast();
   const [isEditing, setIsEditing] = useState<Vendor | null>(null);
   const [isAdding, setIsAdding] = useState(false);
+  const [isImporting, setIsImporting] = useState(false);
 
+  // Fetch Vendors
   const vendorsQuery = useMemoFirebase(() => {
     if (!firestore) return null;
     return collection(firestore, 'vendors');
   }, [firestore]);
+  const { data: vendors, isLoading: isVendorsLoading } = useCollection<Vendor>(vendorsQuery);
 
-  const { data: vendors, isLoading } = useCollection<Vendor>(vendorsQuery);
+  // Fetch Menu Items for Import Logic
+  const menuItemsQuery = useMemoFirebase(() => {
+    if (!firestore) return null;
+    return collection(firestore, 'menuItems');
+  }, [firestore]);
+  const { data: menuItems } = useCollection<Product>(menuItemsQuery);
 
   const handleDelete = async (id: string) => {
     if (!firestore) return;
@@ -57,7 +65,49 @@ export default function AdminVendorsPage() {
     }
   };
 
-  if (isLoading) {
+  const handleImportFromMenu = async () => {
+    if (!firestore || !menuItems) return;
+    setIsImporting(true);
+    
+    try {
+      const vendorCodes = new Set<string>();
+      menuItems.forEach(item => {
+        if (item.sku && item.sku.includes('-')) {
+          // Ambil kode sebelum tanda "-"
+          const code = item.sku.split('-')[0].trim();
+          if (code) vendorCodes.add(code);
+        }
+      });
+
+      const existingCodes = new Set(vendors?.map(v => v.code) || []);
+      let importedCount = 0;
+
+      for (const code of vendorCodes) {
+        if (!existingCodes.has(code)) {
+          const vendorData: Vendor = {
+            id: (Math.floor(Math.random() * 1000) + 500).toString(),
+            name: code, // Sesuai permintaan: Nama Mitra = Kode Mitra
+            code: code,
+          };
+          await setDoc(doc(firestore, 'vendors', vendorData.id), vendorData);
+          importedCount++;
+        }
+      }
+
+      if (importedCount > 0) {
+        toast({ title: "Berhasil", description: `${importedCount} mitra baru berhasil diimport dari data menu.` });
+      } else {
+        toast({ title: "Info", description: "Semua kode mitra dari menu sudah terdaftar di Master Mitra." });
+      }
+    } catch (error) {
+      console.error("Import error:", error);
+      toast({ variant: "destructive", title: "Gagal", description: "Terjadi kesalahan saat mengimport data mitra." });
+    } finally {
+      setIsImporting(false);
+    }
+  };
+
+  if (isVendorsLoading) {
     return <div className="flex h-full items-center justify-center p-24"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
   }
 
@@ -68,34 +118,42 @@ export default function AdminVendorsPage() {
           <h1 className="text-3xl font-bold tracking-tight font-headline">Master Mitra</h1>
           <p className="text-muted-foreground">Kelola daftar vendor atau mitra TakjilKu.</p>
         </div>
-        <Dialog open={isAdding} onOpenChange={setIsAdding}>
-          <DialogTrigger asChild>
-            <Button>
-              <Plus className="mr-2 h-4 w-4" /> Tambah Mitra
+        <div className="flex gap-2">
+          {menuItems && menuItems.length > 0 && (
+            <Button variant="outline" onClick={handleImportFromMenu} disabled={isImporting}>
+              {isImporting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCcw className="mr-2 h-4 w-4" />}
+              Import dari Menu
             </Button>
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-[425px]">
-            <DialogHeader>
-              <DialogTitle>Tambah Mitra Baru</DialogTitle>
-              <DialogDescription>Masukkan rincian mitra baru.</DialogDescription>
-            </DialogHeader>
-            <form onSubmit={handleSave} className="space-y-4">
-              <div className="grid gap-4 py-4">
-                <div className="grid gap-2">
-                  <Label htmlFor="name">Nama Mitra / Brand</Label>
-                  <Input id="name" name="name" placeholder="Contoh: Dapur Bunda" required />
+          )}
+          <Dialog open={isAdding} onOpenChange={setIsAdding}>
+            <DialogTrigger asChild>
+              <Button>
+                <Plus className="mr-2 h-4 w-4" /> Tambah Mitra
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-[425px]">
+              <DialogHeader>
+                <DialogTitle>Tambah Mitra Baru</DialogTitle>
+                <DialogDescription>Masukkan rincian mitra baru.</DialogDescription>
+              </DialogHeader>
+              <form onSubmit={handleSave} className="space-y-4">
+                <div className="grid gap-4 py-4">
+                  <div className="grid gap-2">
+                    <Label htmlFor="name">Nama Mitra / Brand</Label>
+                    <Input id="name" name="name" placeholder="Contoh: Dapur Bunda" required />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="code">Kode Mitra (Singkatan)</Label>
+                    <Input id="code" name="code" placeholder="Contoh: DB" required />
+                  </div>
                 </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="code">Kode Mitra (Singkatan)</Label>
-                  <Input id="code" name="code" placeholder="Contoh: DB" required />
-                </div>
-              </div>
-              <DialogFooter>
-                <Button type="submit" className="w-full">Simpan Mitra</Button>
-              </DialogFooter>
-            </form>
-          </DialogContent>
-        </Dialog>
+                <DialogFooter>
+                  <Button type="submit" className="w-full">Simpan Mitra</Button>
+                </DialogFooter>
+              </form>
+            </DialogContent>
+          </Dialog>
+        </div>
       </div>
 
       <Card>
