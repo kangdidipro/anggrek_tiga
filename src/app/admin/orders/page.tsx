@@ -1,7 +1,8 @@
+
 'use client';
 
 import { useEffect, useState, useMemo } from 'react';
-import { useFirestore, useUser } from '@/firebase';
+import { useFirestore, useUser, errorEmitter, FirestorePermissionError } from '@/firebase';
 import { collectionGroup, getDocs, query, writeBatch, doc, updateDoc, arrayUnion } from 'firebase/firestore';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -102,7 +103,7 @@ export default function AdminOrdersPage() {
         })).sort((a, b) => new Date(b.orderDateTime).getTime() - new Date(a.orderDateTime).getTime());
 
         setOrders(ordersWithItems);
-      } catch (error) {
+      } catch (error: any) {
         console.error("Error fetching orders:", error);
       } finally {
         setIsLoading(false);
@@ -147,73 +148,75 @@ export default function AdminOrdersPage() {
 
     const now = new Date().toISOString();
     const orderRef = doc(firestore, 'customers', order.customerId, 'orders', order.id);
+    const updateData = {
+      status: newStatus,
+      statusHistory: arrayUnion({ status: newStatus, timestamp: now })
+    };
 
-    try {
-      await updateDoc(orderRef, {
-        status: newStatus,
-        statusHistory: arrayUnion({ status: newStatus, timestamp: now })
-      });
+    updateDoc(orderRef, updateData)
+      .then(() => {
+        setOrders(prev => prev.map(o => {
+          if (o.id === order.id) {
+            return {
+              ...o,
+              status: newStatus,
+              statusHistory: [...(o.statusHistory || []), { status: newStatus, timestamp: now }]
+            };
+          }
+          return o;
+        }));
 
-      setOrders(prev => prev.map(o => {
-        if (o.id === order.id) {
-          return {
-            ...o,
-            status: newStatus,
-            statusHistory: [...(o.statusHistory || []), { status: newStatus, timestamp: now }]
-          };
-        }
-        return o;
-      }));
-
-      toast({
-        title: "Status Diperbarui",
-        description: `Pesanan #${order.id.substring(0, 7)} sekarang: ${newStatus}`,
+        toast({
+          title: "Status Diperbarui",
+          description: `Pesanan #${order.id.substring(0, 7)} sekarang: ${newStatus}`,
+        });
+      })
+      .catch(async (error) => {
+        const permissionError = new FirestorePermissionError({
+          path: orderRef.path,
+          operation: 'update',
+          requestResourceData: updateData,
+        });
+        errorEmitter.emit('permission-error', permissionError);
+      })
+      .finally(() => {
+        setIsUpdatingStatus(null);
       });
-    } catch (error) {
-      console.error("Error updating status:", error);
-      toast({
-        variant: "destructive",
-        title: "Gagal Update",
-        description: "Terjadi kesalahan saat memperbarui status.",
-      });
-    } finally {
-      setIsUpdatingStatus(null);
-    }
   };
 
   const handleDeleteOrder = async () => {
     if (!orderToDelete || !firestore) return;
 
     setIsDeleting(true);
-    try {
-        const batch = writeBatch(firestore);
+    const batch = writeBatch(firestore);
 
-        orderToDelete.items.forEach(item => {
-            const itemRef = doc(firestore, 'customers', orderToDelete.customerId, 'orders', orderToDelete.id, 'orderItems', item.id);
-            batch.delete(itemRef);
-        });
+    orderToDelete.items.forEach(item => {
+        const itemRef = doc(firestore, 'customers', orderToDelete.customerId, 'orders', orderToDelete.id, 'orderItems', item.id);
+        batch.delete(itemRef);
+    });
 
-        const orderRef = doc(firestore, 'customers', orderToDelete.customerId, 'orders', orderToDelete.id);
-        batch.delete(orderRef);
+    const orderRef = doc(firestore, 'customers', orderToDelete.customerId, 'orders', orderToDelete.id);
+    batch.delete(orderRef);
 
-        await batch.commit();
-
+    batch.commit()
+      .then(() => {
         setOrders(prev => prev.filter(o => o.id !== orderToDelete.id));
         toast({
             title: "Pesanan Dihapus",
             description: "Pesanan telah berhasil dihapus dari sistem.",
         });
-    } catch (error) {
-        console.error("Error deleting order:", error);
-        toast({
-            variant: "destructive",
-            title: "Gagal Menghapus",
-            description: "Terjadi kesalahan saat mencoba menghapus pesanan.",
+      })
+      .catch(async (error) => {
+        const permissionError = new FirestorePermissionError({
+          path: orderRef.path,
+          operation: 'delete',
         });
-    } finally {
+        errorEmitter.emit('permission-error', permissionError);
+      })
+      .finally(() => {
         setIsDeleting(false);
         setOrderToDelete(null);
-    }
+      });
   };
 
   const exportToExcel = () => {

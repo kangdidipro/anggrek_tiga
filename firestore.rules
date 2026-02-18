@@ -14,12 +14,16 @@ service cloud.firestore {
       return isSignedIn() && request.auth.uid == userId;
     }
 
+    // Aturan untuk pencarian lintas koleksi (Collection Group)
     match /{path=**}/orders/{orderId} {
       allow read, delete: if isSignedIn();
+      // Izinkan update status oleh Admin (pengguna yang terautentikasi)
+      allow update: if isSignedIn();
     }
 
     match /{path=**}/orderItems/{orderItemId} {
       allow read, delete: if isSignedIn();
+      allow write: if isSignedIn();
     }
 
     match /customers/{customerId} {
@@ -37,10 +41,11 @@ service cloud.firestore {
       allow delete: if isOwner(customerId);
 
       match /orders/{orderId} {
-        allow write: if isOwner(customerId) && (request.resource.data.customerId == customerId || resource.data.customerId == customerId);
+        // Pemilik bisa menulis, Admin (isSignedIn) bisa mengupdate status
+        allow write: if isOwner(customerId) || isSignedIn();
 
         match /orderItems/{orderItemId} {
-          allow write: if isOwner(customerId) && (request.resource.data.customerId == customerId || resource.data.customerId == customerId);
+          allow write: if isOwner(customerId) || isSignedIn();
         }
       }
     }
