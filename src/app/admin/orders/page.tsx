@@ -71,6 +71,7 @@ export default function AdminOrdersPage() {
   const [targetEmail, setTargetEmail] = useState('');
   const [date, setDate] = useState<Date | undefined>(new Date());
   const [vendor, setVendor] = useState<string>('all');
+  const [statusFilter, setStatusFilter] = useState<string>('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [orderToDelete, setOrderToDelete] = useState<Order | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -122,15 +123,18 @@ export default function AdminOrdersPage() {
         const dateMatch = date ? orderDate.toDateString() === date.toDateString() : true;
         const vendorMatch = vendor === 'all' ? true : order.items.some(item => getVendorFromSku(item.sku) === vendor);
         
+        const currentStatus = order.status === 'pending' ? 'Dipesan' : (order.status || 'Dipesan');
+        const statusMatch = statusFilter === 'all' ? true : currentStatus === statusFilter;
+        
         const search = searchTerm.toLowerCase();
         const searchMatch = search === '' || 
             order.id.toLowerCase().includes(search) || 
             order.deliveryAddress.toLowerCase().includes(search) ||
             order.items.some(item => item.name.toLowerCase().includes(search));
 
-        return dateMatch && vendorMatch && searchMatch;
+        return dateMatch && vendorMatch && searchMatch && statusMatch;
     });
-  }, [orders, date, vendor, searchTerm]);
+  }, [orders, date, vendor, statusFilter, searchTerm]);
 
   const groupedByVendor = useMemo(() => {
     const groups: Record<string, Order[]> = {};
@@ -234,7 +238,7 @@ export default function AdminOrdersPage() {
             'Harga Satuan': item.priceAtOrder,
             'Total Harga': item.quantity * item.priceAtOrder,
             'Metode Bayar': order.paymentMethod,
-            'Status': order.status || 'Dipesan',
+            'Status': order.status === 'pending' ? 'Dipesan' : (order.status || 'Dipesan'),
             'Alamat': order.deliveryAddress,
         }))
     );
@@ -244,7 +248,7 @@ export default function AdminOrdersPage() {
     XLSX.utils.book_append_sheet(workbook, worksheet, "Orders");
     const excelBuffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
     const data = new Blob([excelBuffer], {type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;charset=UTF-8'});
-    saveAs(data, `orders_${date ? format(date, 'yyyy-MM-dd') : 'all'}.xlsx`);
+    saveAs(data, `orders_${date ? format(date, 'yyyy-MM-dd') : 'all'}_${statusFilter}.xlsx`);
   };
 
   const exportToPDF = () => {
@@ -258,11 +262,11 @@ export default function AdminOrdersPage() {
             item.name,
             item.quantity.toString(),
             formatPrice(item.priceAtOrder * item.quantity),
-            order.status || 'Dipesan'
+            order.status === 'pending' ? 'Dipesan' : (order.status || 'Dipesan')
         ])
     );
 
-    doc.text(`Daftar Pesanan - ${date ? format(date, 'd MMMM yyyy', { locale: id }) : 'Semua'}`, 14, 15);
+    doc.text(`Daftar Pesanan - ${date ? format(date, 'd MMMM yyyy', { locale: id }) : 'Semua'} - Status: ${statusFilter === 'all' ? 'Semua' : statusFilter}`, 14, 15);
     autoTable(doc, {
         head: [tableColumn],
         body: tableRows,
@@ -271,7 +275,7 @@ export default function AdminOrdersPage() {
         headStyles: { fillColor: [255, 140, 0] },
         styles: { fontSize: 8 }
     });
-    doc.save(`orders_${date ? format(date, 'yyyy-MM-dd') : 'all'}.pdf`);
+    doc.save(`orders_${date ? format(date, 'yyyy-MM-dd') : 'all'}_${statusFilter}.pdf`);
   };
 
   const handlePrintReceipt = (order: Order, vendorCode?: string) => {
@@ -403,7 +407,7 @@ export default function AdminOrdersPage() {
                 </div>
                 <Popover>
                     <PopoverTrigger asChild>
-                        <Button variant={"outline"} className="w-[240px] justify-start text-left font-normal">
+                        <Button variant={"outline"} className="w-[200px] justify-start text-left font-normal">
                             <CalendarIcon className="mr-2 h-4 w-4" />
                             {date ? format(date, "PPP", { locale: id }) : <span>Pilih tanggal</span>}
                         </Button>
@@ -413,11 +417,20 @@ export default function AdminOrdersPage() {
                     </PopoverContent>
                 </Popover>
                  <Select value={vendor} onValueChange={setVendor}>
-                    <SelectTrigger className="w-[180px]">
-                        <SelectValue placeholder="Pilih Mitra" />
+                    <SelectTrigger className="w-[150px]">
+                        <SelectValue placeholder="Semua Mitra" />
                     </SelectTrigger>
                     <SelectContent>
                         {allVendors.map(v => <SelectItem key={v} value={v}>{v === 'all' ? 'Semua Mitra' : v}</SelectItem>)}
+                    </SelectContent>
+                </Select>
+                <Select value={statusFilter} onValueChange={setStatusFilter}>
+                    <SelectTrigger className="w-[150px]">
+                        <SelectValue placeholder="Semua Status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="all">Semua Status</SelectItem>
+                        {ORDER_STATUSES.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
                     </SelectContent>
                 </Select>
                 <div className="flex flex-wrap gap-2 items-center">
