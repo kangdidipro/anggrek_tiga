@@ -13,6 +13,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { format } from 'date-fns';
+import { id } from 'date-fns/locale';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 interface OrderItem {
@@ -139,7 +140,7 @@ export default function AdminSummaryPage() {
             <CardHeader>
                 <CardTitle>Rekap Harian</CardTitle>
                 <CardDescription>
-                  Rekapitulasi total pesanan per penjual untuk tanggal {date ? format(date, 'eeee, d MMMM yyyy', { locale: require('date-fns/locale/id') }) : 'semua waktu'}.
+                  Rekapitulasi total pesanan per penjual untuk tanggal {date ? format(date, 'eeee, d MMMM yyyy', { locale: id }) : 'semua waktu'}.
                 </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -148,11 +149,11 @@ export default function AdminSummaryPage() {
                         <PopoverTrigger asChild>
                             <Button variant={"outline"} className="w-[280px] justify-start text-left font-normal">
                                 <CalendarIcon className="mr-2 h-4 w-4" />
-                                {date ? format(date, "PPP") : <span>Pilih tanggal</span>}
+                                {date ? format(date, "PPP", { locale: id }) : <span>Pilih tanggal</span>}
                             </Button>
                         </PopoverTrigger>
                         <PopoverContent className="w-auto p-0">
-                            <Calendar mode="single" selected={date} onSelect={setDate} initialFocus />
+                            <Calendar mode="single" selected={date} onSelect={setDate} initialFocus locale={id} />
                         </PopoverContent>
                     </Popover>
 
