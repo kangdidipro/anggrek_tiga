@@ -117,8 +117,8 @@ export default function AdminSummaryPage() {
   const exportToExcel = () => {
     const dataForExport = dailySummary.map(summary => ({
         'Vendor': summary.vendor,
-        'Total Order': summary.totalOrders,
-        'Total Pemasukan': summary.totalAmount,
+        'Total Pesanan': summary.totalOrders,
+        'Total Pemesanan': summary.totalAmount,
         'Rincian Item': summary.items.map(i => `${i.name} (x${i.quantity})`).join(', '),
     }));
 
@@ -180,8 +180,8 @@ export default function AdminSummaryPage() {
                     <TableHeader>
                         <TableRow>
                             <TableHead>Vendor</TableHead>
-                            <TableHead className="text-right">Total Order</TableHead>
-                            <TableHead className="text-right">Total Pemasukan</TableHead>
+                            <TableHead className="text-right">Total Pesanan</TableHead>
+                            <TableHead className="text-right">Total Pemesanan</TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
