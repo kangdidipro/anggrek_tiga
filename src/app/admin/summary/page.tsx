@@ -18,6 +18,7 @@ import { useToast } from '@/hooks/use-toast';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 interface OrderItem {
   id: string;
@@ -53,6 +54,7 @@ export default function AdminSummaryPage() {
   const [isSending, setIsSending] = useState(false);
   const [targetEmail, setTargetEmail] = useState('');
   const [date, setDate] = useState<Date | undefined>(new Date());
+  const [vendorFilter, setVendorFilter] = useState('all');
   const { toast } = useToast();
 
   useEffect(() => {
@@ -127,15 +129,26 @@ export default function AdminSummaryPage() {
     }));
   }, [orders, date]);
 
+  const availableVendors = useMemo(() => {
+    const vendors = new Set<string>();
+    dailySummary.forEach(s => vendors.add(s.vendor));
+    return ['all', ...Array.from(vendors).sort()];
+  }, [dailySummary]);
+
+  const filteredSummary = useMemo(() => {
+    if (vendorFilter === 'all') return dailySummary;
+    return dailySummary.filter(s => s.vendor === vendorFilter);
+  }, [dailySummary, vendorFilter]);
+
   const grandTotals = useMemo(() => {
-    return dailySummary.reduce((acc, curr) => ({
+    return filteredSummary.reduce((acc, curr) => ({
       orders: acc.orders + curr.totalOrders,
       amount: acc.amount + curr.totalAmount
     }), { orders: 0, amount: 0 });
-  }, [dailySummary]);
+  }, [filteredSummary]);
 
   const exportToExcel = () => {
-    const dataForExport = dailySummary.map(summary => ({
+    const dataForExport = filteredSummary.map(summary => ({
         'Vendor': summary.vendor,
         'Total Pesanan': summary.totalOrders,
         'Total Pemesanan': summary.totalAmount,
@@ -163,7 +176,7 @@ export default function AdminSummaryPage() {
   const exportToPDF = () => {
     const doc = new jsPDF();
     const tableColumn = ["Vendor", "Pesanan", "Total", "Item & SKU", "Alamat"];
-    const tableRows = dailySummary.map(summary => [
+    const tableRows = filteredSummary.map(summary => [
         summary.vendor,
         summary.totalOrders.toString(),
         formatPrice(summary.totalAmount),
@@ -240,13 +253,26 @@ export default function AdminSummaryPage() {
                             <Calendar mode="single" selected={date} onSelect={setDate} initialFocus locale={id} />
                         </PopoverContent>
                     </Popover>
+                    
+                    <Select value={vendorFilter} onValueChange={setVendorFilter}>
+                        <SelectTrigger className="w-[180px]">
+                            <SelectValue placeholder="Semua Vendor" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            {availableVendors.map(v => (
+                                <SelectItem key={v} value={v}>
+                                    {v === 'all' ? 'Semua Vendor' : v}
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
 
                     <div className="flex flex-wrap gap-2 items-center">
-                        <Button variant="outline" size="sm" onClick={exportToExcel} disabled={dailySummary.length === 0}>
+                        <Button variant="outline" size="sm" onClick={exportToExcel} disabled={filteredSummary.length === 0}>
                             <FileDown className="mr-2 h-4 w-4" />
                             Excel
                         </Button>
-                        <Button variant="outline" size="sm" onClick={exportToPDF} disabled={dailySummary.length === 0}>
+                        <Button variant="outline" size="sm" onClick={exportToPDF} disabled={filteredSummary.length === 0}>
                             <FileText className="mr-2 h-4 w-4" />
                             PDF
                         </Button>
@@ -258,7 +284,7 @@ export default function AdminSummaryPage() {
                                 value={targetEmail}
                                 onChange={(e) => setTargetEmail(e.target.value)}
                             />
-                            <Button variant="default" size="sm" className="h-8" onClick={sendToEmail} disabled={dailySummary.length === 0 || isSending || !targetEmail.includes('@')}>
+                            <Button variant="default" size="sm" className="h-8" onClick={sendToEmail} disabled={filteredSummary.length === 0 || isSending || !targetEmail.includes('@')}>
                                 {isSending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Mail className="mr-2 h-4 w-4" />}
                                 Email
                             </Button>
@@ -277,14 +303,14 @@ export default function AdminSummaryPage() {
                         </TableRow>
                     </TableHeader>
                     <TableBody>
-                        {dailySummary.length === 0 ? (
+                        {filteredSummary.length === 0 ? (
                             <TableRow>
                                 <TableCell colSpan={5} className="text-center text-muted-foreground py-10">
                                   Tidak ada transaksi ditemukan untuk filter ini.
                                 </TableCell>
                             </TableRow>
                         ) : (
-                            dailySummary.map(summary => (
+                            filteredSummary.map(summary => (
                                 <TableRow key={summary.vendor}>
                                     <TableCell className="font-medium">{summary.vendor}</TableCell>
                                     <TableCell className="text-right">{summary.totalOrders}</TableCell>
@@ -316,7 +342,7 @@ export default function AdminSummaryPage() {
                             ))
                         )}
                     </TableBody>
-                    {dailySummary.length > 0 && (
+                    {filteredSummary.length > 0 && (
                         <TableFooter>
                             <TableRow className="bg-primary/5">
                                 <TableCell className="font-bold">TOTAL KESELURUHAN</TableCell>
