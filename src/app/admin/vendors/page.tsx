@@ -1,17 +1,18 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useFirestore, useCollection, useMemoFirebase } from '@/firebase';
 import { collection, doc, deleteDoc, setDoc } from 'firebase/firestore';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Loader2, Plus, Pencil, Trash2, RefreshCcw } from 'lucide-react';
+import { Loader2, Plus, Pencil, Trash2, RefreshCcw, FileUp } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import type { Vendor, Product } from '@/lib/types';
+import * as XLSX from 'xlsx';
 
 export default function AdminVendorsPage() {
   const firestore = useFirestore();
@@ -19,6 +20,8 @@ export default function AdminVendorsPage() {
   const [isEditing, setIsEditing] = useState<Vendor | null>(null);
   const [isAdding, setIsAdding] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
+  const [isExcelImporting, setIsExcelImporting] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Fetch Vendors
   const vendorsQuery = useMemoFirebase(() => {
@@ -73,7 +76,6 @@ export default function AdminVendorsPage() {
       const vendorCodes = new Set<string>();
       menuItems.forEach(item => {
         if (item.sku && item.sku.includes('-')) {
-          // Ambil kode sebelum tanda "-"
           const code = item.sku.split('-')[0].trim();
           if (code) vendorCodes.add(code);
         }
@@ -86,7 +88,7 @@ export default function AdminVendorsPage() {
         if (!existingCodes.has(code)) {
           const vendorData: Vendor = {
             id: (Math.floor(Math.random() * 1000) + 500).toString(),
-            name: code, // Sesuai permintaan: Nama Mitra = Kode Mitra
+            name: code,
             code: code,
           };
           await setDoc(doc(firestore, 'vendors', vendorData.id), vendorData);
@@ -107,6 +109,59 @@ export default function AdminVendorsPage() {
     }
   };
 
+  const handleExcelUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !firestore) return;
+
+    setIsExcelImporting(true);
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      try {
+        const data = new Uint8Array(event.target?.result as ArrayBuffer);
+        const workbook = XLSX.read(data, { type: 'array' });
+        const firstSheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[firstSheetName];
+        const jsonData = XLSX.utils.sheet_to_json(worksheet) as any[];
+
+        let importedCount = 0;
+        const existingCodes = new Set(vendors?.map(v => v.code) || []);
+
+        for (const row of jsonData) {
+          // Cari kolom Nama dan Kode (case insensitive)
+          const name = row['Nama Mitra'] || row['Nama'] || Object.values(row)[0];
+          const code = row['Kode Mitra'] || row['Kode'] || Object.values(row)[1];
+
+          if (name && code && !existingCodes.has(String(code))) {
+            const vendorData: Vendor = {
+              id: (Math.floor(Math.random() * 10000) + 1000).toString(),
+              name: String(name),
+              code: String(code),
+            };
+            await setDoc(doc(firestore, 'vendors', vendorData.id), vendorData);
+            importedCount++;
+            existingCodes.add(String(code));
+          }
+        }
+
+        toast({
+          title: "Import Selesai",
+          description: `${importedCount} mitra berhasil diimport dari Excel.`,
+        });
+      } catch (error) {
+        console.error("Excel import error:", error);
+        toast({
+          variant: "destructive",
+          title: "Gagal Import",
+          description: "Pastikan format file Excel benar.",
+        });
+      } finally {
+        setIsExcelImporting(false);
+        if (fileInputRef.current) fileInputRef.current.value = '';
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  };
+
   if (isVendorsLoading) {
     return <div className="flex h-full items-center justify-center p-24"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
   }
@@ -119,6 +174,17 @@ export default function AdminVendorsPage() {
           <p className="text-muted-foreground">Kelola daftar vendor atau mitra TakjilKu.</p>
         </div>
         <div className="flex gap-2">
+          <input
+            type="file"
+            accept=".xlsx, .xls"
+            className="hidden"
+            ref={fileInputRef}
+            onChange={handleExcelUpload}
+          />
+          <Button variant="outline" onClick={() => fileInputRef.current?.click()} disabled={isExcelImporting}>
+            {isExcelImporting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileUp className="mr-2 h-4 w-4" />}
+            Import Excel
+          </Button>
           {menuItems && menuItems.length > 0 && (
             <Button variant="outline" onClick={handleImportFromMenu} disabled={isImporting}>
               {isImporting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCcw className="mr-2 h-4 w-4" />}
