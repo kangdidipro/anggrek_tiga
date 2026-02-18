@@ -9,10 +9,10 @@ import { ListOrdered, LayoutDashboard, LogOut, Soup, Home, UtensilsCrossed, User
 
 const navItems = [
   { href: '/', label: 'Halaman Depan', icon: Home },
-  { href: '/admin/vendors', label: 'Master Mitra', icon: Users },
   { href: '/admin/menu', label: 'Atur Menu', icon: UtensilsCrossed },
   { href: '/admin/orders', label: 'List Order', icon: ListOrdered },
   { href: '/admin/summary', label: 'Rekap Harian', icon: LayoutDashboard },
+  { href: '/admin/vendors', label: 'Master Mitra', icon: Users },
 ];
 
 export default function AdminSidebar() {
