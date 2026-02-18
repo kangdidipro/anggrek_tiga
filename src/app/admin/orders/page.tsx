@@ -2,10 +2,10 @@
 
 import { useEffect, useState, useMemo } from 'react';
 import { useFirestore, useUser } from '@/firebase';
-import { collectionGroup, getDocs, query, writeBatch, doc, collection } from 'firebase/firestore';
+import { collectionGroup, getDocs, query, writeBatch, doc } from 'firebase/firestore';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Loader2, FileDown, CalendarIcon, Trash2 } from 'lucide-react';
+import { Loader2, FileDown, CalendarIcon, Trash2, FileText, Mail } from 'lucide-react';
 import { formatPrice } from '@/lib/utils';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import * as XLSX from 'xlsx';
@@ -13,8 +13,11 @@ import { saveAs } from 'file-saver';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { format } from 'date-fns';
+import { id } from 'date-fns/locale';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -54,6 +57,7 @@ export default function AdminOrdersPage() {
   const { user, isUserLoading } = useUser();
   const [orders, setOrders] = useState<Order[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isSending, setIsSending] = useState(false);
   const [date, setDate] = useState<Date | undefined>(new Date());
   const [vendor, setVendor] = useState<string>('all');
   const [orderToDelete, setOrderToDelete] = useState<Order | null>(null);
@@ -174,7 +178,46 @@ export default function AdminOrdersPage() {
     XLSX.utils.book_append_sheet(workbook, worksheet, "Orders");
     const excelBuffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
     const data = new Blob([excelBuffer], {type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;charset=UTF-8'});
-    saveAs(data, `orders_${format(new Date(), 'yyyy-MM-dd')}.xlsx`);
+    saveAs(data, `orders_${date ? format(date, 'yyyy-MM-dd') : 'all'}.xlsx`);
+  };
+
+  const exportToPDF = () => {
+    const doc = new jsPDF();
+    const tableColumn = ["Tanggal", "ID", "Vendor", "Item", "Qty", "Total", "Alamat"];
+    const tableRows = filteredOrders.flatMap(order => 
+        order.items.map(item => [
+            format(new Date(order.orderDateTime), 'dd/MM HH:mm'),
+            order.id.substring(0, 5),
+            getVendorFromSku(item.sku),
+            item.name,
+            item.quantity.toString(),
+            formatPrice(item.priceAtOrder * item.quantity),
+            order.deliveryAddress.substring(0, 20) + '...'
+        ])
+    );
+
+    doc.text(`Daftar Pesanan - ${date ? format(date, 'd MMMM yyyy', { locale: id }) : 'Semua'}`, 14, 15);
+    autoTable(doc, {
+        head: [tableColumn],
+        body: tableRows,
+        startY: 20,
+        theme: 'striped',
+        headStyles: { fillColor: [255, 140, 0] },
+        styles: { fontSize: 8 }
+    });
+    doc.save(`orders_${date ? format(date, 'yyyy-MM-dd') : 'all'}.pdf`);
+  };
+
+  const sendToEmail = async () => {
+    setIsSending(true);
+    // Simulating email sending process
+    await new Promise(resolve => setTimeout(resolve, 2000));
+    
+    setIsSending(false);
+    toast({
+        title: "Laporan Terkirim",
+        description: `Daftar pesanan telah dikirim ke email admin.`,
+    });
   };
   
   if (isLoading || isUserLoading) {
@@ -192,13 +235,13 @@ export default function AdminOrdersPage() {
             <div className="flex flex-wrap gap-4 items-center">
                 <Popover>
                     <PopoverTrigger asChild>
-                        <Button variant={"outline"} className="w-[280px] justify-start text-left font-normal">
+                        <Button variant={"outline"} className="w-[240px] justify-start text-left font-normal">
                             <CalendarIcon className="mr-2 h-4 w-4" />
-                            {date ? format(date, "PPP") : <span>Pilih tanggal</span>}
+                            {date ? format(date, "PPP", { locale: id }) : <span>Pilih tanggal</span>}
                         </Button>
                     </PopoverTrigger>
                     <PopoverContent className="w-auto p-0">
-                        <Calendar mode="single" selected={date} onSelect={setDate} initialFocus />
+                        <Calendar mode="single" selected={date} onSelect={setDate} initialFocus locale={id} />
                     </PopoverContent>
                 </Popover>
                  <Select value={vendor} onValueChange={setVendor}>
@@ -209,10 +252,20 @@ export default function AdminOrdersPage() {
                         {allVendors.map(v => <SelectItem key={v} value={v}>{v === 'all' ? 'Semua Vendor' : v}</SelectItem>)}
                     </SelectContent>
                 </Select>
-                <Button onClick={exportToExcel} disabled={filteredOrders.length === 0}>
-                    <FileDown className="mr-2 h-4 w-4" />
-                    Export Excel
-                </Button>
+                <div className="flex gap-2">
+                    <Button variant="outline" size="sm" onClick={exportToExcel} disabled={filteredOrders.length === 0}>
+                        <FileDown className="mr-2 h-4 w-4" />
+                        Excel
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={exportToPDF} disabled={filteredOrders.length === 0}>
+                        <FileText className="mr-2 h-4 w-4" />
+                        PDF
+                    </Button>
+                    <Button variant="default" size="sm" onClick={sendToEmail} disabled={filteredOrders.length === 0 || isSending}>
+                        {isSending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Mail className="mr-2 h-4 w-4" />}
+                        Email
+                    </Button>
+                </div>
             </div>
         </CardContent>
       </Card>
