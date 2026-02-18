@@ -14,7 +14,6 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Calendar } from '@/components/ui/calendar';
 import { format } from 'date-fns';
 import { id } from 'date-fns/locale';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -42,7 +41,7 @@ type DailySummary = {
     vendor: string;
     totalOrders: number;
     totalAmount: number;
-    items: { name: string, quantity: number, sku: string }[];
+    items: { name: string, quantity: number, sku: string, price: number }[];
     addresses: string[];
 }
 
@@ -54,7 +53,6 @@ export default function AdminSummaryPage() {
   const [isSending, setIsSending] = useState(false);
   const [targetEmail, setTargetEmail] = useState('');
   const [date, setDate] = useState<Date | undefined>(new Date());
-  const [vendorFilter, setVendorFilter] = useState<string>('all');
   const { toast } = useToast();
 
   useEffect(() => {
@@ -86,11 +84,6 @@ export default function AdminSummaryPage() {
     fetchOrders();
   }, [firestore, user, isUserLoading]);
 
-  const allVendors = useMemo(() => {
-    const vendorSet = new Set(orders.flatMap(o => o.items.map(i => getVendorFromSku(i.sku))));
-    return ['all', ...Array.from(vendorSet)];
-  }, [orders]);
-
   const dailySummary: DailySummary[] = useMemo(() => {
     if (!date) return [];
     
@@ -99,7 +92,7 @@ export default function AdminSummaryPage() {
     const summaryMap: Record<string, { 
       totalOrders: Set<string>; 
       totalAmount: number; 
-      items: Record<string, { name: string, quantity: number, sku: string }>;
+      items: Record<string, { name: string, quantity: number, sku: string, price: number }>;
       addresses: Set<string>;
     }> = {};
 
@@ -107,9 +100,6 @@ export default function AdminSummaryPage() {
         order.items.forEach(item => {
             const vendor = getVendorFromSku(item.sku);
             
-            // Apply vendor filter
-            if (vendorFilter !== 'all' && vendor !== vendorFilter) return;
-
             if (!summaryMap[vendor]) {
                 summaryMap[vendor] = { totalOrders: new Set(), totalAmount: 0, items: {}, addresses: new Set() };
             }
@@ -122,7 +112,7 @@ export default function AdminSummaryPage() {
             
             const itemKey = item.sku;
             if (!summaryMap[vendor].items[itemKey]) {
-                summaryMap[vendor].items[itemKey] = { name: item.name, quantity: 0, sku: item.sku };
+                summaryMap[vendor].items[itemKey] = { name: item.name, quantity: 0, sku: item.sku, price: item.priceAtOrder };
             }
             summaryMap[vendor].items[itemKey].quantity += item.quantity;
         });
@@ -135,7 +125,7 @@ export default function AdminSummaryPage() {
         items: Object.values(data.items),
         addresses: Array.from(data.addresses)
     }));
-  }, [orders, date, vendorFilter]);
+  }, [orders, date]);
 
   const grandTotals = useMemo(() => {
     return dailySummary.reduce((acc, curr) => ({
@@ -149,7 +139,7 @@ export default function AdminSummaryPage() {
         'Vendor': summary.vendor,
         'Total Pesanan': summary.totalOrders,
         'Total Pemesanan': summary.totalAmount,
-        'Rincian Item': summary.items.map(i => `${i.name} [${i.sku}] (x${i.quantity})`).join(', '),
+        'Rincian Item': summary.items.map(i => `${i.name} [${i.sku}] (${formatPrice(i.price)} x ${i.quantity} = ${formatPrice(i.price * i.quantity)})`).join(', '),
         'Alamat Pengiriman': summary.addresses.join('; '),
     }));
 
@@ -177,7 +167,7 @@ export default function AdminSummaryPage() {
         summary.vendor,
         summary.totalOrders.toString(),
         formatPrice(summary.totalAmount),
-        summary.items.map(i => `${i.name} [${i.sku}] (x${i.quantity})`).join(', '),
+        summary.items.map(i => `${i.name} [${i.sku}] (${formatPrice(i.price)} x ${i.quantity} = ${formatPrice(i.price * i.quantity)})`).join(', '),
         summary.addresses.join(', ')
     ]);
 
@@ -282,7 +272,7 @@ export default function AdminSummaryPage() {
                             <TableHead>Vendor</TableHead>
                             <TableHead className="text-right">Pesanan</TableHead>
                             <TableHead className="text-right">Total</TableHead>
-                            <TableHead>Rincian Item & SKU</TableHead>
+                            <TableHead>Rincian Item, Harga & SKU</TableHead>
                             <TableHead>Alamat Pengiriman</TableHead>
                         </TableRow>
                     </TableHeader>
@@ -299,15 +289,18 @@ export default function AdminSummaryPage() {
                                     <TableCell className="font-medium">{summary.vendor}</TableCell>
                                     <TableCell className="text-right">{summary.totalOrders}</TableCell>
                                     <TableCell className="text-right">{formatPrice(summary.totalAmount)}</TableCell>
-                                    <TableCell>
+                                    <TableCell className="min-w-[300px]">
                                         <ul className="text-xs space-y-1">
                                             {summary.items.map((item, idx) => (
                                                 <li key={idx} className="flex justify-between gap-4 border-b border-muted last:border-0 pb-1">
-                                                    <div>
+                                                    <div className="flex-1">
                                                       <span className="block font-medium">{item.name}</span>
-                                                      <span className="text-[10px] text-muted-foreground">SKU: {item.sku}</span>
+                                                      <div className="flex justify-between text-[10px] text-muted-foreground">
+                                                        <span>SKU: {item.sku}</span>
+                                                        <span>{formatPrice(item.price)} x {item.quantity}</span>
+                                                      </div>
                                                     </div>
-                                                    <span className="font-bold text-primary">x{item.quantity}</span>
+                                                    <span className="font-bold text-primary self-center">{formatPrice(item.price * item.quantity)}</span>
                                                 </li>
                                             ))}
                                         </ul>
