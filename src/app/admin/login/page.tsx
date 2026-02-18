@@ -37,7 +37,13 @@ export default function AdminLoginPage() {
             <Lock className="h-6 w-6" />
             Admin Login
           </CardTitle>
-          <CardDescription>Masukkan password untuk mengakses panel admin.</CardDescription>
+          <CardDescription>
+            Masukkan password untuk mengakses panel admin.
+            <br />
+            <span className="mt-2 block font-medium text-destructive">
+              panel Admin adalah halaman untuk pengelola TakjilKU saja, bukan untuk pemesan
+            </span>
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
