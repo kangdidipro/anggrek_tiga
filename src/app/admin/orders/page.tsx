@@ -54,19 +54,22 @@ export default function AdminOrdersPage() {
 
   useEffect(() => {
     const fetchOrders = async () => {
-      // Tunggu hingga firestore tersedia DAN status autentikasi selesai dimuat
+      // Tunggu hingga firestore dan user tersedia
       if (!firestore || isUserLoading || !user) return;
       
       setIsLoading(true);
       try {
+        // Fetch all orders using collectionGroup
         const ordersQuery = query(collectionGroup(firestore, 'orders'));
         const ordersSnapshot = await getDocs(ordersQuery);
         const ordersData = ordersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Omit<Order, 'items'>));
 
+        // Fetch all order items using collectionGroup
         const orderItemsQuery = query(collectionGroup(firestore, 'orderItems'));
         const orderItemsSnapshot = await getDocs(orderItemsQuery);
         const orderItemsData = orderItemsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as OrderItem));
         
+        // Match items to their parent orders
         const ordersWithItems: Order[] = ordersData.map(order => ({
             ...order,
             items: orderItemsData.filter(item => item.orderId === order.id)
@@ -130,7 +133,7 @@ export default function AdminOrdersPage() {
   };
   
   if (isLoading || isUserLoading) {
-    return <div className="flex h-full items-center justify-center"><Loader2 className="h-8 w-8 animate-spin" /></div>;
+    return <div className="flex h-full items-center justify-center p-24"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
   }
 
   return (
@@ -170,11 +173,11 @@ export default function AdminOrdersPage() {
       </Card>
       
       {Object.keys(groupedByVendor).length === 0 ? (
-          <p className="text-center text-muted-foreground">Tidak ada order untuk filter yang dipilih.</p>
+          <p className="text-center text-muted-foreground py-12">Tidak ada order untuk filter yang dipilih.</p>
       ) : (
         Object.entries(groupedByVendor).map(([vendorCode, vendorOrders]) => (
-            <div key={vendorCode}>
-                <h2 className="text-xl font-bold mb-2">Vendor: {vendorCode}</h2>
+            <div key={vendorCode} className="mb-8">
+                <h2 className="text-xl font-bold mb-4 bg-primary/10 p-2 rounded px-4 text-primary">Vendor: {vendorCode}</h2>
                 <Accordion type="single" collapsible className="w-full space-y-4">
                   {vendorOrders.map((order) => (
                       <AccordionItem value={order.id} key={order.id} className="border-b-0">
@@ -190,9 +193,9 @@ export default function AdminOrdersPage() {
                                                   {new Date(order.orderDateTime).toLocaleString('id-ID')}
                                               </CardDescription>
                                           </div>
-                                          <div className="text-right">
+                                          <div className="text-right flex flex-col items-end gap-1">
                                               <p className="font-semibold text-base md:text-lg text-primary">{formatPrice(order.totalAmount)}</p>
-                                               <p className="text-xs capitalize text-white font-medium px-2 py-0.5 rounded-full bg-blue-500">{order.status || 'Pending'}</p>
+                                               <p className="text-[10px] md:text-xs capitalize text-white font-medium px-2 py-0.5 rounded-full bg-blue-500">{order.status || 'Pending'}</p>
                                           </div>
                                       </div>
                                   </AccordionTrigger>
@@ -200,12 +203,12 @@ export default function AdminOrdersPage() {
                           <AccordionContent>
                                   <CardContent className="p-4 pt-0">
                                       <div className="border-t pt-4">
-                                      <h4 className="font-semibold mb-2 text-sm">Item:</h4>
+                                      <h4 className="font-semibold mb-2 text-sm text-muted-foreground uppercase tracking-wider">Item Pesanan:</h4>
                                        <div className="space-y-2 pt-2">
-                                          {order.items.map(item => (
+                                          {order.items.filter(item => getVendorFromSku(item.sku) === vendorCode).map(item => (
                                               <div key={item.id} className="flex justify-between text-sm">
                                                   <div>
-                                                      <span className="font-medium">{item.name} ({getVendorFromSku(item.sku)})</span>
+                                                      <span className="font-medium">{item.name}</span>
                                                       <span className="text-muted-foreground"> x {item.quantity}</span>
                                                   </div>
                                                   <span className="text-muted-foreground">{formatPrice(item.priceAtOrder * item.quantity)}</span>
@@ -214,7 +217,7 @@ export default function AdminOrdersPage() {
                                       </div>
                                       </div>
                                       <div className="border-t pt-4 mt-4">
-                                          <h4 className="font-semibold mb-2 text-sm">Alamat Pengiriman:</h4>
+                                          <h4 className="font-semibold mb-2 text-sm text-muted-foreground uppercase tracking-wider">Alamat Pengiriman:</h4>
                                           <p className="text-sm text-muted-foreground">{order.deliveryAddress}</p>
                                       </div>
                                   </CardContent>
