@@ -1,12 +1,12 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useFirestore, useCollection, useMemoFirebase } from '@/firebase';
 import { collection, doc, deleteDoc, setDoc } from 'firebase/firestore';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Loader2, Plus, Pencil, Trash2, RefreshCcw } from 'lucide-react';
+import { Loader2, Plus, Pencil, Trash2, RefreshCcw, Search } from 'lucide-react';
 import { formatPrice } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
@@ -22,6 +22,7 @@ export default function AdminMenuPage() {
   const [isEditing, setIsEditing] = useState<Product | null>(null);
   const [isAdding, setIsAdding] = useState(false);
   const [isSeeding, setIsSeeding] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
 
   // Fetch Menu Items
   const menuItemsQuery = useMemoFirebase(() => {
@@ -36,6 +37,22 @@ export default function AdminMenuPage() {
     return collection(firestore, 'vendors');
   }, [firestore]);
   const { data: vendors, isLoading: isVendorsLoading } = useCollection<Vendor>(vendorsQuery);
+
+  // Filtered Menu Items
+  const filteredMenuItems = useMemo(() => {
+    if (!menuItems) return [];
+    return menuItems
+      .filter((item) => {
+        const search = searchTerm.toLowerCase();
+        return (
+          item.name.toLowerCase().includes(search) ||
+          item.category.toLowerCase().includes(search) ||
+          item.sku.toLowerCase().includes(search) ||
+          item.vendor.toLowerCase().includes(search)
+        );
+      })
+      .sort((a, b) => a.category.localeCompare(b.category));
+  }, [menuItems, searchTerm]);
 
   const handleDelete = async (id: string) => {
     if (!firestore) return;
@@ -176,6 +193,16 @@ export default function AdminMenuPage() {
         </div>
       </div>
 
+      <div className="relative max-w-sm">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+        <Input
+          placeholder="Cari nama, kategori, SKU, atau vendor..."
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          className="pl-10"
+        />
+      </div>
+
       <Card>
         <CardContent className="p-0">
           <Table>
@@ -190,14 +217,14 @@ export default function AdminMenuPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {!menuItems || menuItems.length === 0 ? (
+              {filteredMenuItems.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={6} className="text-center py-12 text-muted-foreground">
-                    Belum ada menu di database. Gunakan menu default atau tambah baru.
+                    {searchTerm ? 'Tidak ada menu yang cocok dengan pencarian.' : 'Belum ada menu di database. Gunakan menu default atau tambah baru.'}
                   </TableCell>
                 </TableRow>
               ) : (
-                menuItems.sort((a, b) => a.category.localeCompare(b.category)).map((item) => (
+                filteredMenuItems.map((item) => (
                   <TableRow key={item.id}>
                     <TableCell className="font-medium">{item.name}</TableCell>
                     <TableCell>{item.category}</TableCell>
