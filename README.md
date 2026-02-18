@@ -20,6 +20,7 @@ Ikuti langkah berikut di terminal Firebase Studio untuk menyimpan kode ke reposi
    *Salin hasilnya dan tambahkan ke [GitHub SSH Settings](https://github.com/settings/keys).*
 
 3. **Inisialisasi & Set Remote SSH**:
+   Jika Anda mendapatkan error "No such remote 'origin'", gunakan perintah `add` berikut:
    ```bash
    git init
    git remote add origin git@github.com:kangdidipro/anggrek_tiga.git
