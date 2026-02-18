@@ -1,8 +1,8 @@
 'use client';
 
 import { useEffect, useState, useMemo } from 'react';
-import { useFirestore, useUser } from '@/firebase';
-import { collectionGroup, getDocs, query } from 'firebase/firestore';
+import { useFirestore, useUser, useCollection, useMemoFirebase } from '@/firebase';
+import { collectionGroup, getDocs, query, collection } from 'firebase/firestore';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Loader2, FileDown, CalendarIcon, FileText, Mail, Search } from 'lucide-react';
@@ -19,6 +19,7 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import type { Vendor } from '@/lib/types';
 
 interface OrderItem {
   id: string;
@@ -57,6 +58,21 @@ export default function AdminSummaryPage() {
   const [vendorFilter, setVendorFilter] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
   const { toast } = useToast();
+
+  // Fetch Vendors for Lookup
+  const vendorsQuery = useMemoFirebase(() => {
+    if (!firestore) return null;
+    return collection(firestore, 'vendors');
+  }, [firestore]);
+  const { data: vendorsData } = useCollection<Vendor>(vendorsQuery);
+
+  const vendorLookup = useMemo(() => {
+    const map: Record<string, string> = {};
+    vendorsData?.forEach(v => {
+      map[v.code] = v.name;
+    });
+    return map;
+  }, [vendorsData]);
 
   useEffect(() => {
     const fetchOrders = async () => {
@@ -145,15 +161,17 @@ export default function AdminSummaryPage() {
     
     if (searchTerm.trim() !== '') {
         const lowerSearch = searchTerm.toLowerCase();
-        result = result.filter(s => 
-            s.vendor.toLowerCase().includes(lowerSearch) ||
-            s.items.some(item => item.name.toLowerCase().includes(lowerSearch)) ||
-            s.addresses.some(addr => addr.toLowerCase().includes(lowerSearch))
-        );
+        result = result.filter(s => {
+            const vName = vendorLookup[s.vendor] || '';
+            return s.vendor.toLowerCase().includes(lowerSearch) ||
+                   vName.toLowerCase().includes(lowerSearch) ||
+                   s.items.some(item => item.name.toLowerCase().includes(lowerSearch)) ||
+                   s.addresses.some(addr => addr.toLowerCase().includes(lowerSearch));
+        });
     }
     
     return result;
-  }, [dailySummary, vendorFilter, searchTerm]);
+  }, [dailySummary, vendorFilter, searchTerm, vendorLookup]);
 
   const grandTotals = useMemo(() => {
     return filteredSummary.reduce((acc, curr) => ({
@@ -162,9 +180,14 @@ export default function AdminSummaryPage() {
     }), { orders: 0, amount: 0 });
   }, [filteredSummary]);
 
+  const getMitraDisplayName = (code: string) => {
+    const name = vendorLookup[code];
+    return name && name !== code ? `${name} (${code})` : code;
+  };
+
   const exportToExcel = () => {
     const dataForExport = filteredSummary.map(summary => ({
-        'Mitra': summary.vendor,
+        'Mitra': getMitraDisplayName(summary.vendor),
         'Total Pesanan': summary.totalOrders,
         'Total Pemesanan': summary.totalAmount,
         'Rincian Item, Harga & SKU': summary.items.map(i => `${i.name} [${i.sku}] (${formatPrice(i.price)} x ${i.quantity} = ${formatPrice(i.price * i.quantity)})`).join('\r\n'),
@@ -186,7 +209,7 @@ export default function AdminSummaryPage() {
     
     // Auto-width adjustment
     const wscols = [
-        {wch: 15}, // Vendor/Mitra
+        {wch: 30}, // Vendor/Mitra
         {wch: 15}, // Total Pesanan
         {wch: 20}, // Total Pemesanan
         {wch: 70}, // Rincian
@@ -203,7 +226,7 @@ export default function AdminSummaryPage() {
     const doc = new jsPDF('l', 'mm', 'a4'); // Landscape orientation
     const tableColumn = ["Mitra", "Pesanan", "Total", "Rincian Item, Harga & SKU", "Alamat Pengiriman"];
     const tableRows = filteredSummary.map(summary => [
-        summary.vendor,
+        getMitraDisplayName(summary.vendor),
         summary.totalOrders.toString(),
         formatPrice(summary.totalAmount),
         summary.items.map(i => `${i.name} [${i.sku}]\n${formatPrice(i.price)} x ${i.quantity} = ${formatPrice(i.price * i.quantity)}`).join('\n---\n'),
@@ -229,6 +252,7 @@ export default function AdminSummaryPage() {
         footStyles: { fillColor: [255, 140, 0], textColor: [255, 255, 255], fontStyle: 'bold' },
         styles: { fontSize: 8, cellPadding: 2, overflow: 'linebreak' },
         columnStyles: {
+            0: { cellWidth: 40 },
             3: { cellWidth: 80 }, // Rincian column width
             4: { cellWidth: 60 }  // Alamat column width
         }
@@ -298,9 +322,10 @@ export default function AdminSummaryPage() {
                             <SelectValue placeholder="Semua Mitra" />
                         </SelectTrigger>
                         <SelectContent>
-                            {availableVendors.map(v => (
+                            <SelectItem value="all">Semua Mitra</SelectItem>
+                            {availableVendors.filter(v => v !== 'all').map(v => (
                                 <SelectItem key={v} value={v}>
-                                    {v === 'all' ? 'Semua Mitra' : v}
+                                    {getMitraDisplayName(v)}
                                 </SelectItem>
                             ))}
                         </SelectContent>
@@ -351,7 +376,9 @@ export default function AdminSummaryPage() {
                         ) : (
                             filteredSummary.map(summary => (
                                 <TableRow key={summary.vendor}>
-                                    <TableCell className="font-medium">{summary.vendor}</TableCell>
+                                    <TableCell className="font-medium">
+                                        {getMitraDisplayName(summary.vendor)}
+                                    </TableCell>
                                     <TableCell className="text-right">{summary.totalOrders}</TableCell>
                                     <TableCell className="text-right">{formatPrice(summary.totalAmount)}</TableCell>
                                     <TableCell className="min-w-[300px]">
