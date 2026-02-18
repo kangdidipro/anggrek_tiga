@@ -133,7 +133,8 @@ export default function OrdersPage() {
     };
 
     const getStatusBadgeColor = (status: string) => {
-        switch (status) {
+        const s = status === 'pending' ? 'Dipesan' : (status || 'Dipesan');
+        switch (s) {
           case 'Dipesan': return 'bg-yellow-500 hover:bg-yellow-600';
           case 'Diproses': return 'bg-blue-500 hover:bg-blue-600';
           case 'Dikirim': return 'bg-purple-500 hover:bg-purple-600';
@@ -210,8 +211,8 @@ export default function OrdersPage() {
                                                 </div>
                                                 <div className="text-right flex flex-col items-end gap-2">
                                                     <p className="font-semibold text-base md:text-lg text-primary">{formatPrice(order.totalAmount)}</p>
-                                                    <Badge className={getStatusBadgeColor(order.status || 'Dipesan')}>
-                                                        {order.status || 'Dipesan'}
+                                                    <Badge className={getStatusBadgeColor(order.status)}>
+                                                        {order.status === 'pending' ? 'Dipesan' : (order.status || 'Dipesan')}
                                                     </Badge>
                                                 </div>
                                             </div>
@@ -244,7 +245,7 @@ export default function OrdersPage() {
                                                                 <CheckCircle2 className="h-3 w-3 text-primary" />
                                                             </div>
                                                             <div className="flex-1">
-                                                                <span className="font-bold">{order.status || 'Dipesan'}</span>
+                                                                <span className="font-bold">{order.status === 'pending' ? 'Dipesan' : (order.status || 'Dipesan')}</span>
                                                                 <span className="text-muted-foreground ml-2">
                                                                     {format(new Date(order.orderDateTime), 'dd MMM yyyy, HH:mm', { locale: id })}
                                                                 </span>

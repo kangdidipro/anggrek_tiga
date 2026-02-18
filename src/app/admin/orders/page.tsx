@@ -227,7 +227,7 @@ export default function AdminOrdersPage() {
             'Harga Satuan': item.priceAtOrder,
             'Total Harga': item.quantity * item.priceAtOrder,
             'Metode Bayar': order.paymentMethod,
-            'Status': order.status,
+            'Status': order.status || 'Dipesan',
             'Alamat': order.deliveryAddress,
         }))
     );
@@ -251,7 +251,7 @@ export default function AdminOrdersPage() {
             item.name,
             item.quantity.toString(),
             formatPrice(item.priceAtOrder * item.quantity),
-            order.status
+            order.status || 'Dipesan'
         ])
     );
 
@@ -288,7 +288,8 @@ export default function AdminOrdersPage() {
   };
 
   const getStatusBadgeColor = (status: string) => {
-    switch (status) {
+    const s = status === 'pending' ? 'Dipesan' : (status || 'Dipesan');
+    switch (s) {
       case 'Dipesan': return 'bg-yellow-500 hover:bg-yellow-600';
       case 'Diproses': return 'bg-blue-500 hover:bg-blue-600';
       case 'Dikirim': return 'bg-purple-500 hover:bg-purple-600';
@@ -388,8 +389,8 @@ export default function AdminOrdersPage() {
                                           </div>
                                           <div className="text-right flex flex-col items-end gap-2">
                                               <p className="font-semibold text-base md:text-lg text-primary">{formatPrice(order.totalAmount)}</p>
-                                              <Badge className={getStatusBadgeColor(order.status || 'Dipesan')}>
-                                                {order.status || 'Dipesan'}
+                                              <Badge className={getStatusBadgeColor(order.status)}>
+                                                {order.status === 'pending' ? 'Dipesan' : (order.status || 'Dipesan')}
                                               </Badge>
                                           </div>
                                       </div>
@@ -405,7 +406,7 @@ export default function AdminOrdersPage() {
                                           <div className="flex-1 max-w-xs">
                                             <Select 
                                               disabled={isUpdatingStatus === order.id} 
-                                              value={order.status} 
+                                              value={order.status === 'pending' ? 'Dipesan' : (order.status || 'Dipesan')} 
                                               onValueChange={(val) => handleUpdateStatus(order, val)}
                                             >
                                               <SelectTrigger>
@@ -434,7 +435,17 @@ export default function AdminOrdersPage() {
                                               </div>
                                             ))
                                           ) : (
-                                            <p className="text-xs text-muted-foreground italic">Belum ada catatan riwayat status.</p>
+                                            <div className="flex items-start gap-3 text-xs">
+                                                <div className="mt-1">
+                                                  <CheckCircle2 className="h-3 w-3 text-primary" />
+                                                </div>
+                                                <div className="flex-1">
+                                                  <span className="font-bold">{order.status === 'pending' ? 'Dipesan' : (order.status || 'Dipesan')}</span>
+                                                  <span className="text-muted-foreground ml-2">
+                                                    {format(new Date(order.orderDateTime), 'dd MMM yyyy, HH:mm', { locale: id })}
+                                                  </span>
+                                                </div>
+                                              </div>
                                           )}
                                         </div>
                                       </div>
