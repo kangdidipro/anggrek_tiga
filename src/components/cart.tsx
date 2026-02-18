@@ -9,12 +9,17 @@ import OrderForm from './order-form';
 import { Separator } from './ui/separator';
 import { ScrollArea } from './ui/scroll-area';
 import { deliveryFee } from '@/lib/constants';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Alert, AlertDescription, AlertTitle } from './ui/alert';
 
 export default function Cart() {
   const { cartItems, totalItems, cartTotal, clearCart } = useCart();
   const [open, setOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const finalTotal = cartTotal + deliveryFee;
 
@@ -23,7 +28,7 @@ export default function Cart() {
       <SheetTrigger asChild>
         <Button variant="outline" size="icon" className="relative">
           <ShoppingCart className="h-5 w-5" />
-          {totalItems > 0 && (
+          {mounted && totalItems > 0 && (
             <span className="absolute -top-2 -right-2 flex h-5 w-5 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">
               {totalItems}
             </span>
