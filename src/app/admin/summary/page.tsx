@@ -59,7 +59,7 @@ export default function AdminSummaryPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const { toast } = useToast();
 
-  // Fetch Vendors for Lookup
+  // Fetch Mitra for Lookup
   const vendorsQuery = useMemoFirebase(() => {
     if (!firestore) return null;
     return collection(firestore, 'vendors');
@@ -209,7 +209,7 @@ export default function AdminSummaryPage() {
     
     // Auto-width adjustment
     const wscols = [
-        {wch: 30}, // Vendor/Mitra
+        {wch: 40}, // Mitra
         {wch: 15}, // Total Pesanan
         {wch: 20}, // Total Pemesanan
         {wch: 70}, // Rincian
@@ -252,7 +252,7 @@ export default function AdminSummaryPage() {
         footStyles: { fillColor: [255, 140, 0], textColor: [255, 255, 255], fontStyle: 'bold' },
         styles: { fontSize: 8, cellPadding: 2, overflow: 'linebreak' },
         columnStyles: {
-            0: { cellWidth: 40 },
+            0: { cellWidth: 45 },
             3: { cellWidth: 80 }, // Rincian column width
             4: { cellWidth: 60 }  // Alamat column width
         }
@@ -277,7 +277,7 @@ export default function AdminSummaryPage() {
     setIsSending(false);
     toast({
         title: "Laporan Terkirim",
-        description: `Rekap harian (dengan semua kolom) telah dikirim ke ${targetEmail}.`,
+        description: `Rekap harian lengkap telah dikirim ke ${targetEmail}.`,
     });
   };
 
@@ -291,7 +291,7 @@ export default function AdminSummaryPage() {
             <CardHeader>
                 <CardTitle>Rekap Harian</CardTitle>
                 <CardDescription>
-                  Rekapitulasi total pesanan per penjual untuk tanggal {date ? format(date, 'eeee, d MMMM yyyy', { locale: id }) : 'semua waktu'}.
+                  Rekapitulasi total pesanan per mitra untuk tanggal {date ? format(date, 'eeee, d MMMM yyyy', { locale: id }) : 'semua waktu'}.
                 </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
