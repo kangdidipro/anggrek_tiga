@@ -1,4 +1,3 @@
-
 {
   "entities": {
     "Customer": {
@@ -67,6 +66,10 @@
         "category": {
           "type": "string",
           "description": "The category of the menu item (e.g., 'Nasi & Lauk', 'Pempek')."
+        },
+        "vendor": {
+          "type": "string",
+          "description": "The vendor or seller of this menu item (e.g., 'NL', 'P', 'MS')."
         }
       },
       "required": [
@@ -74,7 +77,8 @@
         "name",
         "price",
         "sku",
-        "category"
+        "category",
+        "vendor"
       ]
     },
     "Order": {
@@ -161,6 +165,10 @@
         "priceAtOrder": {
           "type": "number",
           "description": "The price of the menu item at the time the order was placed, to ensure historical accuracy."
+        },
+        "vendor": {
+          "type": "string",
+          "description": "The vendor code for the item at the time of order."
         }
       },
       "required": [
@@ -168,7 +176,8 @@
         "orderId",
         "menuItemId",
         "quantity",
-        "priceAtOrder"
+        "priceAtOrder",
+        "vendor"
       ]
     }
   },
@@ -186,7 +195,7 @@
           "schema": {
             "$ref": "#/backend/entities/Customer"
           },
-          "description": "Stores individual customer profiles. The 'customerId' wildcard corresponds to the Firebase Authentication UID. The 'id' and 'googleAccountId' fields within the document are denormalized and MUST match the 'customerId' path parameter and request.auth.uid for authorization independence.",
+          "description": "Stores individual customer profiles. The 'customerId' wildcard corresponds to the Firebase Authentication UID.",
           "params": [
             {
               "name": "customerId",
@@ -202,7 +211,7 @@
           "schema": {
             "$ref": "#/backend/entities/MenuItem"
           },
-          "description": "Contains all available food and drink items. This collection is globally readable by all users, ensuring a homogeneous security posture and secure list operations (QAPs).",
+          "description": "Contains all available food and drink items.",
           "params": [
             {
               "name": "menuItemId",
@@ -218,7 +227,7 @@
           "schema": {
             "$ref": "#/backend/entities/Order"
           },
-          "description": "Stores individual orders placed by a customer. The 'customerId' field within the document is denormalized and MUST match the 'customerId' path parameter and request.auth.uid for authorization independence, enabling robust and atomic security rules. 'deliveryAddress' is also denormalized from the customer's profile at order time.",
+          "description": "Stores individual orders placed by a customer.",
           "params": [
             {
               "name": "customerId",
@@ -238,7 +247,7 @@
           "schema": {
             "$ref": "#/backend/entities/OrderItem"
           },
-          "description": "Contains the specific items included in an order. The 'customerId' and 'orderId' fields are denormalized within the document to match the parent path parameters, ensuring authorization independence and simplifying security rules by eliminating get() calls for ownership checks. 'priceAtOrder' is also denormalized for historical accuracy.",
+          "description": "Contains the specific items included in an order.",
           "params": [
             {
               "name": "customerId",
@@ -255,7 +264,6 @@
           ]
         }
       }
-    ],
-    "reasoning": "The Firestore data structure for the Ramadhan Takjil Order application prioritizes security, scalability, and debuggability by strictly adhering to the core design principles. The primary strategy employed is **Authorization Independence via Denormalization** (Mandate A) and **Structural Segregation** (Mandate B), combined with **Access Modeling** using hierarchical paths for user-owned data (Mandate C).\n\n**Authorization Independence:**\n1.  **Customer Profile (`/customers/{customerId}`):** The `customerId` wildcard directly corresponds to `request.auth.uid`. The `Customer` document's `id` and `googleAccountId` fields will also store this UID. This means that to check if a user can access their profile, rules only need to compare `request.auth.uid` with the `customerId` in the path, and optionally `resource.data.googleAccountId`. No `get()` operations on parent documents are required.\n2.  **Orders (`/customers/{customerId}/orders/{orderId}`):** Each `Order` document includes a `customerId` field. This denormalizes the ownership directly into the order document. Security rules for `Order` documents can therefore verify `request.auth.uid == customerId` (from the path) and `request.auth.uid == resource.data.customerId` without needing to perform a `get()` on the parent `/customers/{customerId}` document. This ensures atomic creation and updates and simplifies rules significantly.\n3.  **Order Items (`/customers/{customerId}/orders/{orderId}/orderItems/{orderItemId}`):** Similarly, each `OrderItem` document will denormalize both `customerId` and `orderId` fields. Rules for `OrderItem` documents can check `request.auth.uid == customerId` (from the path), `resource.data.customerId`, and `resource.data.orderId` directly against the path segments, completely eliminating cross-document `get()` calls for authorization.\n\n**QAPs (Queries as Authorization Primitives) and Structural Segregation:**\n1.  **Menu Items (`/menuItems/{menuItemId}`):** This collection is designed for **homogeneous security posture**. All menu items are publicly readable, allowing any user (authenticated or unauthenticated) to browse the menu. This makes `list` operations on `/menuItems` inherently secure and efficient, as rules can simply grant `read` access to all. There's no mixing of public and private data in this collection.\n2.  **Customer-Specific Data (`/customers/{customerId}/...`):** By nesting `orders` and `orderItems` under `/customers/{customerId}`, access is implicitly scoped to the authenticated user (`request.auth.uid`). A user can only `list` or `get` documents within their own `/customers/{request.auth.uid}/orders` or `/customers/{request.auth.uid}/orders/{orderId}/orderItems` subcollections. This prevents users from listing other customers' orders, effectively making `list` operations secure without complex filtering logic in rules. The path itself acts as a strong authorization primitive, aligning with the principle that 'rules are not filters'.\n\n**Overall, the structure:**\n*   Uses `request.auth.uid` as the primary identifier for customers and their data, making authorization direct.\n*   Employs clear, hierarchical paths for user-owned data (`/customers/{userId}/orders/{orderId}/orderItems/{orderItemId}`).\n*   Denormalizes critical authorization fields (`customerId`, `orderId`) into child documents to avoid expensive and insecure `get()` calls in security rules.\n*   Separates public (menu items) from private (customer orders) data to simplify rules and support efficient `list` queries.\n*   Adopts explicit state modeling for `Order.status` and predictable schemas to ensure data clarity and consistency."
+    ]
   }
 }

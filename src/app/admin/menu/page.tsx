@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState } from 'react';
@@ -16,6 +15,15 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { products as initialProducts } from '@/lib/products';
 import type { Product } from '@/lib/types';
+
+const VENDORS = [
+  { value: 'NL', label: 'Vendor NL (Nasi & Lauk)' },
+  { value: 'MS', label: 'Vendor MS (Mie & Soto)' },
+  { value: 'P', label: 'Vendor P (Pempek)' },
+  { value: 'JA', label: 'Vendor JA (Jajanan Asin)' },
+  { value: 'JM', label: 'Vendor JM (Jajanan Manis)' },
+  { value: 'BP', label: 'Vendor BP (Bubur & Puding)' },
+];
 
 export default function AdminMenuPage() {
   const firestore = useFirestore();
@@ -46,12 +54,13 @@ export default function AdminMenuPage() {
     if (!firestore) return;
 
     const formData = new FormData(e.currentTarget);
-    const productData = {
+    const productData: Product = {
       id: isEditing?.id || (Math.floor(Math.random() * 1000) + 100).toString(),
       name: formData.get('name') as string,
       price: Number(formData.get('price')),
       sku: formData.get('sku') as string,
       category: formData.get('category') as string,
+      vendor: formData.get('vendor') as string,
     };
 
     try {
@@ -103,7 +112,7 @@ export default function AdminMenuPage() {
                 <Plus className="mr-2 h-4 w-4" /> Tambah Menu
               </Button>
             </DialogTrigger>
-            <DialogContent>
+            <DialogContent className="sm:max-w-[500px]">
               <DialogHeader>
                 <DialogTitle>Tambah Menu Baru</DialogTitle>
                 <DialogDescription>Masukkan detail menu takjil baru.</DialogDescription>
@@ -114,33 +123,50 @@ export default function AdminMenuPage() {
                     <Label htmlFor="name">Nama Menu</Label>
                     <Input id="name" name="name" placeholder="Contoh: Nasi Bakar" required />
                   </div>
-                  <div className="grid gap-2">
-                    <Label htmlFor="price">Harga (Rp)</Label>
-                    <Input id="price" name="price" type="number" placeholder="12000" required />
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="grid gap-2">
+                      <Label htmlFor="price">Harga (Rp)</Label>
+                      <Input id="price" name="price" type="number" placeholder="12000" required />
+                    </div>
+                    <div className="grid gap-2">
+                      <Label htmlFor="sku">SKU / Kode Produk</Label>
+                      <Input id="sku" name="sku" placeholder="NL-001" required />
+                    </div>
                   </div>
-                  <div className="grid gap-2">
-                    <Label htmlFor="sku">SKU / Kode Vendor</Label>
-                    <Input id="sku" name="sku" placeholder="NL-001" required />
-                  </div>
-                  <div className="grid gap-2">
-                    <Label htmlFor="category">Kategori</Label>
-                    <Select name="category" defaultValue="Nasi & Lauk" required>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Pilih Kategori" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="Nasi & Lauk">Nasi & Lauk</SelectItem>
-                        <SelectItem value="Mie & Soto">Mie & Soto</SelectItem>
-                        <SelectItem value="Pempek">Pempek</SelectItem>
-                        <SelectItem value="Jajanan Asin">Jajanan Asin</SelectItem>
-                        <SelectItem value="Jajanan Manis">Jajanan Manis</SelectItem>
-                        <SelectItem value="Bubur & Puding">Bubur & Puding</SelectItem>
-                      </SelectContent>
-                    </Select>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="grid gap-2">
+                      <Label htmlFor="category">Kategori</Label>
+                      <Select name="category" defaultValue="Nasi & Lauk" required>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Pilih Kategori" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="Nasi & Lauk">Nasi & Lauk</SelectItem>
+                          <SelectItem value="Mie & Soto">Mie & Soto</SelectItem>
+                          <SelectItem value="Pempek">Pempek</SelectItem>
+                          <SelectItem value="Jajanan Asin">Jajanan Asin</SelectItem>
+                          <SelectItem value="Jajanan Manis">Jajanan Manis</SelectItem>
+                          <SelectItem value="Bubur & Puding">Bubur & Puding</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="grid gap-2">
+                      <Label htmlFor="vendor">Vendor / Penjual</Label>
+                      <Select name="vendor" defaultValue="NL" required>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Pilih Vendor" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {VENDORS.map((v) => (
+                            <SelectItem key={v.value} value={v.value}>{v.label}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
                   </div>
                 </div>
                 <DialogFooter>
-                  <Button type="submit">Simpan Menu</Button>
+                  <Button type="submit" className="w-full">Simpan Menu</Button>
                 </DialogFooter>
               </form>
             </DialogContent>
@@ -155,6 +181,7 @@ export default function AdminMenuPage() {
               <TableRow>
                 <TableHead>Nama</TableHead>
                 <TableHead>Kategori</TableHead>
+                <TableHead>Vendor</TableHead>
                 <TableHead>SKU</TableHead>
                 <TableHead className="text-right">Harga</TableHead>
                 <TableHead className="text-right">Aksi</TableHead>
@@ -163,7 +190,7 @@ export default function AdminMenuPage() {
             <TableBody>
               {!menuItems || menuItems.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={5} className="text-center py-12 text-muted-foreground">
+                  <TableCell colSpan={6} className="text-center py-12 text-muted-foreground">
                     Belum ada menu di database. Gunakan menu default atau tambah baru.
                   </TableCell>
                 </TableRow>
@@ -172,6 +199,7 @@ export default function AdminMenuPage() {
                   <TableRow key={item.id}>
                     <TableCell className="font-medium">{item.name}</TableCell>
                     <TableCell>{item.category}</TableCell>
+                    <TableCell className="font-mono text-xs font-bold">{item.vendor}</TableCell>
                     <TableCell>{item.sku}</TableCell>
                     <TableCell className="text-right">{formatPrice(item.price)}</TableCell>
                     <TableCell className="text-right">
@@ -182,7 +210,7 @@ export default function AdminMenuPage() {
                               <Pencil className="h-4 w-4" />
                             </Button>
                           </DialogTrigger>
-                          <DialogContent>
+                          <DialogContent className="sm:max-w-[500px]">
                             <DialogHeader>
                               <DialogTitle>Edit Menu</DialogTitle>
                               <DialogDescription>Ubah detail menu takjil.</DialogDescription>
@@ -193,33 +221,50 @@ export default function AdminMenuPage() {
                                   <Label htmlFor="edit-name">Nama Menu</Label>
                                   <Input id="edit-name" name="name" defaultValue={item.name} required />
                                 </div>
-                                <div className="grid gap-2">
-                                  <Label htmlFor="edit-price">Harga (Rp)</Label>
-                                  <Input id="edit-price" name="price" type="number" defaultValue={item.price} required />
+                                <div className="grid grid-cols-2 gap-4">
+                                  <div className="grid gap-2">
+                                    <Label htmlFor="edit-price">Harga (Rp)</Label>
+                                    <Input id="edit-price" name="price" type="number" defaultValue={item.price} required />
+                                  </div>
+                                  <div className="grid gap-2">
+                                    <Label htmlFor="edit-sku">SKU / Kode Produk</Label>
+                                    <Input id="edit-sku" name="sku" defaultValue={item.sku} required />
+                                  </div>
                                 </div>
-                                <div className="grid gap-2">
-                                  <Label htmlFor="edit-sku">SKU / Kode Vendor</Label>
-                                  <Input id="edit-sku" name="sku" defaultValue={item.sku} required />
-                                </div>
-                                <div className="grid gap-2">
-                                  <Label htmlFor="edit-category">Kategori</Label>
-                                  <Select name="category" defaultValue={item.category} required>
-                                    <SelectTrigger>
-                                      <SelectValue placeholder="Pilih Kategori" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                      <SelectItem value="Nasi & Lauk">Nasi & Lauk</SelectItem>
-                                      <SelectItem value="Mie & Soto">Mie & Soto</SelectItem>
-                                      <SelectItem value="Pempek">Pempek</SelectItem>
-                                      <SelectItem value="Jajanan Asin">Jajanan Asin</SelectItem>
-                                      <SelectItem value="Jajanan Manis">Jajanan Manis</SelectItem>
-                                      <SelectItem value="Bubur & Puding">Bubur & Puding</SelectItem>
-                                    </SelectContent>
-                                  </Select>
+                                <div className="grid grid-cols-2 gap-4">
+                                  <div className="grid gap-2">
+                                    <Label htmlFor="edit-category">Kategori</Label>
+                                    <Select name="category" defaultValue={item.category} required>
+                                      <SelectTrigger>
+                                        <SelectValue placeholder="Pilih Kategori" />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        <SelectItem value="Nasi & Lauk">Nasi & Lauk</SelectItem>
+                                        <SelectItem value="Mie & Soto">Mie & Soto</SelectItem>
+                                        <SelectItem value="Pempek">Pempek</SelectItem>
+                                        <SelectItem value="Jajanan Asin">Jajanan Asin</SelectItem>
+                                        <SelectItem value="Jajanan Manis">Jajanan Manis</SelectItem>
+                                        <SelectItem value="Bubur & Puding">Bubur & Puding</SelectItem>
+                                      </SelectContent>
+                                    </Select>
+                                  </div>
+                                  <div className="grid gap-2">
+                                    <Label htmlFor="edit-vendor">Vendor / Penjual</Label>
+                                    <Select name="vendor" defaultValue={item.vendor} required>
+                                      <SelectTrigger>
+                                        <SelectValue placeholder="Pilih Vendor" />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        {VENDORS.map((v) => (
+                                          <SelectItem key={v.value} value={v.value}>{v.label}</SelectItem>
+                                        ))}
+                                      </SelectContent>
+                                    </Select>
+                                  </div>
                                 </div>
                               </div>
                               <DialogFooter>
-                                <Button type="submit">Simpan Perubahan</Button>
+                                <Button type="submit" className="w-full">Simpan Perubahan</Button>
                               </DialogFooter>
                             </form>
                           </DialogContent>

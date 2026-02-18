@@ -4,6 +4,7 @@ export type Product = {
   price: number;
   category: string;
   sku: string;
+  vendor: string;
 };
 
 export type CartItem = {
@@ -23,6 +24,7 @@ export type OrderPayload = {
     sku: string;
     quantity: number;
     price: number;
+    vendor: string;
   }[];
   total: number;
   deliveryFee: number;
