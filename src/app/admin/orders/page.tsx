@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useEffect, useState, useMemo } from 'react';
@@ -6,7 +5,7 @@ import { useFirestore, useUser, errorEmitter, FirestorePermissionError } from '@
 import { collectionGroup, getDocs, query, writeBatch, doc, updateDoc, arrayUnion } from 'firebase/firestore';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Loader2, FileDown, CalendarIcon, Trash2, FileText, Mail, Search, Clock, CheckCircle2 } from 'lucide-react';
+import { Loader2, FileDown, CalendarIcon, Trash2, FileText, Mail, Search, Clock, CheckCircle2, Printer } from 'lucide-react';
 import { formatPrice } from '@/lib/utils';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import * as XLSX from 'xlsx';
@@ -275,6 +274,63 @@ export default function AdminOrdersPage() {
     doc.save(`orders_${date ? format(date, 'yyyy-MM-dd') : 'all'}.pdf`);
   };
 
+  const handlePrintReceipt = (order: Order) => {
+    const doc = new jsPDF({
+      orientation: 'portrait',
+      unit: 'mm',
+      format: [80, 200] // Ukuran struk thermal umum
+    });
+
+    const centerPos = 40;
+    
+    doc.setFontSize(12);
+    doc.text("TAKJILKU", centerPos, 10, { align: 'center' });
+    doc.setFontSize(8);
+    doc.text("Ramadhan UMKM RW06", centerPos, 14, { align: 'center' });
+    doc.text("-".repeat(40), centerPos, 18, { align: 'center' });
+    
+    doc.text(`ID: #${order.id.substring(0, 7)}`, 5, 24);
+    doc.text(`Tgl: ${format(new Date(order.orderDateTime), 'dd/MM/yyyy HH:mm')}`, 5, 28);
+    doc.text(`Bayar: ${order.paymentMethod}`, 5, 32);
+    doc.text("-".repeat(40), centerPos, 36, { align: 'center' });
+    
+    let y = 42;
+    order.items.forEach((item) => {
+      doc.text(`${item.name}`, 5, y);
+      doc.text(`${item.quantity} x ${formatPrice(item.priceAtOrder)}`, 5, y + 4);
+      doc.text(`${formatPrice(item.priceAtOrder * item.quantity)}`, 75, y + 4, { align: 'right' });
+      y += 10;
+    });
+    
+    doc.text("-".repeat(40), centerPos, y, { align: 'center' });
+    y += 6;
+    
+    doc.text("Ongkir (Delivery):", 5, y);
+    doc.text(`${formatPrice(2500)}`, 75, y, { align: 'right' });
+    y += 6;
+    
+    doc.setFontSize(10);
+    doc.text("TOTAL:", 5, y);
+    doc.text(`${formatPrice(order.totalAmount)}`, 75, y, { align: 'right' });
+    y += 10;
+    
+    doc.setFontSize(8);
+    doc.text("Alamat Pengiriman:", 5, y);
+    const splitAddress = doc.splitTextToSize(order.deliveryAddress, 70);
+    doc.text(splitAddress, 5, y + 4);
+    
+    y += (splitAddress.length * 4) + 10;
+    doc.text("Terima Kasih Telah Memesan!", centerPos, y, { align: 'center' });
+    doc.text("Semoga Berkah", centerPos, y + 4, { align: 'center' });
+    
+    doc.save(`struk_${order.id.substring(0, 7)}.pdf`);
+    
+    toast({
+      title: "Struk Berhasil Dibuat",
+      description: "File PDF struk telah diunduh.",
+    });
+  };
+
   const sendToEmail = async () => {
     if (!targetEmail || !targetEmail.includes('@')) {
         toast({
@@ -476,7 +532,15 @@ export default function AdminOrdersPage() {
                                           <h4 className="font-semibold mb-2 text-sm text-muted-foreground uppercase tracking-wider">Alamat Pengiriman:</h4>
                                           <p className="text-sm text-muted-foreground">{order.deliveryAddress}</p>
                                       </div>
-                                      <div className="border-t pt-4 flex justify-end">
+                                      <div className="border-t pt-4 flex justify-between items-center">
+                                          <Button 
+                                            variant="outline" 
+                                            size="sm" 
+                                            onClick={() => handlePrintReceipt(order)}
+                                          >
+                                            <Printer className="h-4 w-4 mr-2" />
+                                            Cetak Struk
+                                          </Button>
                                           <Button 
                                               variant="destructive" 
                                               size="sm" 
