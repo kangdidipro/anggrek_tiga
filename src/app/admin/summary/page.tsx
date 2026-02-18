@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useEffect, useState, useMemo } from 'react';
@@ -231,12 +230,13 @@ export default function AdminSummaryPage() {
                             <TableHead>Vendor</TableHead>
                             <TableHead className="text-right">Total Pesanan</TableHead>
                             <TableHead className="text-right">Total Pemesanan</TableHead>
+                            <TableHead>Rincian Item</TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
                         {dailySummary.length === 0 ? (
                             <TableRow>
-                                <TableCell colSpan={3} className="text-center text-muted-foreground py-10">
+                                <TableCell colSpan={4} className="text-center text-muted-foreground py-10">
                                   Tidak ada transaksi ditemukan untuk filter ini.
                                 </TableCell>
                             </TableRow>
@@ -246,6 +246,16 @@ export default function AdminSummaryPage() {
                                     <TableCell className="font-medium">{summary.vendor}</TableCell>
                                     <TableCell className="text-right">{summary.totalOrders}</TableCell>
                                     <TableCell className="text-right">{formatPrice(summary.totalAmount)}</TableCell>
+                                    <TableCell>
+                                        <ul className="text-xs space-y-1">
+                                            {summary.items.map((item, idx) => (
+                                                <li key={idx} className="flex justify-between gap-4">
+                                                    <span>{item.name}</span>
+                                                    <span className="font-semibold text-muted-foreground">x{item.quantity}</span>
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    </TableCell>
                                 </TableRow>
                             ))
                         )}
