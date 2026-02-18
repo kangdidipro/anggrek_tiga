@@ -8,17 +8,30 @@ Aplikasi pemesanan Takjil Ramadhan yang dibangun dengan Next.js, Firebase, dan G
 - **Cart System**: Keranjang belanja dengan perhitungan otomatis.
 - **Admin Panel**: Manajemen pesanan, rekap harian, ekspor Excel/PDF, dan pengiriman laporan via email.
 
-## Cara Deploy / Push ke Git (SSH)
-Jika Anda ingin menyimpan kode ini ke repositori Git pribadi (seperti GitHub) menggunakan SSH, ikuti langkah berikut di terminal:
+## Cara Push ke GitHub (SSH)
+Ikuti langkah berikut di terminal Firebase Studio untuk menyimpan kode ke repositori Anda:
 
-1. **Generate SSH Key**:
+1. **Generate SSH Key** (Lewati jika sudah ada):
    `ssh-keygen -t ed25519 -C "email@anda.com"`
-2. **Copy Public Key**:
-   `cat ~/.ssh/id_ed25519.pub` (Salin hasilnya ke pengaturan SSH di GitHub/GitLab).
-3. **Set SSH Remote**:
-   `git remote set-url origin git@github.com:username/repo-name.git`
-4. **Push**:
-   `git push origin main`
+   *Tekan Enter terus sampai selesai.*
+
+2. **Salin Public Key**:
+   `cat ~/.ssh/id_ed25519.pub`
+   *Salin hasilnya dan tambahkan ke [GitHub SSH Settings](https://github.com/settings/keys).*
+
+3. **Inisialisasi & Set Remote SSH**:
+   ```bash
+   git init
+   git remote add origin git@github.com:kangdidipro/anggrek_tiga.git
+   ```
+
+4. **Simpan & Push Kode**:
+   ```bash
+   git add .
+   git commit -m "Initial commit from Firebase Studio"
+   git branch -M main
+   git push -u origin main
+   ```
 
 ## Teknologi
 - **Next.js 15** (App Router)
