@@ -167,8 +167,8 @@ export default function AdminSummaryPage() {
         'Vendor': summary.vendor,
         'Total Pesanan': summary.totalOrders,
         'Total Pemesanan': summary.totalAmount,
-        'Rincian Item': summary.items.map(i => `${i.name} [${i.sku}] (${formatPrice(i.price)} x ${i.quantity} = ${formatPrice(i.price * i.quantity)})`).join(', '),
-        'Alamat Pengiriman': summary.addresses.join('; '),
+        'Rincian Item, Harga & SKU': summary.items.map(i => `${i.name} [${i.sku}] (${formatPrice(i.price)} x ${i.quantity} = ${formatPrice(i.price * i.quantity)})`).join('\r\n'),
+        'Alamat Pengiriman': summary.addresses.join('\r\n'),
     }));
 
     // Add Grand Total row to Excel
@@ -176,27 +176,38 @@ export default function AdminSummaryPage() {
       'Vendor': 'TOTAL KESELURUHAN',
       'Total Pesanan': grandTotals.orders,
       'Total Pemesanan': grandTotals.amount,
-      'Rincian Item': '-',
-      'Alamat Pengiriman': '-'
+      'Rincian Item, Harga & SKU': '',
+      'Alamat Pengiriman': ''
     });
 
     const worksheet = XLSX.utils.json_to_sheet(dataForExport);
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, "Rekap Harian");
+    
+    // Auto-width adjustment
+    const wscols = [
+        {wch: 15}, // Vendor
+        {wch: 15}, // Total Pesanan
+        {wch: 20}, // Total Pemesanan
+        {wch: 70}, // Rincian
+        {wch: 50}  // Alamat
+    ];
+    worksheet['!cols'] = wscols;
+
     const excelBuffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
     const dataBlob = new Blob([excelBuffer], {type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;charset=UTF-8'});
     saveAs(dataBlob, `rekap_harian_${date ? date.toISOString().split('T')[0] : 'semua'}.xlsx`);
   };
 
   const exportToPDF = () => {
-    const doc = new jsPDF();
-    const tableColumn = ["Vendor", "Pesanan", "Total", "Item & SKU", "Alamat"];
+    const doc = new jsPDF('l', 'mm', 'a4'); // Landscape orientation
+    const tableColumn = ["Vendor", "Pesanan", "Total", "Rincian Item, Harga & SKU", "Alamat Pengiriman"];
     const tableRows = filteredSummary.map(summary => [
         summary.vendor,
         summary.totalOrders.toString(),
         formatPrice(summary.totalAmount),
-        summary.items.map(i => `${i.name} [${i.sku}] (${formatPrice(i.price)} x ${i.quantity} = ${formatPrice(i.price * i.quantity)})`).join(', '),
-        summary.addresses.join(', ')
+        summary.items.map(i => `${i.name} [${i.sku}]\n${formatPrice(i.price)} x ${i.quantity} = ${formatPrice(i.price * i.quantity)}`).join('\n---\n'),
+        summary.addresses.join('\n')
     ]);
 
     // Add Grand Total row to PDF
@@ -204,8 +215,8 @@ export default function AdminSummaryPage() {
       "TOTAL KESELURUHAN",
       grandTotals.orders.toString(),
       formatPrice(grandTotals.amount),
-      "-",
-      "-"
+      "",
+      ""
     ]);
 
     doc.text(`Rekap Harian Takjil - ${date ? format(date, 'd MMMM yyyy', { locale: id }) : 'Semua'}`, 14, 15);
@@ -213,10 +224,14 @@ export default function AdminSummaryPage() {
         head: [tableColumn],
         body: tableRows,
         startY: 20,
-        theme: 'striped',
+        theme: 'grid',
         headStyles: { fillColor: [255, 140, 0] },
         footStyles: { fillColor: [255, 140, 0], textColor: [255, 255, 255], fontStyle: 'bold' },
-        styles: { fontSize: 7 }
+        styles: { fontSize: 8, cellPadding: 2, overflow: 'linebreak' },
+        columnStyles: {
+            3: { cellWidth: 80 }, // Rincian column width
+            4: { cellWidth: 60 }  // Alamat column width
+        }
     });
     doc.save(`rekap_harian_${date ? date.toISOString().split('T')[0] : 'semua'}.pdf`);
   };
@@ -238,7 +253,7 @@ export default function AdminSummaryPage() {
     setIsSending(false);
     toast({
         title: "Laporan Terkirim",
-        description: `Rekap harian telah dikirim ke ${targetEmail}.`,
+        description: `Rekap harian (dengan semua kolom) telah dikirim ke ${targetEmail}.`,
     });
   };
 
