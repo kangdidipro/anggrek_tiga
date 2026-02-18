@@ -7,13 +7,14 @@ import { collection, doc, deleteDoc, setDoc } from 'firebase/firestore';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Loader2, Plus, Pencil, Trash2, RefreshCcw, FileUp, Search } from 'lucide-react';
+import { Loader2, Plus, Pencil, Trash2, RefreshCcw, FileUp, Search, ExternalLink, Copy } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import type { Vendor, Product } from '@/lib/types';
 import * as XLSX from 'xlsx';
+import Link from 'next/link';
 
 export default function AdminVendorsPage() {
   const firestore = useFirestore();
@@ -25,7 +26,7 @@ export default function AdminVendorsPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Fetch Vendors
+  // Fetch Mitra
   const vendorsQuery = useMemoFirebase(() => {
     if (!firestore) return null;
     return collection(firestore, 'vendors');
@@ -181,6 +182,15 @@ export default function AdminVendorsPage() {
     reader.readAsArrayBuffer(file);
   };
 
+  const copyToClipboard = (code: string) => {
+    const url = `${window.location.origin}/mitra/${code}`;
+    navigator.clipboard.writeText(url);
+    toast({
+      title: "Link Disalin",
+      description: "Link daftar pesanan mitra telah disalin ke clipboard.",
+    });
+  };
+
   if (isVendorsLoading) {
     return <div className="flex h-full items-center justify-center p-24"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
   }
@@ -190,7 +200,7 @@ export default function AdminVendorsPage() {
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <h1 className="text-3xl font-bold tracking-tight font-headline">Master Mitra</h1>
-          <p className="text-muted-foreground">Kelola daftar vendor atau mitra TakjilKu.</p>
+          <p className="text-muted-foreground">Kelola daftar mitra TakjilKu.</p>
         </div>
         <div className="flex flex-wrap gap-2">
           <input
@@ -260,7 +270,7 @@ export default function AdminVendorsPage() {
       </div>
 
       <Card>
-        <CardContent className="p-0">
+        <CardContent className="p-0 overflow-auto">
           <Table>
             <TableHeader>
               <TableRow>
@@ -268,13 +278,14 @@ export default function AdminVendorsPage() {
                 <TableHead>Kode</TableHead>
                 <TableHead>Email</TableHead>
                 <TableHead>No HP</TableHead>
+                <TableHead>Link Pesanan</TableHead>
                 <TableHead className="text-right">Aksi</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {filteredVendors.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={5} className="text-center py-12 text-muted-foreground">
+                  <TableCell colSpan={6} className="text-center py-12 text-muted-foreground">
                     {searchTerm ? 'Tidak ada mitra yang cocok dengan pencarian.' : 'Belum ada mitra yang terdaftar.'}
                   </TableCell>
                 </TableRow>
@@ -285,6 +296,19 @@ export default function AdminVendorsPage() {
                     <TableCell className="font-mono font-bold">{vendor.code}</TableCell>
                     <TableCell>{vendor.email || '-'}</TableCell>
                     <TableCell>{vendor.phoneNumber || '-'}</TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                        <Button variant="outline" size="sm" asChild>
+                          <Link href={`/mitra/${vendor.code}`} target="_blank">
+                            <ExternalLink className="h-3 w-3 mr-2" />
+                            Buka
+                          </Link>
+                        </Button>
+                        <Button variant="ghost" size="sm" onClick={() => copyToClipboard(vendor.code)}>
+                          <Copy className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    </TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-2">
                         <Dialog open={isEditing?.id === vendor.id} onOpenChange={(open) => !open && setIsEditing(null)}>
