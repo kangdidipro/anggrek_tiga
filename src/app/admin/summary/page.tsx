@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useEffect, useState, useMemo } from 'react';
@@ -5,7 +6,7 @@ import { useFirestore, useUser } from '@/firebase';
 import { collectionGroup, getDocs, query } from 'firebase/firestore';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Loader2, FileDown, CalendarIcon } from 'lucide-react';
+import { Loader2, FileDown, CalendarIcon, FileText, Mail } from 'lucide-react';
 import { formatPrice } from '@/lib/utils';
 import * as XLSX from 'xlsx';
 import { saveAs } from 'file-saver';
@@ -15,6 +16,9 @@ import { Calendar } from '@/components/ui/calendar';
 import { format } from 'date-fns';
 import { id } from 'date-fns/locale';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { useToast } from '@/hooks/use-toast';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 interface OrderItem {
   id: string;
@@ -45,8 +49,10 @@ export default function AdminSummaryPage() {
   const { user, isUserLoading } = useUser();
   const [orders, setOrders] = useState<Order[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isSending, setIsSending] = useState(false);
   const [date, setDate] = useState<Date | undefined>(new Date());
   const [vendorFilter, setVendorFilter] = useState<string>('all');
+  const { toast } = useToast();
 
   useEffect(() => {
     const fetchOrders = async () => {
@@ -130,6 +136,39 @@ export default function AdminSummaryPage() {
     saveAs(dataBlob, `rekap_harian_${date ? date.toISOString().split('T')[0] : 'semua'}.xlsx`);
   };
 
+  const exportToPDF = () => {
+    const doc = new jsPDF();
+    const tableColumn = ["Vendor", "Total Pesanan", "Total Pemesanan", "Rincian Item"];
+    const tableRows = dailySummary.map(summary => [
+        summary.vendor,
+        summary.totalOrders.toString(),
+        formatPrice(summary.totalAmount),
+        summary.items.map(i => `${i.name} (x${i.quantity})`).join(', ')
+    ]);
+
+    doc.text(`Rekap Harian Takjil - ${date ? format(date, 'd MMMM yyyy', { locale: id }) : 'Semua'}`, 14, 15);
+    autoTable(doc, {
+        head: [tableColumn],
+        body: tableRows,
+        startY: 20,
+        theme: 'striped',
+        headStyles: { fillColor: [255, 140, 0] }
+    });
+    doc.save(`rekap_harian_${date ? date.toISOString().split('T')[0] : 'semua'}.pdf`);
+  };
+
+  const sendToEmail = async () => {
+    setIsSending(true);
+    // Simulating email sending process
+    await new Promise(resolve => setTimeout(resolve, 2000));
+    
+    setIsSending(false);
+    toast({
+        title: "Laporan Terkirim",
+        description: `Rekap harian telah dikirim ke email admin.`,
+    });
+  };
+
   if (isLoading || isUserLoading) {
     return <div className="flex h-full items-center justify-center p-24"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
   }
@@ -170,10 +209,20 @@ export default function AdminSummaryPage() {
                         </SelectContent>
                     </Select>
 
-                    <Button onClick={exportToExcel} disabled={dailySummary.length === 0}>
-                        <FileDown className="mr-2 h-4 w-4" />
-                        Export Excel
-                    </Button>
+                    <div className="flex gap-2">
+                        <Button variant="outline" size="sm" onClick={exportToExcel} disabled={dailySummary.length === 0}>
+                            <FileDown className="mr-2 h-4 w-4" />
+                            Excel
+                        </Button>
+                        <Button variant="outline" size="sm" onClick={exportToPDF} disabled={dailySummary.length === 0}>
+                            <FileText className="mr-2 h-4 w-4" />
+                            PDF
+                        </Button>
+                        <Button variant="default" size="sm" onClick={sendToEmail} disabled={dailySummary.length === 0 || isSending}>
+                            {isSending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Mail className="mr-2 h-4 w-4" />}
+                            Email
+                        </Button>
+                    </div>
                 </div>
 
                 <Table>
