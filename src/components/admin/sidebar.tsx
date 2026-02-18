@@ -8,6 +8,7 @@ import { cn } from '@/lib/utils';
 import { ListOrdered, LayoutDashboard, LogOut, Soup, Home } from 'lucide-react';
 
 const navItems = [
+  { href: '/', label: 'Halaman Depan', icon: Home },
   { href: '/admin/orders', label: 'List Order', icon: ListOrdered },
   { href: '/admin/summary', label: 'Rekap Harian', icon: LayoutDashboard },
 ];
@@ -27,13 +28,15 @@ export default function AdminSidebar() {
       <nav className="flex-1 p-4 space-y-2">
         {navItems.map((item) => {
           const Icon = item.icon;
+          const isActive = pathname === item.href;
+          
           return (
             <Link
               key={item.href}
               href={item.href}
               className={cn(
                 'flex items-center gap-3 rounded-lg px-3 py-2 text-muted-foreground transition-all hover:text-primary',
-                pathname === item.href && 'bg-muted text-primary'
+                isActive && 'bg-muted text-primary font-medium'
               )}
             >
               <Icon className="h-4 w-4" />
@@ -41,16 +44,6 @@ export default function AdminSidebar() {
             </Link>
           );
         })}
-        
-        <div className="pt-4 mt-4 border-t border-border/50">
-          <Link
-            href="/"
-            className="flex items-center gap-3 rounded-lg px-3 py-2 text-muted-foreground transition-all hover:text-primary hover:bg-muted/50"
-          >
-            <Home className="h-4 w-4" />
-            Lihat Website
-          </Link>
-        </div>
       </nav>
       <div className="p-4 mt-auto border-t">
         <Button variant="outline" className="w-full" onClick={logout}>
