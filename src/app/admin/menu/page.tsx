@@ -6,7 +6,7 @@ import { collection, doc, deleteDoc, setDoc } from 'firebase/firestore';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Loader2, Plus, Pencil, Trash2, RefreshCcw, Search } from 'lucide-react';
+import { Loader2, Plus, Pencil, Trash2, RefreshCcw, Search, X } from 'lucide-react';
 import { formatPrice } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
@@ -22,7 +22,12 @@ export default function AdminMenuPage() {
   const [isEditing, setIsEditing] = useState<Product | null>(null);
   const [isAdding, setIsAdding] = useState(false);
   const [isSeeding, setIsSeeding] = useState(false);
+  
+  // Search and Filter States
   const [searchTerm, setSearchTerm] = useState('');
+  const [nameFilter, setNameFilter] = useState('all');
+  const [categoryFilter, setCategoryFilter] = useState('all');
+  const [vendorFilter, setVendorFilter] = useState('all');
 
   // Fetch Menu Items
   const menuItemsQuery = useMemoFirebase(() => {
@@ -38,21 +43,42 @@ export default function AdminMenuPage() {
   }, [firestore]);
   const { data: vendors, isLoading: isVendorsLoading } = useCollection<Vendor>(vendorsQuery);
 
-  // Filtered Menu Items
+  // Unique values for dropdown filters
+  const uniqueNames = useMemo(() => {
+    if (!menuItems) return [];
+    return Array.from(new Set(menuItems.map(i => i.name))).sort();
+  }, [menuItems]);
+
+  const uniqueCategories = useMemo(() => {
+    if (!menuItems) return [];
+    return Array.from(new Set(menuItems.map(i => i.category))).sort();
+  }, [menuItems]);
+
+  const uniqueVendors = useMemo(() => {
+    if (!vendors) return [];
+    return vendors.map(v => v.code).sort();
+  }, [vendors]);
+
+  // Filtered Menu Items Logic
   const filteredMenuItems = useMemo(() => {
     if (!menuItems) return [];
     return menuItems
       .filter((item) => {
         const search = searchTerm.toLowerCase();
-        return (
+        const matchesSearch = 
           item.name.toLowerCase().includes(search) ||
           item.category.toLowerCase().includes(search) ||
           item.sku.toLowerCase().includes(search) ||
-          item.vendor.toLowerCase().includes(search)
-        );
+          item.vendor.toLowerCase().includes(search);
+        
+        const matchesName = nameFilter === 'all' || item.name === nameFilter;
+        const matchesCategory = categoryFilter === 'all' || item.category === categoryFilter;
+        const matchesVendor = vendorFilter === 'all' || item.vendor === vendorFilter;
+
+        return matchesSearch && matchesName && matchesCategory && matchesVendor;
       })
       .sort((a, b) => a.category.localeCompare(b.category));
-  }, [menuItems, searchTerm]);
+  }, [menuItems, searchTerm, nameFilter, categoryFilter, vendorFilter]);
 
   const handleDelete = async (id: string) => {
     if (!firestore) return;
@@ -79,7 +105,7 @@ export default function AdminMenuPage() {
     };
 
     try {
-      await setDoc(doc(firestore, 'menuItems', productData.id), productData);
+      await setDoc(doc(firestore, 'menuItems', productData.id), productData, { merge: true });
       toast({ title: "Berhasil", description: "Menu telah disimpan." });
       setIsEditing(null);
       setIsAdding(false);
@@ -101,6 +127,13 @@ export default function AdminMenuPage() {
     } finally {
       setIsSeeding(false);
     }
+  };
+
+  const resetFilters = () => {
+    setSearchTerm('');
+    setNameFilter('all');
+    setCategoryFilter('all');
+    setVendorFilter('all');
   };
 
   if (isLoading || isVendorsLoading) {
@@ -193,15 +226,72 @@ export default function AdminMenuPage() {
         </div>
       </div>
 
-      <div className="relative max-w-sm">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-        <Input
-          placeholder="Cari nama, kategori, SKU, atau vendor..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          className="pl-10"
-        />
-      </div>
+      {/* Filter Section */}
+      <Card className="p-4">
+        <div className="flex flex-wrap gap-4 items-end">
+          <div className="space-y-2 flex-1 min-w-[200px]">
+            <Label className="text-xs uppercase text-muted-foreground font-bold">Cari Menu</Label>
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Cari kata kunci..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-10"
+              />
+            </div>
+          </div>
+
+          <div className="space-y-2 w-[200px]">
+            <Label className="text-xs uppercase text-muted-foreground font-bold">Filter Nama</Label>
+            <Select value={nameFilter} onValueChange={setNameFilter}>
+              <SelectTrigger>
+                <SelectValue placeholder="Semua Nama" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Semua Nama</SelectItem>
+                {uniqueNames.map(name => (
+                  <SelectItem key={name} value={name}>{name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-2 w-[180px]">
+            <Label className="text-xs uppercase text-muted-foreground font-bold">Filter Kategori</Label>
+            <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+              <SelectTrigger>
+                <SelectValue placeholder="Semua Kategori" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Semua Kategori</SelectItem>
+                {uniqueCategories.map(cat => (
+                  <SelectItem key={cat} value={cat}>{cat}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-2 w-[150px]">
+            <Label className="text-xs uppercase text-muted-foreground font-bold">Filter Vendor</Label>
+            <Select value={vendorFilter} onValueChange={setVendorFilter}>
+              <SelectTrigger>
+                <SelectValue placeholder="Semua Vendor" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Semua Vendor</SelectItem>
+                {uniqueVendors.map(code => (
+                  <SelectItem key={code} value={code}>{code}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <Button variant="ghost" size="icon" onClick={resetFilters} title="Reset Filter" className="h-10 w-10">
+            <X className="h-4 w-4" />
+          </Button>
+        </div>
+      </Card>
 
       <Card>
         <CardContent className="p-0">
@@ -220,7 +310,9 @@ export default function AdminMenuPage() {
               {filteredMenuItems.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={6} className="text-center py-12 text-muted-foreground">
-                    {searchTerm ? 'Tidak ada menu yang cocok dengan pencarian.' : 'Belum ada menu di database. Gunakan menu default atau tambah baru.'}
+                    {searchTerm || nameFilter !== 'all' || categoryFilter !== 'all' || vendorFilter !== 'all' 
+                      ? 'Tidak ada menu yang cocok dengan filter.' 
+                      : 'Belum ada menu di database. Gunakan menu default atau tambah baru.'}
                   </TableCell>
                 </TableRow>
               ) : (
