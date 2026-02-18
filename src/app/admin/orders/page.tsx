@@ -5,7 +5,7 @@ import { useFirestore, useUser } from '@/firebase';
 import { collectionGroup, getDocs, query, writeBatch, doc } from 'firebase/firestore';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Loader2, FileDown, CalendarIcon, Trash2, FileText, Mail } from 'lucide-react';
+import { Loader2, FileDown, CalendarIcon, Trash2, FileText, Mail, Search } from 'lucide-react';
 import { formatPrice } from '@/lib/utils';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import * as XLSX from 'xlsx';
@@ -62,6 +62,7 @@ export default function AdminOrdersPage() {
   const [targetEmail, setTargetEmail] = useState('');
   const [date, setDate] = useState<Date | undefined>(new Date());
   const [vendor, setVendor] = useState<string>('all');
+  const [searchTerm, setSearchTerm] = useState('');
   const [orderToDelete, setOrderToDelete] = useState<Order | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const { toast } = useToast();
@@ -105,9 +106,16 @@ export default function AdminOrdersPage() {
         const orderDate = new Date(order.orderDateTime);
         const dateMatch = date ? orderDate.toDateString() === date.toDateString() : true;
         const vendorMatch = vendor === 'all' ? true : order.items.some(item => getVendorFromSku(item.sku) === vendor);
-        return dateMatch && vendorMatch;
+        
+        const search = searchTerm.toLowerCase();
+        const searchMatch = search === '' || 
+            order.id.toLowerCase().includes(search) || 
+            order.deliveryAddress.toLowerCase().includes(search) ||
+            order.items.some(item => item.name.toLowerCase().includes(search));
+
+        return dateMatch && vendorMatch && searchMatch;
     });
-  }, [orders, date, vendor]);
+  }, [orders, date, vendor, searchTerm]);
 
   const groupedByVendor = useMemo(() => {
     const groups: Record<string, Order[]> = {};
@@ -244,6 +252,15 @@ export default function AdminOrdersPage() {
         </CardHeader>
         <CardContent className="space-y-4">
             <div className="flex flex-wrap gap-4 items-center">
+                <div className="relative flex-1 min-w-[200px]">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input 
+                        placeholder="Cari ID Order, Alamat, atau Item..." 
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        className="pl-10"
+                    />
+                </div>
                 <Popover>
                     <PopoverTrigger asChild>
                         <Button variant={"outline"} className="w-[240px] justify-start text-left font-normal">
