@@ -2,19 +2,29 @@
 
 import { useEffect, useState, useMemo } from 'react';
 import { useFirestore, useUser } from '@/firebase';
-import { collectionGroup, getDocs, query } from 'firebase/firestore';
+import { collectionGroup, getDocs, query, writeBatch, doc, collection } from 'firebase/firestore';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Loader2, FileDown } from 'lucide-react';
+import { Loader2, FileDown, CalendarIcon, Trash2 } from 'lucide-react';
 import { formatPrice } from '@/lib/utils';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import * as XLSX from 'xlsx';
 import { saveAs } from 'file-saver';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { CalendarIcon } from 'lucide-react';
 import { Calendar } from '@/components/ui/calendar';
 import { format } from 'date-fns';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { useToast } from '@/hooks/use-toast';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 
 interface OrderItem {
   id: string;
@@ -46,6 +56,9 @@ export default function AdminOrdersPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [date, setDate] = useState<Date | undefined>(new Date());
   const [vendor, setVendor] = useState<string>('all');
+  const [orderToDelete, setOrderToDelete] = useState<Order | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const { toast } = useToast();
   
   const allVendors = useMemo(() => {
     const vendorSet = new Set(orders.flatMap(o => o.items.map(i => getVendorFromSku(i.sku))));
@@ -54,22 +67,18 @@ export default function AdminOrdersPage() {
 
   useEffect(() => {
     const fetchOrders = async () => {
-      // Tunggu hingga firestore dan user tersedia
       if (!firestore || isUserLoading || !user) return;
       
       setIsLoading(true);
       try {
-        // Fetch all orders using collectionGroup
         const ordersQuery = query(collectionGroup(firestore, 'orders'));
         const ordersSnapshot = await getDocs(ordersQuery);
         const ordersData = ordersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Omit<Order, 'items'>));
 
-        // Fetch all order items using collectionGroup
         const orderItemsQuery = query(collectionGroup(firestore, 'orderItems'));
         const orderItemsSnapshot = await getDocs(orderItemsQuery);
         const orderItemsData = orderItemsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as OrderItem));
         
-        // Match items to their parent orders
         const ordersWithItems: Order[] = ordersData.map(order => ({
             ...order,
             items: orderItemsData.filter(item => item.orderId === order.id)
@@ -108,6 +117,42 @@ export default function AdminOrdersPage() {
     return groups;
   }, [filteredOrders]);
 
+  const handleDeleteOrder = async () => {
+    if (!orderToDelete || !firestore) return;
+
+    setIsDeleting(true);
+    try {
+        const batch = writeBatch(firestore);
+
+        // Hapus semua item dalam order
+        orderToDelete.items.forEach(item => {
+            const itemRef = doc(firestore, 'customers', orderToDelete.customerId, 'orders', orderToDelete.id, 'orderItems', item.id);
+            batch.delete(itemRef);
+        });
+
+        // Hapus dokumen order itu sendiri
+        const orderRef = doc(firestore, 'customers', orderToDelete.customerId, 'orders', orderToDelete.id);
+        batch.delete(orderRef);
+
+        await batch.commit();
+
+        setOrders(prev => prev.filter(o => o.id !== orderToDelete.id));
+        toast({
+            title: "Pesanan Dihapus",
+            description: "Pesanan telah berhasil dihapus dari sistem.",
+        });
+    } catch (error) {
+        console.error("Error deleting order:", error);
+        toast({
+            variant: "destructive",
+            title: "Gagal Menghapus",
+            description: "Terjadi kesalahan saat mencoba menghapus pesanan.",
+        });
+    } finally {
+        setIsDeleting(false);
+        setOrderToDelete(null);
+    }
+  };
 
   const exportToExcel = () => {
     const dataForExport = filteredOrders.flatMap(order => 
@@ -220,6 +265,17 @@ export default function AdminOrdersPage() {
                                           <h4 className="font-semibold mb-2 text-sm text-muted-foreground uppercase tracking-wider">Alamat Pengiriman:</h4>
                                           <p className="text-sm text-muted-foreground">{order.deliveryAddress}</p>
                                       </div>
+                                      <div className="border-t pt-4 mt-4 flex justify-end">
+                                          <Button 
+                                              variant="destructive" 
+                                              size="sm" 
+                                              onClick={() => setOrderToDelete(order)}
+                                              disabled={isDeleting}
+                                          >
+                                              <Trash2 className="h-4 w-4 mr-2" />
+                                              Hapus Pesanan
+                                          </Button>
+                                      </div>
                                   </CardContent>
                           </AccordionContent>
                       </Card>
@@ -229,6 +285,26 @@ export default function AdminOrdersPage() {
             </div>
         ))
       )}
+
+      <AlertDialog open={!!orderToDelete} onOpenChange={(open) => !open && setOrderToDelete(null)}>
+          <AlertDialogContent>
+              <AlertDialogHeader>
+                  <AlertDialogTitle>Apakah Anda yakin?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                      Tindakan ini tidak dapat dibatalkan. Ini akan menghapus pesanan secara permanen dari database.
+                  </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                  <AlertDialogCancel onClick={() => setOrderToDelete(null)} disabled={isDeleting}>
+                      Batal
+                  </AlertDialogCancel>
+                  <AlertDialogAction onClick={handleDeleteOrder} disabled={isDeleting} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                      {isDeleting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                      Hapus
+                  </AlertDialogAction>
+              </AlertDialogFooter>
+          </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

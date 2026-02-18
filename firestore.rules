@@ -27,17 +27,17 @@ service cloud.firestore {
     
     /**
      * @description Enables collectionGroup queries for 'orders' across the database.
-     * This is required for the admin dashboard to fetch all orders.
+     * This is required for the admin dashboard to fetch and manage all orders.
      */
     match /{path=**}/orders/{orderId} {
-      allow read: if isSignedIn();
+      allow read, delete: if isSignedIn();
     }
 
     /**
      * @description Enables collectionGroup queries for 'orderItems'.
      */
     match /{path=**}/orderItems/{orderItemId} {
-      allow read: if isSignedIn();
+      allow read, delete: if isSignedIn();
     }
 
     // ------------------------------------------------------------------------
@@ -60,7 +60,7 @@ service cloud.firestore {
 
       // Subcollections under a specific customer
       match /orders/{orderId} {
-        // Read is already allowed by the collectionGroup match above for signed-in users.
+        // Read/Delete is already allowed by the collectionGroup match above for signed-in users.
         allow write: if isOwner(customerId) && (request.resource.data.customerId == customerId || resource.data.customerId == customerId);
 
         match /orderItems/{orderItemId} {
