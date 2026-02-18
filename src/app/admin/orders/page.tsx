@@ -274,28 +274,43 @@ export default function AdminOrdersPage() {
     doc.save(`orders_${date ? format(date, 'yyyy-MM-dd') : 'all'}.pdf`);
   };
 
-  const handlePrintReceipt = (order: Order) => {
+  const handlePrintReceipt = (order: Order, vendorCode?: string) => {
     const doc = new jsPDF({
       orientation: 'portrait',
       unit: 'mm',
-      format: [80, 200] // Ukuran struk thermal umum
+      format: [80, 200]
     });
 
     const centerPos = 40;
     
+    // Filter items based on vendor if provided
+    const itemsToPrint = vendorCode 
+      ? order.items.filter(item => getVendorFromSku(item.sku) === vendorCode)
+      : order.items;
+    
+    const subtotal = itemsToPrint.reduce((sum, item) => sum + (item.priceAtOrder * item.quantity), 0);
+    const totalToPrint = vendorCode ? subtotal : order.totalAmount;
+
     doc.setFontSize(12);
     doc.text("TAKJILKU", centerPos, 10, { align: 'center' });
     doc.setFontSize(8);
     doc.text("Ramadhan UMKM RW06", centerPos, 14, { align: 'center' });
-    doc.text("-".repeat(40), centerPos, 18, { align: 'center' });
     
-    doc.text(`ID: #${order.id.substring(0, 7)}`, 5, 24);
-    doc.text(`Tgl: ${format(new Date(order.orderDateTime), 'dd/MM/yyyy HH:mm')}`, 5, 28);
-    doc.text(`Bayar: ${order.paymentMethod}`, 5, 32);
-    doc.text("-".repeat(40), centerPos, 36, { align: 'center' });
+    if (vendorCode) {
+      doc.setFontSize(10);
+      doc.text(`SLIP MITRA: ${vendorCode}`, centerPos, 18, { align: 'center' });
+      doc.setFontSize(8);
+    }
     
-    let y = 42;
-    order.items.forEach((item) => {
+    doc.text("-".repeat(40), centerPos, 22, { align: 'center' });
+    
+    doc.text(`ID: #${order.id.substring(0, 7)}`, 5, 28);
+    doc.text(`Tgl: ${format(new Date(order.orderDateTime), 'dd/MM/yyyy HH:mm')}`, 5, 32);
+    doc.text(`Bayar: ${order.paymentMethod}`, 5, 36);
+    doc.text("-".repeat(40), centerPos, 40, { align: 'center' });
+    
+    let y = 46;
+    itemsToPrint.forEach((item) => {
       doc.text(`${item.name}`, 5, y);
       doc.text(`${item.quantity} x ${formatPrice(item.priceAtOrder)}`, 5, y + 4);
       doc.text(`${formatPrice(item.priceAtOrder * item.quantity)}`, 75, y + 4, { align: 'right' });
@@ -305,13 +320,15 @@ export default function AdminOrdersPage() {
     doc.text("-".repeat(40), centerPos, y, { align: 'center' });
     y += 6;
     
-    doc.text("Ongkir (Delivery):", 5, y);
-    doc.text(`${formatPrice(2500)}`, 75, y, { align: 'right' });
-    y += 6;
+    if (!vendorCode) {
+      doc.text("Ongkir (Delivery):", 5, y);
+      doc.text(`${formatPrice(2500)}`, 75, y, { align: 'right' });
+      y += 6;
+    }
     
     doc.setFontSize(10);
-    doc.text("TOTAL:", 5, y);
-    doc.text(`${formatPrice(order.totalAmount)}`, 75, y, { align: 'right' });
+    doc.text(vendorCode ? "SUBTOTAL MITRA:" : "TOTAL:", 5, y);
+    doc.text(`${formatPrice(totalToPrint)}`, 75, y, { align: 'right' });
     y += 10;
     
     doc.setFontSize(8);
@@ -323,11 +340,11 @@ export default function AdminOrdersPage() {
     doc.text("Terima Kasih Telah Memesan!", centerPos, y, { align: 'center' });
     doc.text("Semoga Berkah", centerPos, y + 4, { align: 'center' });
     
-    doc.save(`struk_${order.id.substring(0, 7)}.pdf`);
+    doc.save(`${vendorCode ? 'slip_mitra' : 'struk'}_${order.id.substring(0, 7)}.pdf`);
     
     toast({
-      title: "Struk Berhasil Dibuat",
-      description: "File PDF struk telah diunduh.",
+      title: vendorCode ? "Slip Mitra Berhasil Dibuat" : "Struk Berhasil Dibuat",
+      description: "File PDF telah diunduh.",
     });
   };
 
@@ -451,8 +468,11 @@ export default function AdminOrdersPage() {
                                                   {new Date(order.orderDateTime).toLocaleString('id-ID')}
                                               </CardDescription>
                                           </div>
-                                          <div className="text-right flex flex-col items-end gap-2">
-                                              <p className="font-semibold text-base md:text-lg text-primary">{formatPrice(order.totalAmount)}</p>
+                                          <div className="text-right flex flex-col items-end gap-1">
+                                              <p className="font-semibold text-base md:text-lg text-primary">
+                                                {formatPrice(order.items.filter(item => getVendorFromSku(item.sku) === vendorCode).reduce((sum, i) => sum + (i.priceAtOrder * i.quantity), 0))}
+                                              </p>
+                                              <span className="text-[10px] text-muted-foreground">Total Order: {formatPrice(order.totalAmount)}</span>
                                               <Badge className={getStatusBadgeColor(order.status)}>
                                                 {order.status === 'pending' ? 'Dipesan' : (order.status || 'Dipesan')}
                                               </Badge>
@@ -515,7 +535,7 @@ export default function AdminOrdersPage() {
                                       </div>
 
                                       <div className="border-t pt-4">
-                                      <h4 className="font-semibold mb-2 text-sm text-muted-foreground uppercase tracking-wider">Item Pesanan:</h4>
+                                      <h4 className="font-semibold mb-2 text-sm text-muted-foreground uppercase tracking-wider">Item Pesanan ({vendorCode}):</h4>
                                        <div className="space-y-2 pt-2">
                                           {order.items.filter(item => getVendorFromSku(item.sku) === vendorCode).map(item => (
                                               <div key={item.id} className="flex justify-between text-sm">
@@ -533,14 +553,24 @@ export default function AdminOrdersPage() {
                                           <p className="text-sm text-muted-foreground">{order.deliveryAddress}</p>
                                       </div>
                                       <div className="border-t pt-4 flex justify-between items-center">
-                                          <Button 
-                                            variant="outline" 
-                                            size="sm" 
-                                            onClick={() => handlePrintReceipt(order)}
-                                          >
-                                            <Printer className="h-4 w-4 mr-2" />
-                                            Cetak Struk
-                                          </Button>
+                                          <div className="flex gap-2">
+                                            <Button 
+                                              variant="outline" 
+                                              size="sm" 
+                                              onClick={() => handlePrintReceipt(order, vendorCode)}
+                                            >
+                                              <Printer className="h-4 w-4 mr-2" />
+                                              Cetak Slip Mitra
+                                            </Button>
+                                            <Button 
+                                              variant="ghost" 
+                                              size="sm" 
+                                              onClick={() => handlePrintReceipt(order)}
+                                              className="text-xs text-muted-foreground"
+                                            >
+                                              Cetak Struk Full
+                                            </Button>
+                                          </div>
                                           <Button 
                                               variant="destructive" 
                                               size="sm" 
