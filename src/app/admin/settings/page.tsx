@@ -618,19 +618,21 @@ export default function AdminSettingsPage() {
               <AlertTriangle className="h-5 w-5" />
               Konfirmasi Penghapusan Permanen
             </AlertDialogTitle>
-            <AlertDialogDescription className="space-y-4">
-              <p>
-                Anda akan menghapus seluruh data pada <strong>{actionTarget?.label}</strong>. 
-                Data yang sudah dihapus tidak dapat dikembalikan lagi.
-              </p>
-              <div className="p-3 bg-destructive/10 rounded-md border border-destructive/20 space-y-2">
-                <Label className="text-destructive font-bold text-xs uppercase">Ketik "HAPUS" untuk melanjutkan:</Label>
-                <Input 
-                  value={confirmInput} 
-                  onChange={(e) => setConfirmInput(e.target.value)} 
-                  placeholder="Ketik HAPUS di sini..."
-                  className="bg-background border-destructive/30 focus-visible:ring-destructive"
-                />
+            <AlertDialogDescription className="space-y-4" asChild>
+              <div className="space-y-4">
+                <p>
+                  Anda akan menghapus seluruh data pada <strong>{actionTarget?.label}</strong>. 
+                  Data yang sudah dihapus tidak dapat dikembalikan lagi.
+                </p>
+                <div className="p-3 bg-destructive/10 rounded-md border border-destructive/20 space-y-2">
+                  <Label className="text-destructive font-bold text-xs uppercase">Ketik "HAPUS" untuk melanjutkan:</Label>
+                  <Input 
+                    value={confirmInput} 
+                    onChange={(e) => setConfirmInput(e.target.value)} 
+                    placeholder="Ketik HAPUS di sini..."
+                    className="bg-background border-destructive/30 focus-visible:ring-destructive"
+                  />
+                </div>
               </div>
             </AlertDialogDescription>
           </AlertDialogHeader>
