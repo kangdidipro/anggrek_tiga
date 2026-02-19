@@ -198,12 +198,7 @@ export default function AdminSummaryPage() {
             summaryMap[key].totalAmount += itemTotal;
             
             // Ongkir Logic: Per Mitra per Order
-            // We track if this vendor has been counted for this order yet in the context of the grouping
             const vendorOrderKey = `${order.id}-${vendor}`;
-            
-            // If we are grouping by orderId (which is actually sub-order), each row gets 2500
-            // If we are grouping by vendor, each unique order this vendor was in gets 2500
-            // If we are grouping by SKU, we don't usually sum ongkir here as it's product-focused
             if (!orderVendorsSeenInOrder.has(vendorOrderKey)) {
                 orderVendorsSeenInOrder.add(vendorOrderKey);
                 if (groupBy === 'orderId' || groupBy === 'vendor') {
@@ -288,26 +283,26 @@ export default function AdminSummaryPage() {
   const exportToExcel = () => {
     const dataForExport = filteredSummary.map((summary, index) => ({
         'No.': index + 1,
-        'Group (No. Order/Mitra)': summary.label,
+        'Group (ID Sub-Order/Mitra/SKU)': summary.label,
         'Info': summary.subLabel || '',
         'Total Produk (Bruto)': summary.totalAmount,
         'Admin (5%)': summary.adminFee,
         'Bayar ke Mitra (Netto)': summary.netToVendor,
         'Ongkir': summary.totalDeliveryFee,
-        'Rincian Item': summary.items.map(i => `${i.name} [${i.sku}] (${i.quantity} x ${formatPrice(i.price)})`).join('\r\n'),
-        'Alamat': summary.addresses.join('\r\n'),
+        'Rincian Item': summary.items.map(i => `${i.name} [${i.sku}] (${i.quantity} porsi x ${formatPrice(i.price)})`).join('\r\n'),
+        'Alamat Pengiriman': summary.addresses.join('\r\n'),
     }));
 
     dataForExport.push({
       'No.': '',
-      'Group (No. Order/Mitra)': 'TOTAL KESELURUHAN',
+      'Group (ID Sub-Order/Mitra/SKU)': 'TOTAL KESELURUHAN',
       'Info': '',
       'Total Produk (Bruto)': grandTotals.amount,
       'Admin (5%)': grandTotals.admin,
       'Bayar ke Mitra (Netto)': grandTotals.net,
       'Ongkir': grandTotals.ongkir,
       'Rincian Item': '',
-      'Alamat': ''
+      'Alamat Pengiriman': ''
     });
 
     const worksheet = XLSX.utils.json_to_sheet(dataForExport);
@@ -321,7 +316,7 @@ export default function AdminSummaryPage() {
 
   const exportToPDF = () => {
     const doc = new jsPDF('l', 'mm', 'a4');
-    const tableColumn = ["No.", "ID Sub-Order / Group", "Total Produk", "Admin (5%)", "Bayar ke Mitra", "Ongkir", "Rincian Item"];
+    const tableColumn = ["No.", "ID Sub-Order / Group", "Total Produk", "Admin (5%)", "Bayar ke Mitra", "Ongkir", "Rincian Item", "Alamat"];
     const tableRows = filteredSummary.map((summary, index) => [
         (index + 1).toString(),
         summary.label + (summary.subLabel ? `\n(${summary.subLabel})` : ''),
@@ -330,6 +325,7 @@ export default function AdminSummaryPage() {
         formatPrice(summary.netToVendor),
         summary.totalDeliveryFee > 0 ? formatPrice(summary.totalDeliveryFee) : '-',
         summary.items.map(i => `${i.name} [${i.sku}]\n${i.quantity} porsi`).join('\n---\n'),
+        summary.addresses.join('\n\n')
     ]);
 
     tableRows.push([
@@ -339,6 +335,7 @@ export default function AdminSummaryPage() {
       formatPrice(grandTotals.admin),
       formatPrice(grandTotals.net),
       formatPrice(grandTotals.ongkir),
+      "",
       ""
     ]);
 
@@ -349,7 +346,11 @@ export default function AdminSummaryPage() {
         startY: 20,
         theme: 'grid',
         headStyles: { fillColor: [255, 140, 0] },
-        styles: { fontSize: 8, overflow: 'linebreak' },
+        styles: { fontSize: 7, overflow: 'linebreak' },
+        columnStyles: {
+          6: { cellWidth: 40 }, // Rincian Item
+          7: { cellWidth: 40 }, // Alamat
+        }
     });
     doc.save(`rekap_${groupBy}_${date ? date.toISOString().split('T')[0] : 'semua'}.pdf`);
   };
@@ -364,12 +365,12 @@ export default function AdminSummaryPage() {
         return;
     }
     setIsSending(true);
-    // This would typically call a server action, mimicking for now
+    // Simulating sending report with all columns
     await new Promise(resolve => setTimeout(resolve, 2000));
     setIsSending(false);
     toast({
         title: "Laporan Terkirim",
-        description: `Rekap harian lengkap telah dikirim ke ${targetEmail}.`,
+        description: `Rekap harian lengkap (termasuk Alamat & Item) telah dikirim ke ${targetEmail}.`,
     });
   };
 
@@ -393,7 +394,7 @@ export default function AdminSummaryPage() {
             <CardHeader>
                 <CardTitle>Rekap Harian</CardTitle>
                 <CardDescription>
-                  Rekapitulasi pengerjaan pesanan per Mitra untuk tanggal {date ? format(date, 'eeee, d MMMM yyyy', { locale: id }) : 'semua waktu'}.
+                  Rekapitulasi transaksi lengkap per {groupBy === 'orderId' ? 'ID Sub-Order' : groupBy === 'vendor' ? 'Mitra' : 'SKU'} untuk tanggal {date ? format(date, 'eeee, d MMMM yyyy', { locale: id }) : 'semua waktu'}.
                 </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -401,7 +402,7 @@ export default function AdminSummaryPage() {
                     <div className="relative flex-1 min-w-[240px]">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                         <Input 
-                            placeholder="Cari kata kunci..." 
+                            placeholder="Cari kata kunci (No Order, Alamat, Menu)..." 
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
                             className="pl-10"
@@ -434,7 +435,7 @@ export default function AdminSummaryPage() {
                     </Select>
 
                     <Select value={groupBy} onValueChange={(val: any) => setGroupBy(val)}>
-                        <SelectTrigger className="w-[150px] border-primary/50 bg-primary/5">
+                        <SelectTrigger className="w-[180px] border-primary/50 bg-primary/5">
                             <LayoutGrid className="mr-2 h-4 w-4 text-primary" />
                             <SelectValue placeholder="Group By" />
                         </SelectTrigger>
@@ -455,7 +456,7 @@ export default function AdminSummaryPage() {
                         <div className="flex items-center gap-1 border rounded-md p-1 bg-muted/20">
                             <Input 
                                 type="email" 
-                                placeholder="Email" 
+                                placeholder="Email Laporan" 
                                 className="h-8 w-32 text-xs border-0 bg-transparent focus-visible:ring-0" 
                                 value={targetEmail}
                                 onChange={(e) => setTargetEmail(e.target.value)}
@@ -498,8 +499,8 @@ export default function AdminSummaryPage() {
                                       Ongkir {getSortIcon('totalDeliveryFee')}
                                     </div>
                                 </TableHead>
-                                <TableHead>Rincian Item & Pembayaran per Mitra</TableHead>
-                                <TableHead>Alamat</TableHead>
+                                <TableHead className="min-w-[250px]">Rincian Item & Pembayaran per Mitra</TableHead>
+                                <TableHead className="min-w-[200px]">Alamat Pengiriman</TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -523,7 +524,7 @@ export default function AdminSummaryPage() {
                                         <TableCell className="text-right">
                                             {summary.totalDeliveryFee > 0 ? formatPrice(summary.totalDeliveryFee) : '-'}
                                         </TableCell>
-                                        <TableCell className="min-w-[300px]">
+                                        <TableCell>
                                             <div className="space-y-3">
                                                 {Object.entries(groupItemsByVendor(summary.items)).map(([vCode, vItems]) => {
                                                     const subtotalMitra = vItems.reduce((sum, i) => sum + (i.price * i.quantity), 0);
@@ -550,10 +551,10 @@ export default function AdminSummaryPage() {
                                                 })}
                                             </div>
                                         </TableCell>
-                                        <TableCell className="max-w-[150px]">
-                                            <ul className="text-[10px] list-disc pl-4 space-y-1 text-muted-foreground">
+                                        <TableCell>
+                                            <ul className="text-[10px] list-disc pl-4 space-y-2 text-muted-foreground">
                                                 {summary.addresses.map((addr, idx) => (
-                                                    <li key={idx} className="truncate" title={addr}>{addr}</li>
+                                                    <li key={idx} className="leading-tight">{addr}</li>
                                                 ))}
                                             </ul>
                                         </TableCell>
