@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -39,7 +38,6 @@ export default function ProductCard({ product, vendorName }: ProductCardProps) {
   };
 
   const isOutOfStock = currentStock <= 0;
-  const subtotal = product.price * quantity;
 
   return (
     <Card className={`flex flex-col h-full overflow-hidden transition-all duration-300 hover:shadow-xl hover:-translate-y-1 ${isOutOfStock ? 'opacity-75 grayscale-[0.5]' : ''}`}>
@@ -59,20 +57,13 @@ export default function ProductCard({ product, vendorName }: ProductCardProps) {
           <span className="bg-muted px-1 rounded font-mono">({product.vendor})</span>
         </div>
 
-        <div className="mt-auto space-y-2">
+        <div className="mt-auto">
           <div className="flex items-center justify-between">
             <p className="text-lg font-bold text-primary">{formatPrice(product.price)}</p>
             <Badge variant={isOutOfStock ? "destructive" : currentStock <= 5 ? "secondary" : "outline"} className="text-[10px] px-1.5 py-0 h-5">
               {isOutOfStock ? "Habis" : `Stok: ${currentStock}`}
             </Badge>
           </div>
-
-          {mounted && quantity > 0 && (
-            <div className="flex justify-between items-center bg-primary/5 p-2 rounded-md border border-primary/10">
-              <span className="text-[10px] font-bold uppercase text-muted-foreground">Total Bayar:</span>
-              <span className="text-sm font-bold text-primary">{formatPrice(subtotal)}</span>
-            </div>
-          )}
         </div>
       </CardContent>
       <CardFooter className="p-4 pt-0">
