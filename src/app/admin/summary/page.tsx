@@ -55,6 +55,7 @@ type SummaryItem = {
     totalOrders: number;
     totalAmount: number; // Item Sales only
     adminFee: number;    // 5% of totalAmount
+    netToVendor: number; // totalAmount - adminFee
     totalDeliveryFee: number; // Only for orderId grouping
     items: { name: string, quantity: number, sku: string, price: number, vendor: string }[];
     addresses: string[];
@@ -198,17 +199,21 @@ export default function AdminSummaryPage() {
         });
     });
 
-    return Object.entries(summaryMap).map(([key, data]) => ({
-        key,
-        label: data.label,
-        subLabel: data.subLabel,
-        totalOrders: data.totalOrders.size,
-        totalAmount: data.totalAmount,
-        adminFee: data.totalAmount * 0.05,
-        totalDeliveryFee: data.totalDeliveryFee,
-        items: Object.values(data.items),
-        addresses: Array.from(data.addresses)
-    }));
+    return Object.entries(summaryMap).map(([key, data]) => {
+        const adminFee = data.totalAmount * 0.05;
+        return {
+            key,
+            label: data.label,
+            subLabel: data.subLabel,
+            totalOrders: data.totalOrders.size,
+            totalAmount: data.totalAmount,
+            adminFee: adminFee,
+            netToVendor: data.totalAmount - adminFee,
+            totalDeliveryFee: data.totalDeliveryFee,
+            items: Object.values(data.items),
+            addresses: Array.from(data.addresses)
+        };
+    });
   }, [orders, date, groupBy, vendorLookup, vendorFilter]);
 
   const filteredSummary = useMemo(() => {
@@ -248,7 +253,8 @@ export default function AdminSummaryPage() {
       orders: acc.orders + curr.totalOrders,
       amount: acc.amount + curr.totalAmount,
       admin: acc.admin + curr.adminFee,
-    }), { orders: 0, amount: 0, admin: 0 });
+      net: acc.net + curr.netToVendor,
+    }), { orders: 0, amount: 0, admin: 0, net: 0 });
     
     return { ...totals, ongkir: trueGrandTotalOngkir };
   }, [filteredSummary, trueGrandTotalOngkir]);
@@ -271,6 +277,7 @@ export default function AdminSummaryPage() {
         'Pesanan': summary.totalOrders,
         'Total Produk': summary.totalAmount,
         'Admin (5%)': summary.adminFee,
+        'Bayar ke Mitra': summary.netToVendor,
         'Ongkir': summary.totalDeliveryFee,
         'Rincian Item': summary.items.map(i => `${i.name} [${i.sku}] (${formatPrice(i.price)} x ${i.quantity})`).join('\r\n'),
         'Alamat': summary.addresses.join('\r\n'),
@@ -282,6 +289,7 @@ export default function AdminSummaryPage() {
       'Pesanan': grandTotals.orders,
       'Total Produk': grandTotals.amount,
       'Admin (5%)': grandTotals.admin,
+      'Bayar ke Mitra': grandTotals.net,
       'Ongkir': grandTotals.ongkir,
       'Rincian Item': '',
       'Alamat': ''
@@ -298,11 +306,12 @@ export default function AdminSummaryPage() {
 
   const exportToPDF = () => {
     const doc = new jsPDF('l', 'mm', 'a4');
-    const tableColumn = ["Group", "Produk", "Admin (5%)", "Ongkir", "Rincian Item", "Alamat"];
+    const tableColumn = ["Group", "Produk", "Admin (5%)", "Bayar ke Mitra", "Ongkir", "Rincian Item", "Alamat"];
     const tableRows = filteredSummary.map(summary => [
         summary.label + (summary.subLabel ? ` (${summary.subLabel})` : ''),
         formatPrice(summary.totalAmount),
         formatPrice(summary.adminFee),
+        formatPrice(summary.netToVendor),
         summary.totalDeliveryFee > 0 ? formatPrice(summary.totalDeliveryFee) : '-',
         summary.items.map(i => `${i.name} [${i.sku}]\n${i.quantity} porsi`).join('\n---\n'),
         summary.addresses.join('\n')
@@ -312,6 +321,7 @@ export default function AdminSummaryPage() {
       "TOTAL KESELURUHAN",
       formatPrice(grandTotals.amount),
       formatPrice(grandTotals.admin),
+      formatPrice(grandTotals.net),
       formatPrice(grandTotals.ongkir),
       "",
       ""
@@ -450,6 +460,7 @@ export default function AdminSummaryPage() {
                                 </TableHead>
                                 <TableHead className="text-right">Total Produk</TableHead>
                                 <TableHead className="text-right">Admin (5%)</TableHead>
+                                <TableHead className="text-right">Bayar ke Mitra</TableHead>
                                 <TableHead className="text-right">Ongkir</TableHead>
                                 <TableHead>Rincian Item</TableHead>
                                 <TableHead>Alamat</TableHead>
@@ -458,7 +469,7 @@ export default function AdminSummaryPage() {
                         <TableBody>
                             {filteredSummary.length === 0 ? (
                                 <TableRow>
-                                    <TableCell colSpan={6} className="text-center text-muted-foreground py-10">
+                                    <TableCell colSpan={7} className="text-center text-muted-foreground py-10">
                                     Tidak ada transaksi ditemukan.
                                     </TableCell>
                                 </TableRow>
@@ -471,6 +482,7 @@ export default function AdminSummaryPage() {
                                         </TableCell>
                                         <TableCell className="text-right">{formatPrice(summary.totalAmount)}</TableCell>
                                         <TableCell className="text-right text-destructive font-medium">{formatPrice(summary.adminFee)}</TableCell>
+                                        <TableCell className="text-right font-bold text-green-600">{formatPrice(summary.netToVendor)}</TableCell>
                                         <TableCell className="text-right">
                                             {summary.totalDeliveryFee > 0 ? formatPrice(summary.totalDeliveryFee) : '-'}
                                         </TableCell>
@@ -516,6 +528,7 @@ export default function AdminSummaryPage() {
                                     <TableCell>TOTAL KESELURUHAN</TableCell>
                                     <TableCell className="text-right text-primary">{formatPrice(grandTotals.amount)}</TableCell>
                                     <TableCell className="text-right text-destructive">{formatPrice(grandTotals.admin)}</TableCell>
+                                    <TableCell className="text-right text-green-700">{formatPrice(grandTotals.net)}</TableCell>
                                     <TableCell className="text-right">{formatPrice(grandTotals.ongkir)}</TableCell>
                                     <TableCell colSpan={2}></TableCell>
                                 </TableRow>
