@@ -1,6 +1,6 @@
 'use client';
 
-import { Soup, ShoppingBag, UserCog } from 'lucide-react';
+import { Soup, ShoppingBag, UserCog, BookOpen } from 'lucide-react';
 import Cart from '@/components/cart';
 import Link from 'next/link';
 import { Button } from './ui/button';
@@ -25,13 +25,19 @@ export default function Header() {
           </a>
         </div>
         <div className="flex flex-1 items-center justify-end space-x-2">
-          <Button variant="ghost" size="icon" asChild>
+          <Button variant="ghost" size="icon" asChild title="Tata Cara Pemesanan">
+            <Link href="/tata-cara">
+              <BookOpen className="h-5 w-5 text-muted-foreground hover:text-primary transition-colors" />
+              <span className="sr-only">Tata Cara Pemesanan</span>
+            </Link>
+          </Button>
+          <Button variant="ghost" size="icon" asChild title="Admin Panel">
             <Link href="/admin">
-              <UserCog className="h-5 w-5" />
+              <UserCog className="h-5 w-5 text-muted-foreground hover:text-primary transition-colors" />
               <span className="sr-only">Admin Panel</span>
             </Link>
           </Button>
-          <Button variant="outline" size="icon" asChild>
+          <Button variant="outline" size="icon" asChild title="Riwayat Pesanan">
             <Link href="/orders">
               <ShoppingBag className="h-5 w-5" />
               <span className="sr-only">Riwayat Pesanan</span>
