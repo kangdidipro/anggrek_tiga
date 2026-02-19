@@ -230,8 +230,9 @@ export default function OrdersPage() {
             docPdf.text("-".repeat(40), centerPos, y, { align: 'center' });
             y += 6;
             const vCount = Object.keys(grouped).length;
+            const calculatedDeliveryFee = vCount * 2500;
             docPdf.text(`Ongkir (${vCount} Mitra):`, 5, y);
-            docPdf.text(`${formatPrice(order.deliveryFee || (vCount * 2500))}`, 75, y, { align: 'right' });
+            docPdf.text(`${formatPrice(calculatedDeliveryFee)}`, 75, y, { align: 'right' });
             y += 6;
             
             docPdf.setFontSize(10);
@@ -354,88 +355,94 @@ export default function OrdersPage() {
                 </div>
                 <div className="space-y-6">
                     <Accordion type="single" collapsible className="w-full space-y-4">
-                        {orders.map((order) => (
-                            <AccordionItem value={order.id} key={order.id} className="border-b-0">
-                            <Card className="shadow-sm">
-                                <CardHeader className="p-4">
-                                        <AccordionTrigger className="w-full p-0 hover:no-underline">
-                                            <div className="flex justify-between items-center w-full">
-                                                <div className="text-left">
-                                                    <CardTitle className="text-base md:text-lg">
-                                                        Order #{order.id}
-                                                    </CardTitle>
-                                                    <CardDescription className="text-xs md:text-sm">
-                                                        {new Date(order.orderDateTime).toLocaleDateString('id-ID', {
-                                                            weekday: 'long',
-                                                            year: 'numeric',
-                                                            month: 'long',
-                                                            day: 'numeric'
-                                                        })} | {order.paymentMethod}
-                                                    </CardDescription>
-                                                </div>
-                                                <div className="text-right flex flex-col items-end gap-2">
-                                                    <p className="font-semibold text-base md:text-lg text-primary">{formatPrice(order.totalAmount)}</p>
-                                                </div>
-                                            </div>
-                                        </AccordionTrigger>
-                                </CardHeader>
-                                <AccordionContent>
-                                        <CardContent className="p-4 pt-0 space-y-6">
-                                            <div className="border-t pt-4">
-                                                <h4 className="font-semibold mb-3 text-sm flex items-center gap-2">
-                                                    <Store className="h-4 w-4" /> Progres Pengerjaan per Mitra:
-                                                </h4>
-                                                <OrderItemDetails customerId={user.uid} orderId={order.id} vendorStatuses={order.vendorStatuses} />
-                                            </div>
-                                            
-                                            <div className="border-t pt-4">
-                                                <h4 className="font-semibold mb-2 text-sm">Rincian Biaya:</h4>
-                                                <div className="space-y-1 bg-muted/5 p-3 rounded-lg border">
-                                                    <div className="flex justify-between text-sm">
-                                                        <span className="text-muted-foreground">Subtotal Produk</span>
-                                                        <span>{formatPrice(order.totalAmount - (order.deliveryFee || 2500))}</span>
-                                                    </div>
-                                                    <div className="flex justify-between text-sm">
-                                                        <span className="text-muted-foreground italic">
-                                                          Ongkos Antar ({Object.keys(order.vendorStatuses || {}).length} Mitra)
-                                                        </span>
-                                                        <span>{formatPrice(order.deliveryFee || 2500)}</span>
-                                                    </div>
-                                                    <div className="flex justify-between font-bold border-t border-dashed pt-1 mt-1">
-                                                        <span>Total Bayar</span>
-                                                        <span className="text-primary">{formatPrice(order.totalAmount)}</span>
-                                                    </div>
-                                                </div>
-                                            </div>
+                        {orders.map((order) => {
+                            const vCount = Object.keys(order.vendorStatuses || {}).length;
+                            const currentOngkir = Math.max(order.deliveryFee || 0, vCount * 2500);
+                            const subtotalProduk = order.totalAmount - currentOngkir;
 
-                                            <div className="border-t pt-4">
-                                                <h4 className="font-semibold mb-2 text-sm">Alamat Pengiriman:</h4>
-                                                <p className="text-sm text-muted-foreground italic">{order.deliveryAddress}</p>
-                                            </div>
-                                            <div className="border-t pt-4 flex justify-end gap-2">
-                                                <Button 
-                                                    variant="outline" 
-                                                    size="sm" 
-                                                    onClick={() => handlePrintReceipt(order)}
-                                                    disabled={isPrinting === order.id}
-                                                >
-                                                    {isPrinting === order.id ? (
-                                                        <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                                                    ) : (
-                                                        <Printer className="h-4 w-4 mr-2" />
-                                                    )}
-                                                    Cetak Struk
-                                                </Button>
-                                                <Button variant="destructive" size="sm" onClick={() => setOrderToDelete(order)}>
-                                                    <Trash2 className="h-4 w-4 mr-2" />
-                                                    Hapus Pesanan
-                                                </Button>
-                                            </div>
-                                        </CardContent>
-                                </AccordionContent>
-                            </Card>
-                            </AccordionItem>
-                        ))}
+                            return (
+                                <AccordionItem value={order.id} key={order.id} className="border-b-0">
+                                <Card className="shadow-sm">
+                                    <CardHeader className="p-4">
+                                            <AccordionTrigger className="w-full p-0 hover:no-underline">
+                                                <div className="flex justify-between items-center w-full">
+                                                    <div className="text-left">
+                                                        <CardTitle className="text-base md:text-lg">
+                                                            Order #{order.id}
+                                                        </CardTitle>
+                                                        <CardDescription className="text-xs md:text-sm">
+                                                            {new Date(order.orderDateTime).toLocaleDateString('id-ID', {
+                                                                weekday: 'long',
+                                                                year: 'numeric',
+                                                                month: 'long',
+                                                                day: 'numeric'
+                                                            })} | {order.paymentMethod}
+                                                        </CardDescription>
+                                                    </div>
+                                                    <div className="text-right flex flex-col items-end gap-2">
+                                                        <p className="font-semibold text-base md:text-lg text-primary">{formatPrice(order.totalAmount)}</p>
+                                                    </div>
+                                                </div>
+                                            </AccordionTrigger>
+                                    </CardHeader>
+                                    <AccordionContent>
+                                            <CardContent className="p-4 pt-0 space-y-6">
+                                                <div className="border-t pt-4">
+                                                    <h4 className="font-semibold mb-3 text-sm flex items-center gap-2">
+                                                        <Store className="h-4 w-4" /> Progres Pengerjaan per Mitra:
+                                                    </h4>
+                                                    <OrderItemDetails customerId={user.uid} orderId={order.id} vendorStatuses={order.vendorStatuses} />
+                                                </div>
+                                                
+                                                <div className="border-t pt-4">
+                                                    <h4 className="font-semibold mb-2 text-sm">Rincian Biaya:</h4>
+                                                    <div className="space-y-1 bg-muted/5 p-3 rounded-lg border">
+                                                        <div className="flex justify-between text-sm">
+                                                            <span className="text-muted-foreground">Subtotal Produk</span>
+                                                            <span>{formatPrice(subtotalProduk)}</span>
+                                                        </div>
+                                                        <div className="flex justify-between text-sm">
+                                                            <span className="text-muted-foreground italic">
+                                                              Ongkos Antar ({vCount} Mitra)
+                                                            </span>
+                                                            <span>{formatPrice(currentOngkir)}</span>
+                                                        </div>
+                                                        <div className="flex justify-between font-bold border-t border-dashed pt-1 mt-1">
+                                                            <span>Total Bayar</span>
+                                                            <span className="text-primary">{formatPrice(order.totalAmount)}</span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                <div className="border-t pt-4">
+                                                    <h4 className="font-semibold mb-2 text-sm">Alamat Pengiriman:</h4>
+                                                    <p className="text-sm text-muted-foreground italic">{order.deliveryAddress}</p>
+                                                </div>
+                                                <div className="border-t pt-4 flex justify-end gap-2">
+                                                    <Button 
+                                                        variant="outline" 
+                                                        size="sm" 
+                                                        onClick={() => handlePrintReceipt(order)}
+                                                        disabled={isPrinting === order.id}
+                                                    >
+                                                        {isPrinting === order.id ? (
+                                                            <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                                                        ) : (
+                                                            <Printer className="h-4 w-4 mr-2" />
+                                                        )}
+                                                        Cetak Struk
+                                                    </Button>
+                                                    <Button variant="destructive" size="sm" onClick={() => setOrderToDelete(order)}>
+                                                        <Trash2 className="h-4 w-4 mr-2" />
+                                                        Hapus Pesanan
+                                                    </Button>
+                                                </div>
+                                            </CardContent>
+                                    </AccordionContent>
+                                </Card>
+                                </AccordionItem>
+                            );
+                        })}
                     </Accordion>
                 </div>
             </div>

@@ -14,6 +14,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Calendar } from '@/components/ui/calendar';
 import { format } from 'date-fns';
 import { id } from 'date-fns/locale';
+import { id as localeId } from 'date-fns/locale';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import jsPDF from 'jspdf';
@@ -346,7 +347,11 @@ export default function AdminOrdersPage() {
       : order.items;
     
     const subtotal = itemsToPrint.reduce((sum, item) => sum + (item.priceAtOrder * item.quantity), 0);
-    const totalToPrint = vendorCode ? subtotal : order.totalAmount;
+    
+    // Logic Ongkir for PDF: numVendors * 2500
+    const vCount = Object.keys(groupItemsByVendor(order.items)).length;
+    const calculatedDeliveryFee = vCount * 2500;
+    const totalToPrint = vendorCode ? subtotal : (subtotal + calculatedDeliveryFee);
 
     docPdf.setFontSize(12);
     docPdf.text("TAKJILKU", centerPos, y, { align: 'center' });
@@ -399,9 +404,8 @@ export default function AdminOrdersPage() {
     y += 6;
     
     if (!vendorCode) {
-      const vCount = Object.keys(groupItemsByVendor(order.items)).length;
       docPdf.text(`Ongkir (${vCount} Mitra):`, 5, y);
-      docPdf.text(`${formatPrice(order.deliveryFee || (vCount * 2500))}`, 75, y, { align: 'right' });
+      docPdf.text(`${formatPrice(calculatedDeliveryFee)}`, 75, y, { align: 'right' });
       y += 6;
     }
     
@@ -647,7 +651,9 @@ export default function AdminOrdersPage() {
                                                 <span className="text-muted-foreground italic">
                                                   Ongkir ({Object.keys(groupItemsByVendor(order.items)).length} Mitra)
                                                 </span>
-                                                <span className="text-muted-foreground">{formatPrice(order.deliveryFee || (Object.keys(groupItemsByVendor(order.items)).length * 2500))}</span>
+                                                <span className="text-muted-foreground">
+                                                  {formatPrice(Math.max(order.deliveryFee || 0, Object.keys(groupItemsByVendor(order.items)).length * 2500))}
+                                                </span>
                                               </div>
                                               <div className="flex justify-between text-sm font-bold pt-1">
                                                 <span>Total Bayar</span>
