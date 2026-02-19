@@ -28,6 +28,7 @@ interface OrderItem {
   quantity: number;
   priceAtOrder: number;
   sku: string;
+  vendor?: string;
 }
 
 interface Order {
@@ -37,7 +38,13 @@ interface Order {
   items: OrderItem[];
 }
 
-const getVendorFromSku = (sku: string) => sku.split('-')[0];
+const getVendorFromSku = (sku: string) => {
+  if (!sku) return 'UNKNOWN';
+  if (sku.includes('-')) return sku.split('-')[0];
+  // If no hyphen, extract the alphabetic prefix (e.g., UDA4 -> UDA)
+  const match = sku.match(/^[a-zA-Z]+/);
+  return match ? match[0] : sku;
+};
 
 type SummaryItem = {
     key: string;
@@ -45,7 +52,7 @@ type SummaryItem = {
     subLabel?: string;
     totalOrders: number;
     totalAmount: number;
-    items: { name: string, quantity: number, sku: string, price: number }[];
+    items: { name: string, quantity: number, sku: string, price: number, vendor: string }[];
     addresses: string[];
 }
 
@@ -115,13 +122,13 @@ export default function AdminSummaryPage() {
       subLabel?: string;
       totalOrders: Set<string>; 
       totalAmount: number; 
-      items: Record<string, { name: string, quantity: number, sku: string, price: number }>;
+      items: Record<string, { name: string, quantity: number, sku: string, price: number, vendor: string }>;
       addresses: Set<string>;
     }> = {};
 
     targetDateOrders.forEach(order => {
         order.items.forEach(item => {
-            const vendor = getVendorFromSku(item.sku);
+            const vendor = item.vendor || getVendorFromSku(item.sku);
             
             let key = '';
             let label = '';
@@ -152,7 +159,7 @@ export default function AdminSummaryPage() {
             
             const itemKey = item.sku;
             if (!summaryMap[key].items[itemKey]) {
-                summaryMap[key].items[itemKey] = { name: item.name, quantity: 0, sku: item.sku, price: item.priceAtOrder };
+                summaryMap[key].items[itemKey] = { name: item.name, quantity: 0, sku: item.sku, price: item.priceAtOrder, vendor };
             }
             summaryMap[key].items[itemKey].quantity += item.quantity;
         });
@@ -171,7 +178,7 @@ export default function AdminSummaryPage() {
 
   const availableVendors = useMemo(() => {
     const vendors = new Set<string>();
-    orders.forEach(order => order.items.forEach(item => vendors.add(getVendorFromSku(item.sku))));
+    orders.forEach(order => order.items.forEach(item => vendors.add(item.vendor || getVendorFromSku(item.sku))));
     return ['all', ...Array.from(vendors).sort()];
   }, [orders]);
 
@@ -182,7 +189,7 @@ export default function AdminSummaryPage() {
       if (groupBy === 'vendor') {
         result = result.filter(s => s.key === vendorFilter);
       } else {
-        result = result.filter(s => s.items.some(i => getVendorFromSku(i.sku) === vendorFilter));
+        result = result.filter(s => s.items.some(i => (i.vendor || getVendorFromSku(i.sku)) === vendorFilter));
       }
     }
     

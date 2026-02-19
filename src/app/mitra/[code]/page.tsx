@@ -29,6 +29,7 @@ interface OrderItem {
   quantity: number;
   priceAtOrder: number;
   sku: string;
+  vendor?: string;
 }
 
 interface Order {
@@ -43,7 +44,12 @@ interface Order {
   items: OrderItem[];
 }
 
-const getVendorFromSku = (sku: string) => sku.split('-')[0];
+const getVendorFromSku = (sku: string) => {
+  if (!sku) return 'UNKNOWN';
+  if (sku.includes('-')) return sku.split('-')[0];
+  const match = sku.match(/^[a-zA-Z]+/);
+  return match ? match[0] : sku;
+};
 
 export default function MitraOrderPage() {
   const { code } = useParams();
@@ -77,7 +83,7 @@ export default function MitraOrderPage() {
         // Filter orders that have items belonging to this mitra
         const ordersWithItems: Order[] = ordersData.map(order => ({
             ...order,
-            items: orderItemsData.filter(item => item.orderId === order.id && getVendorFromSku(item.sku) === code)
+            items: orderItemsData.filter(item => item.orderId === order.id && (item.vendor || getVendorFromSku(item.sku)) === code)
         })).filter(order => order.items.length > 0)
           .sort((a, b) => new Date(b.orderDateTime).getTime() - new Date(a.orderDateTime).getTime());
 

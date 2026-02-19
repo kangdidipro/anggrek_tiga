@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useEffect, useState, useMemo } from 'react';
@@ -45,6 +44,7 @@ interface OrderItem {
   quantity: number;
   priceAtOrder: number;
   sku: string;
+  vendor?: string;
 }
 
 interface Order {
@@ -59,7 +59,12 @@ interface Order {
   items: OrderItem[];
 }
 
-const getVendorFromSku = (sku: string) => sku.split('-')[0];
+const getVendorFromSku = (sku: string) => {
+  if (!sku) return 'UNKNOWN';
+  if (sku.includes('-')) return sku.split('-')[0];
+  const match = sku.match(/^[a-zA-Z]+/);
+  return match ? match[0] : sku;
+};
 
 const ORDER_STATUSES = ["Dipesan", "Diproses", "Dikirim", "Dibayar"];
 
@@ -81,7 +86,7 @@ export default function AdminOrdersPage() {
   const { toast } = useToast();
   
   const allVendors = useMemo(() => {
-    const vendorSet = new Set(orders.flatMap(o => o.items.map(i => getVendorFromSku(i.sku))));
+    const vendorSet = new Set(orders.flatMap(o => o.items.map(i => i.vendor || getVendorFromSku(i.sku))));
     return ['all', ...Array.from(vendorSet)];
   }, [orders]);
 
@@ -119,7 +124,7 @@ export default function AdminOrdersPage() {
     return orders.filter(order => {
         const orderDate = new Date(order.orderDateTime);
         const dateMatch = date ? orderDate.toDateString() === date.toDateString() : true;
-        const vendorMatch = vendor === 'all' ? true : order.items.some(item => getVendorFromSku(item.sku) === vendor);
+        const vendorMatch = vendor === 'all' ? true : order.items.some(item => (item.vendor || getVendorFromSku(item.sku)) === vendor);
         
         const currentStatus = order.status === 'pending' ? 'Dipesan' : (order.status || 'Dipesan');
         const statusMatch = statusFilter === 'all' ? true : currentStatus === statusFilter;
@@ -141,7 +146,7 @@ export default function AdminOrdersPage() {
         if (groupBy === 'orderId') {
             groups[order.id] = [order];
         } else if (groupBy === 'vendor') {
-            const vendorsInOrder = new Set(order.items.map(item => getVendorFromSku(item.sku)));
+            const vendorsInOrder = new Set(order.items.map(item => item.vendor || getVendorFromSku(item.sku)));
             vendorsInOrder.forEach(vendorCode => {
                 if (!groups[vendorCode]) groups[vendorCode] = [];
                 groups[vendorCode].push(order);
@@ -241,7 +246,7 @@ export default function AdminOrdersPage() {
         order.items.map(item => ({
             'Tanggal Order': format(new Date(order.orderDateTime), 'yyyy-MM-dd HH:mm'),
             'Order ID': order.id,
-            'Mitra': getVendorFromSku(item.sku),
+            'Mitra': item.vendor || getVendorFromSku(item.sku),
             'Nama Item': item.name,
             'Jumlah': item.quantity,
             'Harga Satuan': item.priceAtOrder,
@@ -267,7 +272,7 @@ export default function AdminOrdersPage() {
         order.items.map(item => [
             format(new Date(order.orderDateTime), 'dd/MM HH:mm'),
             order.id,
-            getVendorFromSku(item.sku),
+            item.vendor || getVendorFromSku(item.sku),
             item.name,
             item.quantity.toString(),
             formatPrice(item.priceAtOrder * item.quantity),
@@ -316,7 +321,7 @@ export default function AdminOrdersPage() {
     }
     
     const itemsToPrint = vendorCode 
-      ? order.items.filter(item => getVendorFromSku(item.sku) === vendorCode)
+      ? order.items.filter(item => (item.vendor || getVendorFromSku(item.sku)) === vendorCode)
       : order.items;
     
     const subtotal = itemsToPrint.reduce((sum, item) => sum + (item.priceAtOrder * item.quantity), 0);
@@ -531,7 +536,7 @@ export default function AdminOrdersPage() {
                                               <p className="font-semibold text-base md:text-lg text-primary">
                                                 {formatPrice(
                                                   groupBy === 'vendor' ? 
-                                                    order.items.filter(item => getVendorFromSku(item.sku) === groupKey).reduce((sum, i) => sum + (i.priceAtOrder * i.quantity), 0) :
+                                                    order.items.filter(item => (item.vendor || getVendorFromSku(item.sku)) === groupKey).reduce((sum, i) => sum + (i.priceAtOrder * i.quantity), 0) :
                                                   groupBy === 'sku' ?
                                                     order.items.filter(item => item.sku === groupKey.split(']')[0].substring(1)).reduce((sum, i) => sum + (i.priceAtOrder * i.quantity), 0) :
                                                     order.totalAmount
@@ -603,7 +608,7 @@ export default function AdminOrdersPage() {
                                       <h4 className="font-semibold mb-2 text-sm text-muted-foreground uppercase tracking-wider">Item Pesanan:</h4>
                                        <div className="space-y-2 pt-2">
                                           {(groupBy === 'vendor' ? 
-                                              order.items.filter(item => getVendorFromSku(item.sku) === groupKey) :
+                                              order.items.filter(item => (item.vendor || getVendorFromSku(item.sku)) === groupKey) :
                                             groupBy === 'sku' ?
                                               order.items.filter(item => item.sku === groupKey.split(']')[0].substring(1)) :
                                               order.items

@@ -240,6 +240,7 @@ export default function OrderForm({ cartItems, total, deliveryFee, setSheetOpen 
               priceAtOrder: item.product.price,
               name: item.product.name,
               sku: item.product.sku,
+              vendor: item.product.vendor,
           });
 
           const menuItemRef = doc(firestore, 'menuItems', item.product.id);
