@@ -1,11 +1,10 @@
-
 'use client';
 
 import { useUser, useFirestore, useCollection, useMemoFirebase, errorEmitter, FirestorePermissionError } from '@/firebase';
 import { collection, query, orderBy, writeBatch, doc, getDocs } from 'firebase/firestore';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Loader2, ShoppingBag, Trash2, Clock, CheckCircle2 } from 'lucide-react';
+import { Loader2, ShoppingBag, Trash2, Clock, CheckCircle2, Printer } from 'lucide-react';
 import Link from 'next/link';
 import { formatPrice } from '@/lib/utils';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
@@ -24,6 +23,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { useToast } from '@/hooks/use-toast';
+import jsPDF from 'jspdf';
 
 interface StatusLog {
     status: string;
@@ -38,6 +38,7 @@ interface Order {
     status: string;
     statusHistory?: StatusLog[];
     deliveryAddress: string;
+    paymentMethod?: string;
     items?: OrderItem[];
 }
 
@@ -81,6 +82,7 @@ export default function OrdersPage() {
     const { toast } = useToast();
     const [orderToDelete, setOrderToDelete] = useState<Order | null>(null);
     const [isDeleting, setIsDeleting] = useState(false);
+    const [isPrinting, setIsPrinting] = useState<string | null>(null);
 
     const ordersQuery = useMemoFirebase(() => {
         if (!user || !firestore) return null;
@@ -91,6 +93,107 @@ export default function OrdersPage() {
     }, [user, firestore]);
 
     const { data: orders, isLoading: areOrdersLoading } = useCollection<Order>(ordersQuery);
+
+    const loadImage = (url: string): Promise<HTMLImageElement> => {
+        return new Promise((resolve, reject) => {
+            const img = new Image();
+            img.crossOrigin = 'anonymous';
+            img.onload = () => resolve(img);
+            img.onerror = reject;
+            img.src = url;
+        });
+    };
+
+    const handlePrintReceipt = async (order: Order) => {
+        if (!firestore || !user) return;
+        
+        setIsPrinting(order.id);
+        
+        try {
+            // Fetch items first from the specific sub-collection path
+            const itemsQuery = query(collection(firestore, 'customers', user.uid, 'orders', order.id, 'orderItems'));
+            const itemsSnap = await getDocs(itemsQuery);
+            const items = itemsSnap.docs.map(d => d.data() as OrderItem);
+
+            const doc = new jsPDF({
+                orientation: 'portrait',
+                unit: 'mm',
+                format: [80, 250]
+            });
+
+            const centerPos = 40;
+            let y = 10;
+
+            try {
+                const qrisImg = await loadImage('/qris.jpeg');
+                doc.addImage(qrisImg, 'JPEG', 25, y, 30, 45);
+                y += 50;
+            } catch (e) {
+                console.warn("Failed to load QRIS image for receipt", e);
+            }
+
+            doc.setFontSize(12);
+            doc.text("TAKJILKU", centerPos, y, { align: 'center' });
+            y += 4;
+            doc.setFontSize(8);
+            doc.text("Ramadhan UMKM RW06", centerPos, y, { align: 'center' });
+            y += 6;
+            doc.text("-".repeat(40), centerPos, y, { align: 'center' });
+            y += 6;
+            
+            doc.text(`ID: #${order.id}`, 5, y);
+            y += 4;
+            doc.text(`Tgl: ${format(new Date(order.orderDateTime), 'dd/MM/yyyy HH:mm')}`, 5, y);
+            y += 4;
+            doc.text(`Bayar: ${order.paymentMethod || 'QRIS/COD'}`, 5, y);
+            y += 4;
+            doc.text("-".repeat(40), centerPos, y, { align: 'center' });
+            y += 6;
+            
+            items.forEach((item) => {
+                doc.text(`${item.name}`, 5, y);
+                doc.text(`${item.quantity} x ${formatPrice(item.priceAtOrder)}`, 5, y + 4);
+                doc.text(`${formatPrice(item.priceAtOrder * item.quantity)}`, 75, y + 4, { align: 'right' });
+                y += 10;
+            });
+            
+            doc.text("-".repeat(40), centerPos, y, { align: 'center' });
+            y += 6;
+            doc.text("Ongkir (Delivery):", 5, y);
+            doc.text(`${formatPrice(2500)}`, 75, y, { align: 'right' });
+            y += 6;
+            
+            doc.setFontSize(10);
+            doc.text("TOTAL:", 5, y);
+            doc.text(`${formatPrice(order.totalAmount)}`, 75, y, { align: 'right' });
+            
+            y += 10;
+            doc.setFontSize(8);
+            doc.text("Alamat Pengiriman:", 5, y);
+            const splitAddress = doc.splitTextToSize(order.deliveryAddress, 70);
+            doc.text(splitAddress, 5, y + 4);
+            
+            y += (splitAddress.length * 4) + 10;
+            doc.text("Terima Kasih Telah Memesan!", centerPos, y, { align: 'center' });
+            doc.text("Semoga Berkah", centerPos, y + 4, { align: 'center' });
+
+            doc.save(`struk_takjilku_${order.id}.pdf`);
+            
+            toast({
+                title: "Struk Berhasil Diunduh",
+                description: "Silakan cek folder download Anda.",
+            });
+        } catch (error) {
+            console.error("Print receipt error:", error);
+            toast({
+                variant: "destructive",
+                title: "Gagal Mencetak Struk",
+                description: "Terjadi kesalahan saat memproses PDF.",
+            });
+        } finally {
+            setIsPrinting(null);
+        }
+    };
 
     const handleDeleteOrder = async () => {
         if (!orderToDelete || !user || !firestore) return;
@@ -264,7 +367,20 @@ export default function OrdersPage() {
                                                 <h4 className="font-semibold mb-2 text-sm">Alamat Pengiriman:</h4>
                                                 <p className="text-sm text-muted-foreground">{order.deliveryAddress}</p>
                                             </div>
-                                            <div className="border-t pt-4 flex justify-end">
+                                            <div className="border-t pt-4 flex justify-end gap-2">
+                                                <Button 
+                                                    variant="outline" 
+                                                    size="sm" 
+                                                    onClick={() => handlePrintReceipt(order)}
+                                                    disabled={isPrinting === order.id}
+                                                >
+                                                    {isPrinting === order.id ? (
+                                                        <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                                                    ) : (
+                                                        <Printer className="h-4 w-4 mr-2" />
+                                                    )}
+                                                    Cetak Struk
+                                                </Button>
                                                 <Button variant="destructive" size="sm" onClick={() => setOrderToDelete(order)}>
                                                     <Trash2 className="h-4 w-4 mr-2" />
                                                     Hapus Pesanan
