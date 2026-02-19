@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useEffect, useState, useMemo } from 'react';
@@ -7,7 +6,7 @@ import { collectionGroup, getDocs, query, writeBatch, doc, updateDoc, arrayUnion
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Loader2, FileDown, CalendarIcon, Trash2, FileText, Mail, Search, Clock, CheckCircle2, Printer, LayoutGrid, Store } from 'lucide-react';
-import { formatPrice } from '@/lib/utils';
+import { formatPrice, getVendorFromSku } from '@/lib/utils';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import * as XLSX from 'xlsx';
 import { saveAs } from 'file-saver';
@@ -64,13 +63,6 @@ interface Order {
   deliveryAddress: string;
   items: OrderItem[];
 }
-
-const getVendorFromSku = (sku: string) => {
-  if (!sku) return 'UNKNOWN';
-  if (sku.includes('-')) return sku.split('-')[0];
-  const match = sku.match(/^[a-zA-Z]+/);
-  return match ? match[0] : sku;
-};
 
 const STATUS_FLOWS = {
   QRIS: ["Dipesan", "Dibayar", "Diproses", "Dikumpulkan", "Dikirim", "Dibatalkan"],
@@ -198,7 +190,6 @@ export default function AdminOrdersPage() {
     const now = new Date().toISOString();
     const orderRef = doc(firestore, 'customers', order.customerId, 'orders', order.id);
     
-    const currentVendorStatus = order.vendorStatuses?.[vendorCode] || { status: 'Dipesan', statusHistory: [] };
     const updateData = {
       [`vendorStatuses.${vendorCode}.status`]: newStatus,
       [`vendorStatuses.${vendorCode}.statusHistory`]: arrayUnion({ status: newStatus, timestamp: now })
@@ -408,8 +399,9 @@ export default function AdminOrdersPage() {
     y += 6;
     
     if (!vendorCode) {
-      docPdf.text("Ongkir (Delivery):", 5, y);
-      docPdf.text(`${formatPrice(order.deliveryFee || 2500)}`, 75, y, { align: 'right' });
+      const vCount = Object.keys(groupItemsByVendor(order.items)).length;
+      docPdf.text(`Ongkir (${vCount} Mitra):`, 5, y);
+      docPdf.text(`${formatPrice(order.deliveryFee || (vCount * 2500))}`, 75, y, { align: 'right' });
       y += 6;
     }
     
@@ -652,8 +644,10 @@ export default function AdminOrdersPage() {
                                           {groupBy === 'orderId' && (
                                             <div className="space-y-1 px-3">
                                               <div className="flex justify-between text-sm pt-2 border-t border-dashed">
-                                                <span className="text-muted-foreground italic">Ongkir (Delivery)</span>
-                                                <span className="text-muted-foreground">{formatPrice(order.deliveryFee || 2500)}</span>
+                                                <span className="text-muted-foreground italic">
+                                                  Ongkir ({Object.keys(groupItemsByVendor(order.items)).length} Mitra)
+                                                </span>
+                                                <span className="text-muted-foreground">{formatPrice(order.deliveryFee || (Object.keys(groupItemsByVendor(order.items)).length * 2500))}</span>
                                               </div>
                                               <div className="flex justify-between text-sm font-bold pt-1">
                                                 <span>Total Bayar</span>

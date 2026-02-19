@@ -1,13 +1,12 @@
-
 'use client';
 
 import { useUser, useFirestore, useCollection, useMemoFirebase, errorEmitter, FirestorePermissionError } from '@/firebase';
 import { collection, query, orderBy, writeBatch, doc, getDocs } from 'firebase/firestore';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Loader2, ShoppingBag, Trash2, Clock, CheckCircle2, Printer } from 'lucide-react';
+import { Loader2, ShoppingBag, Trash2, Clock, CheckCircle2, Printer, Store } from 'lucide-react';
 import Link from 'next/link';
-import { formatPrice } from '@/lib/utils';
+import { formatPrice, getVendorFromSku } from '@/lib/utils';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { useState } from 'react';
 import { Badge } from '@/components/ui/badge';
@@ -39,6 +38,7 @@ interface Order {
     paymentMethod: 'QRIS' | 'COD';
     vendorStatuses: Record<string, { status: string; statusHistory: StatusLog[] }>;
     deliveryAddress: string;
+    deliveryFee?: number;
     items?: OrderItem[];
 }
 
@@ -50,13 +50,6 @@ interface OrderItem {
     sku: string;
     vendor: string;
 }
-
-const getVendorFromSku = (sku: string) => {
-  if (!sku) return 'UNKNOWN';
-  if (sku.includes('-')) return sku.split('-')[0];
-  const match = sku.match(/^[a-zA-Z]+/);
-  return match ? match[0] : sku;
-};
 
 const getStatusBadgeColor = (status: string) => {
     switch (status) {
@@ -236,12 +229,13 @@ export default function OrdersPage() {
             
             docPdf.text("-".repeat(40), centerPos, y, { align: 'center' });
             y += 6;
-            docPdf.text("Ongkir (Delivery):", 5, y);
-            docPdf.text(`${formatPrice(2500)}`, 75, y, { align: 'right' });
+            const vCount = Object.keys(grouped).length;
+            docPdf.text(`Ongkir (${vCount} Mitra):`, 5, y);
+            docPdf.text(`${formatPrice(order.deliveryFee || (vCount * 2500))}`, 75, y, { align: 'right' });
             y += 6;
             
             docPdf.setFontSize(10);
-            docPdf.text("TOTAL:", 5, y);
+            docPdf.text("TOTAL BAYAR:", 5, y);
             docPdf.text(`${formatPrice(order.totalAmount)}`, 75, y, { align: 'right' });
             
             y += 10;
@@ -393,6 +387,27 @@ export default function OrdersPage() {
                                                 </h4>
                                                 <OrderItemDetails customerId={user.uid} orderId={order.id} vendorStatuses={order.vendorStatuses} />
                                             </div>
+                                            
+                                            <div className="border-t pt-4">
+                                                <h4 className="font-semibold mb-2 text-sm">Rincian Biaya:</h4>
+                                                <div className="space-y-1 bg-muted/5 p-3 rounded-lg border">
+                                                    <div className="flex justify-between text-sm">
+                                                        <span className="text-muted-foreground">Subtotal Produk</span>
+                                                        <span>{formatPrice(order.totalAmount - (order.deliveryFee || 2500))}</span>
+                                                    </div>
+                                                    <div className="flex justify-between text-sm">
+                                                        <span className="text-muted-foreground italic">
+                                                          Ongkos Antar ({Object.keys(order.vendorStatuses || {}).length} Mitra)
+                                                        </span>
+                                                        <span>{formatPrice(order.deliveryFee || 2500)}</span>
+                                                    </div>
+                                                    <div className="flex justify-between font-bold border-t border-dashed pt-1 mt-1">
+                                                        <span>Total Bayar</span>
+                                                        <span className="text-primary">{formatPrice(order.totalAmount)}</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+
                                             <div className="border-t pt-4">
                                                 <h4 className="font-semibold mb-2 text-sm">Alamat Pengiriman:</h4>
                                                 <p className="text-sm text-muted-foreground italic">{order.deliveryAddress}</p>

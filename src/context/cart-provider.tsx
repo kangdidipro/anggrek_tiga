@@ -1,7 +1,9 @@
 'use client';
 
 import type { CartItem, Product } from '@/lib/types';
-import React, { createContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useState, useEffect, useCallback, useMemo } from 'react';
+import { getVendorFromSku } from '@/lib/utils';
+import { deliveryFee } from '@/lib/constants';
 
 interface CartContextType {
   cartItems: CartItem[];
@@ -11,6 +13,7 @@ interface CartContextType {
   getItemQuantity: (productId: string) => number;
   totalItems: number;
   cartTotal: number;
+  deliveryFeeTotal: number;
 }
 
 export const CartContext = createContext<CartContextType | undefined>(undefined);
@@ -72,6 +75,16 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
 
   const totalItems = cartItems.reduce((total, item) => total + item.quantity, 0);
   const cartTotal = cartItems.reduce((total, item) => total + item.product.price * item.quantity, 0);
+  
+  /**
+   * Hitung total ongkir berdasarkan jumlah mitra unik.
+   * Setiap mitra dalam satu order dikenakan biaya pengantaran tersendiri.
+   */
+  const deliveryFeeTotal = useMemo(() => {
+    if (cartItems.length === 0) return 0;
+    const uniqueVendors = new Set(cartItems.map(item => item.product.vendor || getVendorFromSku(item.product.sku)));
+    return uniqueVendors.size * deliveryFee;
+  }, [cartItems]);
 
   const value = {
     cartItems,
@@ -81,6 +94,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     getItemQuantity,
     totalItems,
     cartTotal,
+    deliveryFeeTotal,
   };
 
   return <CartContext.Provider value={value}>{children}</CartContext.Provider>;

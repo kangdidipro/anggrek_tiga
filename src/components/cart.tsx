@@ -4,18 +4,17 @@ import { ShoppingCart, Trash2, Info, Calendar } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger, SheetFooter } from '@/components/ui/sheet';
 import { useCart } from '@/hooks/use-cart';
-import { formatPrice } from '@/lib/utils';
+import { formatPrice, getVendorFromSku } from '@/lib/utils';
 import OrderForm from './order-form';
 import { Separator } from './ui/separator';
 import { ScrollArea } from './ui/scroll-area';
-import { deliveryFee } from '@/lib/constants';
 import { useState, useEffect } from 'react';
 import { Alert, AlertDescription, AlertTitle } from './ui/alert';
 import { format, addDays } from 'date-fns';
 import { id } from 'date-fns/locale';
 
 export default function Cart() {
-  const { cartItems, totalItems, cartTotal, clearCart } = useCart();
+  const { cartItems, totalItems, cartTotal, clearCart, deliveryFeeTotal } = useCart();
   const [open, setOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [deliveryDate, setDeliveryDate] = useState<Date>(new Date());
@@ -24,21 +23,18 @@ export default function Cart() {
     setMounted(true);
     const now = new Date();
     
-    // Get current hour in Jakarta (UTC+7)
     const jakartaHour = parseInt(new Intl.DateTimeFormat('en-GB', {
       hour: 'numeric',
       hour12: false,
       timeZone: 'Asia/Jakarta'
     }).format(now));
     
-    // Logic: Cutoff 4 PM (16:00) Jakarta time.
-    // Before 4 PM -> Delivery Tomorrow (H+1)
-    // After 4 PM -> Considered next day order, Delivery Day After Tomorrow (H+2 from now)
     const daysToAdd = jakartaHour >= 16 ? 2 : 1;
     setDeliveryDate(addDays(now, daysToAdd));
   }, []);
 
-  const finalTotal = cartTotal + deliveryFee;
+  const uniqueVendorsCount = new Set(cartItems.map(item => item.product.vendor || getVendorFromSku(item.product.sku))).size;
+  const finalTotal = cartTotal + deliveryFeeTotal;
 
   return (
     <Sheet open={open} onOpenChange={setOpen}>
@@ -78,16 +74,19 @@ export default function Cart() {
               
                 <div className="space-y-2 text-sm">
                     <div className="flex justify-between">
-                        <span>Subtotal</span>
+                        <span>Subtotal Produk</span>
                         <span>{formatPrice(cartTotal)}</span>
                     </div>
                     <div className="flex justify-between">
-                        <span>Ongkos Antar</span>
-                        <span>{formatPrice(deliveryFee)}</span>
+                        <span className="flex flex-col">
+                          <span>Ongkos Antar</span>
+                          <span className="text-[10px] text-muted-foreground italic">({uniqueVendorsCount} Mitra x Rp 2.500)</span>
+                        </span>
+                        <span>{formatPrice(deliveryFeeTotal)}</span>
                     </div>
                     <Separator />
                     <div className="flex justify-between font-bold text-base">
-                        <span>Total</span>
+                        <span>Total Bayar</span>
                         <span>{formatPrice(finalTotal)}</span>
                     </div>
                 </div>
@@ -108,7 +107,7 @@ export default function Cart() {
                   </AlertDescription>
                 </Alert>
 
-                <OrderForm cartItems={cartItems} total={finalTotal} deliveryFee={deliveryFee} setSheetOpen={setOpen} />
+                <OrderForm cartItems={cartItems} total={finalTotal} deliveryFee={deliveryFeeTotal} setSheetOpen={setOpen} />
               </div>
             </ScrollArea>
           </>

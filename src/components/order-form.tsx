@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useForm } from 'react-hook-form';
@@ -18,7 +17,7 @@ import { useUser, useFirestore, errorEmitter, FirestorePermissionError } from '@
 import { collection, writeBatch, doc, increment, getDoc, query, collectionGroup, getDocs, where } from 'firebase/firestore';
 import { useRouter } from 'next/navigation';
 import jsPDF from 'jspdf';
-import { formatPrice } from '@/lib/utils';
+import { formatPrice, getVendorFromSku } from '@/lib/utils';
 import { format, addDays } from 'date-fns';
 import { id } from 'date-fns/locale';
 import { sendSmtpEmail, type SmtpConfig } from '@/app/actions';
@@ -36,13 +35,6 @@ type OrderFormProps = {
     total: number;
     deliveryFee: number;
     setSheetOpen: (open: boolean) => void;
-};
-
-const getVendorFromSku = (sku: string) => {
-  if (!sku) return 'UNKNOWN';
-  if (sku.includes('-')) return sku.split('-')[0];
-  const match = sku.match(/^[a-zA-Z]+/);
-  return match ? match[0] : sku;
 };
 
 export default function OrderForm({ cartItems, total, deliveryFee, setSheetOpen }: OrderFormProps) {
@@ -165,12 +157,13 @@ export default function OrderForm({ cartItems, total, deliveryFee, setSheetOpen 
       
       pdf.text("-".repeat(40), centerPos, y, { align: 'center' });
       y += 6;
-      pdf.text("Ongkir (Delivery):", 5, y);
+      const uniqueVendorsInOrder = Object.keys(grouped).length;
+      pdf.text(`Ongkir (${uniqueVendorsInOrder} Mitra):`, 5, y);
       pdf.text(`${formatPrice(deliveryFee)}`, 75, y, { align: 'right' });
       y += 6;
       
       pdf.setFontSize(10);
-      pdf.text("TOTAL:", 5, y);
+      pdf.text("TOTAL BAYAR:", 5, y);
       pdf.text(`${formatPrice(total)}`, 75, y, { align: 'right' });
       
       const pdfBase64 = pdf.output('datauristring');
@@ -250,7 +243,6 @@ export default function OrderForm({ cartItems, total, deliveryFee, setSheetOpen 
       const timestamp = now.toISOString();
       const finalDeliveryDate = addDays(now, isAfterCutoff ? 2 : 1).toISOString();
 
-      // Determine involved vendors
       const uniqueVendors = Array.from(new Set(cartItems.map(item => item.product.vendor || getVendorFromSku(item.product.sku))));
       const vendorStatuses: Record<string, any> = {};
       uniqueVendors.forEach(v => {

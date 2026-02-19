@@ -6,7 +6,7 @@ import { collectionGroup, getDocs, query, collection } from 'firebase/firestore'
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Loader2, FileDown, CalendarIcon, FileText, Mail, Search, LayoutGrid, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
-import { formatPrice } from '@/lib/utils';
+import { formatPrice, getVendorFromSku } from '@/lib/utils';
 import * as XLSX from 'xlsx';
 import { saveAs } from 'file-saver';
 import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -41,12 +41,6 @@ interface Order {
   items: OrderItem[];
 }
 
-const getVendorFromSku = (sku: string) => {
-  if (!sku) return 'UNKNOWN';
-  const match = sku.match(/^[a-zA-Z]+/);
-  return match ? match[0] : sku;
-};
-
 type SummaryItem = {
     key: string;
     label: string;
@@ -55,7 +49,7 @@ type SummaryItem = {
     totalAmount: number; // Item Sales only
     adminFee: number;    // 5% of totalAmount
     netToVendor: number; // totalAmount - adminFee
-    totalDeliveryFee: number; // Only for orderId grouping
+    totalDeliveryFee: number; // Ongkir based on filter/group
     items: { name: string, quantity: number, sku: string, price: number, vendor: string }[];
     addresses: string[];
 }
@@ -136,20 +130,32 @@ export default function AdminSummaryPage() {
     const summaryMap: Record<string, { 
       label: string;
       subLabel?: string;
-      totalOrders: Set<string>; 
+      orderIds: Set<string>; 
       totalAmount: number; 
       totalDeliveryFee: number;
       items: Record<string, { name: string, quantity: number, sku: string, price: number, vendor: string }>;
       addresses: Set<string>;
+      vendorsInGroup: Set<string>; // TRACK VENDOR-ORDER UNIK
     }> = {};
 
     targetDateOrders.forEach(order => {
+        // Filter item berdasarkan mitra dan search term
         const uniqueItemsForThisOrder = order.items.filter(item => {
             const vendor = item.vendor || getVendorFromSku(item.sku);
-            return vendorFilter === 'all' || vendor === vendorFilter;
+            const matchesVendor = vendorFilter === 'all' || vendor === vendorFilter;
+            
+            const search = searchTerm.toLowerCase();
+            const matchesSearch = searchTerm === '' || 
+                order.id.toLowerCase().includes(search) ||
+                order.deliveryAddress.toLowerCase().includes(search) ||
+                item.name.toLowerCase().includes(search);
+
+            return matchesVendor && matchesSearch;
         });
 
         if (uniqueItemsForThisOrder.length === 0) return;
+
+        const orderVendorsSeenInRow = new Set<string>();
 
         uniqueItemsForThisOrder.forEach(item => {
             const vendor = item.vendor || getVendorFromSku(item.sku);
@@ -175,15 +181,16 @@ export default function AdminSummaryPage() {
                 summaryMap[key] = { 
                     label, 
                     subLabel, 
-                    totalOrders: new Set(), 
+                    orderIds: new Set(), 
                     totalAmount: 0, 
                     totalDeliveryFee: 0,
                     items: {}, 
-                    addresses: new Set() 
+                    addresses: new Set(),
+                    vendorsInGroup: new Set()
                 };
             }
             
-            summaryMap[key].totalOrders.add(order.id);
+            summaryMap[key].orderIds.add(order.id);
             if (order.deliveryAddress) {
               summaryMap[key].addresses.add(order.deliveryAddress);
             }
@@ -191,8 +198,14 @@ export default function AdminSummaryPage() {
             const itemTotal = item.quantity * item.priceAtOrder;
             summaryMap[key].totalAmount += itemTotal;
             
-            if (groupBy === 'orderId') {
-                summaryMap[key].totalDeliveryFee = order.deliveryFee || 2500;
+            // Logic Ongkir: Setiap vendor unik di dalam satu order row (berdasarkan filter) menambah 2500
+            const vendorOrderKey = `${order.id}-${vendor}`;
+            if (!orderVendorsSeenInRow.has(vendorOrderKey)) {
+                orderVendorsSeenInRow.add(vendorOrderKey);
+                
+                if (groupBy === 'orderId' || groupBy === 'vendor') {
+                    summaryMap[key].totalDeliveryFee += 2500;
+                }
             }
 
             const itemKey = item.sku;
@@ -209,7 +222,7 @@ export default function AdminSummaryPage() {
             key,
             label: data.label,
             subLabel: data.subLabel,
-            totalOrders: data.totalOrders.size,
+            totalOrders: data.orderIds.size,
             totalAmount: data.totalAmount,
             adminFee: adminFee,
             netToVendor: data.totalAmount - adminFee,
@@ -218,19 +231,10 @@ export default function AdminSummaryPage() {
             addresses: Array.from(data.addresses)
         };
     });
-  }, [orders, date, groupBy, vendorLookup, vendorFilter]);
+  }, [orders, date, groupBy, vendorLookup, vendorFilter, searchTerm]);
 
   const filteredSummary = useMemo(() => {
     let result = summaryData;
-    if (searchTerm.trim() !== '') {
-        const lowerSearch = searchTerm.toLowerCase();
-        result = result.filter(s => {
-            return s.label.toLowerCase().includes(lowerSearch) ||
-                   s.items.some(item => item.name.toLowerCase().includes(lowerSearch)) ||
-                   s.addresses.some(addr => addr.toLowerCase().includes(lowerSearch));
-        });
-    }
-
     if (sortConfig.key) {
       result.sort((a, b) => {
         const valA = a[sortConfig.key!] ?? '';
@@ -241,38 +245,18 @@ export default function AdminSummaryPage() {
         return 0;
       });
     }
-
     return result;
-  }, [summaryData, searchTerm, sortConfig]);
-
-  const trueGrandTotalOngkir = useMemo(() => {
-    if (!date) return 0;
-    const targetDateOrders = orders.filter(order => new Date(order.orderDateTime).toDateString() === date.toDateString());
-    const involvedOrders = targetDateOrders.filter(order => {
-        return order.items.some(item => {
-            const vendor = item.vendor || getVendorFromSku(item.sku);
-            const matchesVendor = vendorFilter === 'all' || vendor === vendorFilter;
-            const search = searchTerm.toLowerCase();
-            const matchesSearch = searchTerm === '' || 
-                order.id.toLowerCase().includes(search) ||
-                order.deliveryAddress.toLowerCase().includes(search) ||
-                item.name.toLowerCase().includes(search);
-            return matchesVendor && matchesSearch;
-        });
-    });
-    return involvedOrders.reduce((sum, o) => sum + (o.deliveryFee || 2500), 0);
-  }, [orders, date, vendorFilter, searchTerm]);
+  }, [summaryData, sortConfig]);
 
   const grandTotals = useMemo(() => {
-    const totals = filteredSummary.reduce((acc, curr) => ({
+    return filteredSummary.reduce((acc, curr) => ({
       orders: acc.orders + curr.totalOrders,
       amount: acc.amount + curr.totalAmount,
       admin: acc.admin + curr.adminFee,
       net: acc.net + curr.netToVendor,
-    }), { orders: 0, amount: 0, admin: 0, net: 0 });
-    
-    return { ...totals, ongkir: trueGrandTotalOngkir };
-  }, [filteredSummary, trueGrandTotalOngkir]);
+      ongkir: acc.ongkir + curr.totalDeliveryFee
+    }), { orders: 0, amount: 0, admin: 0, net: 0, ongkir: 0 });
+  }, [filteredSummary]);
 
   const availableVendors = useMemo(() => {
     const vendors = new Set<string>();
@@ -546,15 +530,13 @@ export default function AdminSummaryPage() {
                                                     const netMitra = subtotalMitra * 0.95;
                                                     return (
                                                         <div key={vCode} className="space-y-1 bg-muted/20 p-2 rounded-sm border">
-                                                            {groupBy !== 'vendor' && (
-                                                                <div className="flex justify-between items-center bg-primary/10 px-2 py-1 rounded-sm border border-primary/20 mb-1">
-                                                                    <span className="text-[10px] font-bold text-primary uppercase">Mitra: {vCode}</span>
-                                                                    <div className="flex gap-2 text-[10px]">
-                                                                        <span className="text-muted-foreground">Bruto: {formatPrice(subtotalMitra)}</span>
-                                                                        <span className="font-bold text-green-700">Bayar: {formatPrice(netMitra)}</span>
-                                                                    </div>
+                                                            <div className="flex justify-between items-center bg-primary/10 px-2 py-1 rounded-sm border border-primary/20 mb-1">
+                                                                <span className="text-[10px] font-bold text-primary uppercase">Mitra: {vCode}</span>
+                                                                <div className="flex gap-2 text-[10px]">
+                                                                    <span className="text-muted-foreground">Bruto: {formatPrice(subtotalMitra)}</span>
+                                                                    <span className="font-bold text-green-700">Bayar: {formatPrice(netMitra)}</span>
                                                                 </div>
-                                                            )}
+                                                            </div>
                                                             <ul className="text-xs space-y-1 pl-1">
                                                                 {vItems.map((item, idx) => (
                                                                     <li key={idx} className="flex justify-between gap-4 border-b border-muted last:border-0 pb-1">
