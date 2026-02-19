@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useEffect, useState, useMemo } from 'react';
@@ -155,7 +154,7 @@ export default function MitraOrderPage() {
 
         toast({
           title: "Status Diperbarui",
-          description: `Pesanan #${order.id} sekarang: ${newStatus}`,
+          description: `Pesanan #${order.id}-${code} sekarang: ${newStatus}`,
         });
       })
       .catch(async (error) => {
@@ -211,15 +210,16 @@ export default function MitraOrderPage() {
     docPdf.text("Ramadhan UMKM RW06", centerPos, y, { align: 'center' });
     y += 4;
     
-    docPdf.setFontSize(10);
+    docPdf.setFontSize(9);
     docPdf.text(`SLIP MITRA: ${code}`, centerPos, y, { align: 'center' });
     y += 4;
     docPdf.setFontSize(8);
+    docPdf.text(`ID SUB-ORDER: ${order.id}-${code}`, centerPos, y, { align: 'center' });
+    y += 4;
     
     docPdf.text("-".repeat(40), centerPos, y + 4, { align: 'center' });
     y += 10;
     
-    docPdf.text(`ID: #${order.id}`, 5, y);
     docPdf.text(`Tgl: ${format(new Date(order.orderDateTime), 'dd/MM/yyyy HH:mm')}`, 5, y + 4);
     docPdf.text(`Bayar: ${order.paymentMethod}`, 5, y + 8);
     docPdf.text("-".repeat(40), centerPos, y + 12, { align: 'center' });
@@ -257,7 +257,7 @@ export default function MitraOrderPage() {
     docPdf.text("Terima Kasih!", centerPos, y, { align: 'center' });
     docPdf.text("Semoga Berkah", centerPos, y + 4, { align: 'center' });
     
-    docPdf.save(`slip_mitra_${code}_${order.id}.pdf`);
+    docPdf.save(`slip_${order.id}_${code}.pdf`);
     
     toast({
       title: "Slip Mitra Berhasil Dibuat",
@@ -365,7 +365,7 @@ export default function MitraOrderPage() {
                       <div className="flex justify-between items-center w-full">
                         <div className="text-left">
                           <CardTitle className="text-base md:text-lg">
-                            Order #{order.id}
+                            Order #{order.id}-{code}
                           </CardTitle>
                           <CardDescription className="text-xs md:text-sm">
                             {format(new Date(order.orderDateTime), 'HH:mm')} WIB | {order.paymentMethod}

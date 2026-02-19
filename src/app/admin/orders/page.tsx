@@ -268,6 +268,7 @@ export default function AdminOrdersPage() {
         order.items.map(item => ({
             'Tanggal Order': format(new Date(order.orderDateTime), 'yyyy-MM-dd HH:mm'),
             'Order ID': order.id,
+            'Sub-Order ID': `${order.id}-${item.vendor}`,
             'Mitra': item.vendor,
             'Nama Item': item.name,
             'Jumlah': item.quantity,
@@ -289,11 +290,11 @@ export default function AdminOrdersPage() {
 
   const exportToPDF = () => {
     const doc = new jsPDF();
-    const tableColumn = ["Tanggal", "ID", "Mitra", "Item", "Qty", "Total", "Status"];
+    const tableColumn = ["Tanggal", "ID Sub-Order", "Mitra", "Item", "Qty", "Total", "Status"];
     const tableRows = filteredOrders.flatMap(order => 
         order.items.map(item => [
             format(new Date(order.orderDateTime), 'dd/MM HH:mm'),
-            order.id,
+            `${order.id}-${item.vendor}`,
             item.vendor,
             item.name,
             item.quantity.toString(),
@@ -309,7 +310,7 @@ export default function AdminOrdersPage() {
         startY: 20,
         theme: 'striped',
         headStyles: { fillColor: [255, 140, 0] },
-        styles: { fontSize: 8 }
+        styles: { fontSize: 7 }
     });
     doc.save(`orders_${date ? format(date, 'yyyy-MM-dd') : 'all'}.pdf`);
   };
@@ -348,7 +349,6 @@ export default function AdminOrdersPage() {
     
     const subtotal = itemsToPrint.reduce((sum, item) => sum + (item.priceAtOrder * item.quantity), 0);
     
-    // Logic Ongkir for PDF: numVendors * 2500
     const vCount = Object.keys(groupItemsByVendor(order.items)).length;
     const calculatedDeliveryFee = vCount * 2500;
     const totalToPrint = vendorCode ? subtotal : (subtotal + calculatedDeliveryFee);
@@ -361,16 +361,21 @@ export default function AdminOrdersPage() {
     y += 4;
     
     if (vendorCode) {
-      docPdf.setFontSize(10);
+      docPdf.setFontSize(9);
       docPdf.text(`SLIP MITRA: ${vendorCode}`, centerPos, y, { align: 'center' });
       y += 4;
       docPdf.setFontSize(8);
+      docPdf.text(`ID SUB-ORDER: ${order.id}-${vendorCode}`, centerPos, y, { align: 'center' });
+      y += 4;
     }
     
     docPdf.text("-".repeat(40), centerPos, y + 4, { align: 'center' });
     y += 10;
     
-    docPdf.text(`ID: #${order.id}`, 5, y);
+    if (!vendorCode) {
+      docPdf.text(`ORDER ID: #${order.id}`, 5, y);
+      y += 4;
+    }
     docPdf.text(`Tgl: ${format(new Date(order.orderDateTime), 'dd/MM/yyyy HH:mm')}`, 5, y + 4);
     docPdf.text(`Bayar: ${order.paymentMethod}`, 5, y + 8);
     docPdf.text("-".repeat(40), centerPos, y + 12, { align: 'center' });
@@ -387,7 +392,7 @@ export default function AdminOrdersPage() {
       const grouped = groupItemsByVendor(itemsToPrint);
       Object.entries(grouped).forEach(([vCode, vItems]) => {
         docPdf.setFontSize(7);
-        docPdf.text(`MITRA: ${vCode}`, 5, y);
+        docPdf.text(`MITRA: ${vCode} (Sub: ${order.id}-${vCode})`, 5, y);
         y += 4;
         docPdf.setFontSize(8);
         vItems.forEach((item) => {
@@ -423,7 +428,7 @@ export default function AdminOrdersPage() {
     docPdf.text("Terima Kasih Telah Memesan!", centerPos, y, { align: 'center' });
     docPdf.text("Semoga Berkah", centerPos, y + 4, { align: 'center' });
     
-    docPdf.save(`${vendorCode ? 'slip_mitra' : 'struk'}_${order.id}.pdf`);
+    docPdf.save(`${vendorCode ? 'slip_' + order.id + '_' + vendorCode : 'struk_' + order.id}.pdf`);
     
     toast({
       title: vendorCode ? "Slip Mitra Berhasil Dibuat" : "Struk Berhasil Dibuat",
@@ -566,6 +571,7 @@ export default function AdminOrdersPage() {
                                                 order.items.filter(item => item.sku === groupKey.split(']')[0].substring(1)) :
                                                 order.items
                                           )).map(([vendorCode, vendorItems]) => {
+                                              const subOrderId = `${order.id}-${vendorCode}`;
                                               const subtotalMitra = vendorItems.reduce((sum, i) => sum + (i.priceAtOrder * i.quantity), 0);
                                               const vStatus = order.vendorStatuses?.[vendorCode] || { status: 'Dipesan', statusHistory: [] };
                                               const flow = STATUS_FLOWS[order.paymentMethod];
@@ -574,7 +580,7 @@ export default function AdminOrdersPage() {
                                                 <div key={vendorCode} className="space-y-3 p-3 border rounded-lg bg-muted/10">
                                                     <div className="flex justify-between items-center bg-primary/10 px-2 py-1 rounded-sm border border-primary/20">
                                                         <span className="text-xs font-bold text-primary uppercase">
-                                                            Mitra: {vendorCode}
+                                                            ID Sub-Order: {subOrderId}
                                                         </span>
                                                         <div className="flex items-center gap-3">
                                                             <span className="text-xs font-bold text-primary">

@@ -64,7 +64,7 @@ const getStatusBadgeColor = (status: string) => {
     }
 };
 
-function OrderItemDetails({ customerId, orderId, vendorStatuses }: { customerId: string; orderId: string; vendorStatuses: Order['vendorStatuses'] }) {
+function OrderItemDetails({ orderId, customerId, vendorStatuses }: { orderId: string; customerId: string; vendorStatuses: Order['vendorStatuses'] }) {
     const firestore = useFirestore();
     const orderItemsQuery = useMemoFirebase(() => {
         if (!firestore) return null;
@@ -91,6 +91,7 @@ function OrderItemDetails({ customerId, orderId, vendorStatuses }: { customerId:
     return (
         <div className="space-y-6 pt-2">
             {Object.entries(grouped).map(([vendorCode, vendorItems]) => {
+                const subOrderId = `${orderId}-${vendorCode}`;
                 const subtotalMitra = vendorItems.reduce((sum, i) => sum + (i.priceAtOrder * i.quantity), 0);
                 const vStatus = vendorStatuses?.[vendorCode] || { status: 'Dipesan', statusHistory: [] };
                 
@@ -99,7 +100,7 @@ function OrderItemDetails({ customerId, orderId, vendorStatuses }: { customerId:
                         <div className="flex justify-between items-center bg-primary/5 px-2 py-1 rounded-sm border border-primary/10">
                             <div className="flex items-center gap-2">
                                 <span className="text-[10px] font-bold text-primary/70 uppercase tracking-tighter">
-                                    Mitra: {vendorCode}
+                                    ID Sub-Order: {subOrderId}
                                 </span>
                                 <Badge className={`${getStatusBadgeColor(vStatus.status)} text-[10px] h-5 py-0 px-2`}>
                                     {vStatus.status}
@@ -214,7 +215,7 @@ export default function OrdersPage() {
 
             Object.entries(grouped).forEach(([vendorCode, vendorItems]) => {
                 docPdf.setFontSize(7);
-                docPdf.text(`MITRA: ${vendorCode}`, 5, y);
+                docPdf.text(`MITRA: ${vendorCode} (Sub: ${order.id}-${vendorCode})`, 5, y);
                 y += 4;
                 docPdf.setFontSize(8);
                 
@@ -391,7 +392,7 @@ export default function OrdersPage() {
                                                     <h4 className="font-semibold mb-3 text-sm flex items-center gap-2">
                                                         <Store className="h-4 w-4" /> Progres Pengerjaan per Mitra:
                                                     </h4>
-                                                    <OrderItemDetails customerId={user.uid} orderId={order.id} vendorStatuses={order.vendorStatuses} />
+                                                    <OrderItemDetails orderId={order.id} customerId={user.uid} vendorStatuses={order.vendorStatuses} />
                                                 </div>
                                                 
                                                 <div className="border-t pt-4">
