@@ -6,7 +6,7 @@ import { useFirestore, useUser, errorEmitter, FirestorePermissionError } from '@
 import { collectionGroup, getDocs, query, writeBatch, doc, updateDoc, arrayUnion } from 'firebase/firestore';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Loader2, FileDown, CalendarIcon, Trash2, FileText, Mail, Search, Clock, CheckCircle2, Printer } from 'lucide-react';
+import { Loader2, FileDown, CalendarIcon, Trash2, FileText, Mail, Search, Clock, CheckCircle2, Printer, LayoutGrid } from 'lucide-react';
 import { formatPrice } from '@/lib/utils';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import * as XLSX from 'xlsx';
@@ -74,6 +74,7 @@ export default function AdminOrdersPage() {
   const [vendor, setVendor] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [searchTerm, setSearchTerm] = useState('');
+  const [groupBy, setGroupBy] = useState<'orderId' | 'vendor' | 'sku'>('orderId');
   const [orderToDelete, setOrderToDelete] = useState<Order | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isUpdatingStatus, setIsUpdatingStatus] = useState<string | null>(null);
@@ -133,19 +134,30 @@ export default function AdminOrdersPage() {
     });
   }, [orders, date, vendor, statusFilter, searchTerm]);
 
-  const groupedByVendor = useMemo(() => {
+  const groupedData = useMemo(() => {
     const groups: Record<string, Order[]> = {};
+    
     filteredOrders.forEach(order => {
-        const vendorsInOrder = new Set(order.items.map(item => getVendorFromSku(item.sku)));
-        vendorsInOrder.forEach(vendorCode => {
-            if (!groups[vendorCode]) {
-                groups[vendorCode] = [];
-            }
-            groups[vendorCode].push(order);
-        });
+        if (groupBy === 'orderId') {
+            groups[order.id] = [order];
+        } else if (groupBy === 'vendor') {
+            const vendorsInOrder = new Set(order.items.map(item => getVendorFromSku(item.sku)));
+            vendorsInOrder.forEach(vendorCode => {
+                if (!groups[vendorCode]) groups[vendorCode] = [];
+                groups[vendorCode].push(order);
+            });
+        } else if (groupBy === 'sku') {
+            const skusInOrder = new Set(order.items.map(item => item.sku));
+            skusInOrder.forEach(sku => {
+                const itemName = order.items.find(i => i.sku === sku)?.name || sku;
+                const groupKey = `[${sku}] ${itemName}`;
+                if (!groups[groupKey]) groups[groupKey] = [];
+                groups[groupKey].push(order);
+            });
+        }
     });
     return groups;
-  }, [filteredOrders]);
+  }, [filteredOrders, groupBy]);
 
   const handleUpdateStatus = async (order: Order, newStatus: string) => {
     if (!firestore || isUpdatingStatus) return;
@@ -452,6 +464,17 @@ export default function AdminOrdersPage() {
                         {ORDER_STATUSES.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
                     </SelectContent>
                 </Select>
+                <Select value={groupBy} onValueChange={(val: any) => setGroupBy(val)}>
+                    <SelectTrigger className="w-[180px] border-primary/50 bg-primary/5">
+                        <LayoutGrid className="mr-2 h-4 w-4 text-primary" />
+                        <SelectValue placeholder="Group By" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="orderId">No. Order</SelectItem>
+                        <SelectItem value="vendor">Kode Mitra</SelectItem>
+                        <SelectItem value="sku">SKU Produk</SelectItem>
+                    </SelectContent>
+                </Select>
                 <div className="flex flex-wrap gap-2 items-center">
                     <Button variant="outline" size="sm" onClick={exportToExcel} disabled={filteredOrders.length === 0}>
                         <FileDown className="mr-2 h-4 w-4" />
@@ -479,14 +502,18 @@ export default function AdminOrdersPage() {
         </CardContent>
       </Card>
       
-      {Object.keys(groupedByVendor).length === 0 ? (
+      {Object.keys(groupedData).length === 0 ? (
           <p className="text-center text-muted-foreground py-12">Tidak ada order untuk filter yang dipilih.</p>
       ) : (
-        Object.entries(groupedByVendor).map(([vendorCode, vendorOrders]) => (
-            <div key={vendorCode} className="mb-8">
-                <h2 className="text-xl font-bold mb-4 bg-primary/10 p-2 rounded px-4 text-primary">Mitra: {vendorCode}</h2>
+        Object.entries(groupedData).map(([groupKey, groupOrders]) => (
+            <div key={groupKey} className="mb-8">
+                <h2 className="text-xl font-bold mb-4 bg-primary/10 p-2 rounded px-4 text-primary">
+                    {groupBy === 'orderId' ? `Pesanan #${groupKey}` : 
+                     groupBy === 'vendor' ? `Mitra: ${groupKey}` : 
+                     `Produk: ${groupKey}`}
+                </h2>
                 <Accordion type="single" collapsible className="w-full space-y-4">
-                  {vendorOrders.map((order) => (
+                  {groupOrders.map((order) => (
                       <AccordionItem value={order.id} key={order.id} className="border-b-0">
                       <Card className="shadow-sm overflow-hidden">
                           <CardHeader className="p-4">
@@ -502,7 +529,13 @@ export default function AdminOrdersPage() {
                                           </div>
                                           <div className="text-right flex flex-col items-end gap-1">
                                               <p className="font-semibold text-base md:text-lg text-primary">
-                                                {formatPrice(order.items.filter(item => getVendorFromSku(item.sku) === vendorCode).reduce((sum, i) => sum + (i.priceAtOrder * i.quantity), 0))}
+                                                {formatPrice(
+                                                  groupBy === 'vendor' ? 
+                                                    order.items.filter(item => getVendorFromSku(item.sku) === groupKey).reduce((sum, i) => sum + (i.priceAtOrder * i.quantity), 0) :
+                                                  groupBy === 'sku' ?
+                                                    order.items.filter(item => item.sku === groupKey.split(']')[0].substring(1)).reduce((sum, i) => sum + (i.priceAtOrder * i.quantity), 0) :
+                                                    order.totalAmount
+                                                )}
                                               </p>
                                               <span className="text-[10px] text-muted-foreground">Total Order: {formatPrice(order.totalAmount)}</span>
                                               <Badge className={getStatusBadgeColor(order.status)}>
@@ -567,9 +600,14 @@ export default function AdminOrdersPage() {
                                       </div>
 
                                       <div className="border-t pt-4">
-                                      <h4 className="font-semibold mb-2 text-sm text-muted-foreground uppercase tracking-wider">Item Pesanan ({vendorCode}):</h4>
+                                      <h4 className="font-semibold mb-2 text-sm text-muted-foreground uppercase tracking-wider">Item Pesanan:</h4>
                                        <div className="space-y-2 pt-2">
-                                          {order.items.filter(item => getVendorFromSku(item.sku) === vendorCode).map(item => (
+                                          {(groupBy === 'vendor' ? 
+                                              order.items.filter(item => getVendorFromSku(item.sku) === groupKey) :
+                                            groupBy === 'sku' ?
+                                              order.items.filter(item => item.sku === groupKey.split(']')[0].substring(1)) :
+                                              order.items
+                                          ).map(item => (
                                               <div key={item.id} className="flex justify-between text-sm">
                                                   <div>
                                                       <span className="font-medium">{item.name}</span>
@@ -589,19 +627,21 @@ export default function AdminOrdersPage() {
                                             <Button 
                                               variant="outline" 
                                               size="sm" 
-                                              onClick={() => handlePrintReceipt(order, vendorCode)}
+                                              onClick={() => handlePrintReceipt(order, groupBy === 'vendor' ? groupKey : undefined)}
                                             >
                                               <Printer className="h-4 w-4 mr-2" />
-                                              Cetak Slip Mitra
+                                              {groupBy === 'vendor' ? 'Cetak Slip Mitra' : 'Cetak Struk'}
                                             </Button>
-                                            <Button 
-                                              variant="ghost" 
-                                              size="sm" 
-                                              onClick={() => handlePrintReceipt(order)}
-                                              className="text-xs text-muted-foreground"
-                                            >
-                                              Cetak Struk Full
-                                            </Button>
+                                            {groupBy === 'vendor' && (
+                                              <Button 
+                                                variant="ghost" 
+                                                size="sm" 
+                                                onClick={() => handlePrintReceipt(order)}
+                                                className="text-xs text-muted-foreground"
+                                              >
+                                                Cetak Struk Full
+                                              </Button>
+                                            )}
                                           </div>
                                           <Button 
                                               variant="destructive" 
