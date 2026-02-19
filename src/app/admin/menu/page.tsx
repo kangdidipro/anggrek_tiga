@@ -106,7 +106,7 @@ export default function AdminMenuPage() {
       sku: formData.get('sku') as string,
       category: formData.get('category') as string,
       vendor: formData.get('vendor') as string,
-      stock: Number(formData.get('stock') || 0),
+      stock: Number(formData.get('stock') || 20),
     };
 
     try {
@@ -155,7 +155,7 @@ export default function AdminMenuPage() {
           const price = Number(row['Harga'] || row['Price']);
           const sku = String(row['SKU'] || row['Kode Produk'] || '');
           const category = row['Kategori'] || row['Category'] || 'Nasi & Lauk';
-          const stock = Number(row['Stok'] || row['Stock'] || 50);
+          const stock = Number(row['Stok'] || row['Stock'] || 20);
           const vendor = row['Mitra'] || row['Vendor'] || row['Mitra'] || (sku.includes('-') ? sku.split('-')[0] : '');
 
           if (name && price && sku) {
@@ -258,7 +258,7 @@ export default function AdminMenuPage() {
                   <div className="grid grid-cols-2 gap-4">
                     <div className="grid gap-2">
                       <Label htmlFor="stock">Jumlah Stok</Label>
-                      <Input id="stock" name="stock" type="number" placeholder="50" defaultValue="50" required />
+                      <Input id="stock" name="stock" type="number" placeholder="20" defaultValue="20" required />
                     </div>
                     <div className="grid gap-2">
                       <Label htmlFor="category">Kategori</Label>
