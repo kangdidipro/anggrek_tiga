@@ -15,7 +15,7 @@ import { useCart } from '@/hooks/use-cart';
 import { Loader2, QrCode, Wallet } from 'lucide-react';
 import { useState } from 'react';
 import { useUser, useFirestore, errorEmitter, FirestorePermissionError } from '@/firebase';
-import { collection, writeBatch, doc, increment, getDoc, query, collectionGroup, where, getDocs } from 'firebase/firestore';
+import { collection, writeBatch, doc, increment, getDoc, query, collectionGroup, getDocs } from 'firebase/firestore';
 import { useRouter } from 'next/navigation';
 import jsPDF from 'jspdf';
 import { formatPrice } from '@/lib/utils';
@@ -181,16 +181,20 @@ export default function OrderForm({ cartItems, total, deliveryFee, setSheetOpen 
       const now = new Date();
       const dateStr = format(now, 'yyyyMMdd');
       
-      // Get count of orders today
+      // Fix Index Error: Fetch all orders and filter in JS to avoid Collection Group index requirement
       const startOfToday = new Date();
       startOfToday.setHours(0, 0, 0, 0);
+      const startOfTodayISO = startOfToday.toISOString();
+
+      const ordersQuery = collectionGroup(firestore, 'orders');
+      const allOrdersSnapshot = await getDocs(ordersQuery);
       
-      const ordersTodayQuery = query(
-        collectionGroup(firestore, 'orders'),
-        where('orderDateTime', '>=', startOfToday.toISOString())
-      );
-      const snapshot = await getDocs(ordersTodayQuery);
-      const sequence = (snapshot.size + 1).toString().padStart(3, '0');
+      const todayOrdersCount = allOrdersSnapshot.docs.filter(doc => {
+        const data = doc.data();
+        return data.orderDateTime && data.orderDateTime >= startOfTodayISO;
+      }).length;
+
+      const sequence = (todayOrdersCount + 1).toString().padStart(3, '0');
       const orderId = `${dateStr}-TJK-${sequence}`;
 
       const batch = writeBatch(firestore);
@@ -198,6 +202,7 @@ export default function OrderForm({ cartItems, total, deliveryFee, setSheetOpen 
       const timestamp = now.toISOString();
       
       const newOrder = {
+          id: orderId,
           customerId: user.uid,
           orderDateTime: timestamp,
           totalAmount: total,
