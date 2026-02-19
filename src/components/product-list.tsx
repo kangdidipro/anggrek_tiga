@@ -1,7 +1,8 @@
+
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
-import type { Product } from '@/lib/types';
+import type { Product, Vendor } from '@/lib/types';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import ProductCard from '@/components/product-card';
 import { Input } from '@/components/ui/input';
@@ -9,6 +10,7 @@ import { Search } from 'lucide-react';
 
 type ProductListProps = {
   products: Product[];
+  vendors: Vendor[];
 };
 
 function groupProductsByCategory(products: Product[]): Record<string, Product[]> {
@@ -22,9 +24,17 @@ function groupProductsByCategory(products: Product[]): Record<string, Product[]>
   }, {} as Record<string, Product[]>);
 }
 
-export default function ProductList({ products }: ProductListProps) {
+export default function ProductList({ products, vendors }: ProductListProps) {
   const [searchTerm, setSearchTerm] = useState('');
   
+  const vendorLookup = useMemo(() => {
+    const lookup: Record<string, string> = {};
+    vendors.forEach(v => {
+      lookup[v.code] = v.name;
+    });
+    return lookup;
+  }, [vendors]);
+
   const filteredProducts = useMemo(() => 
     products.filter(product =>
       product.name.toLowerCase().includes(searchTerm.toLowerCase())
@@ -75,7 +85,11 @@ export default function ProductList({ products }: ProductListProps) {
           <TabsContent value="Semua">
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6 md:gap-8 pt-8">
               {filteredProducts.map((product) => (
-                <ProductCard key={product.id} product={product} />
+                <ProductCard 
+                  key={product.id} 
+                  product={product} 
+                  vendorName={vendorLookup[product.vendor] || product.vendor} 
+                />
               ))}
             </div>
           </TabsContent>
@@ -85,7 +99,11 @@ export default function ProductList({ products }: ProductListProps) {
             <TabsContent key={category} value={category}>
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6 md:gap-8 pt-8">
                 {productsByCategory[category].map((product) => (
-                  <ProductCard key={product.id} product={product} />
+                  <ProductCard 
+                    key={product.id} 
+                    product={product} 
+                    vendorName={vendorLookup[product.vendor] || product.vendor}
+                  />
                 ))}
               </div>
             </TabsContent>

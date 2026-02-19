@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import Recommendations from '@/components/recommendations';
 import ProductList from '@/components/product-list';
 import { Loader2 } from 'lucide-react';
-import type { Product } from '@/lib/types';
+import type { Product, Vendor } from '@/lib/types';
 
 export default function Home() {
   const firestore = useFirestore();
@@ -17,7 +17,15 @@ export default function Home() {
     return collection(firestore, 'menuItems');
   }, [firestore]);
 
-  const { data: products, isLoading } = useCollection<Product>(menuItemsQuery);
+  const vendorsQuery = useMemoFirebase(() => {
+    if (!firestore) return null;
+    return collection(firestore, 'vendors');
+  }, [firestore]);
+
+  const { data: products, isLoading: isProductsLoading } = useCollection<Product>(menuItemsQuery);
+  const { data: vendors, isLoading: isVendorsLoading } = useCollection<Vendor>(vendorsQuery);
+
+  const isLoading = isProductsLoading || isVendorsLoading;
 
   return (
     <div className="flex flex-col gap-12 md:gap-16">
@@ -68,7 +76,7 @@ export default function Home() {
                   Pilih dari beragam hidangan lezat kami, mulai dari makanan utama hingga kue-kue manis.
                 </p>
             </div>
-            <ProductList products={products} />
+            <ProductList products={products} vendors={vendors || []} />
           </section>
         </>
       ) : (

@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -6,14 +7,15 @@ import { Card, CardContent, CardFooter, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { formatPrice } from '@/lib/utils';
 import { useCart } from '@/hooks/use-cart';
-import { Plus, Minus, PackageX } from 'lucide-react';
+import { Plus, Minus, PackageX, Store } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 
 type ProductCardProps = {
   product: Product;
+  vendorName?: string;
 };
 
-export default function ProductCard({ product }: ProductCardProps) {
+export default function ProductCard({ product, vendorName }: ProductCardProps) {
   const { addToCart, updateItemQuantity, getItemQuantity } = useCart();
   const quantity = getItemQuantity(product.id);
   const [mounted, setMounted] = useState(false);
@@ -37,30 +39,46 @@ export default function ProductCard({ product }: ProductCardProps) {
   };
 
   const isOutOfStock = currentStock <= 0;
+  const subtotal = product.price * quantity;
 
   return (
     <Card className={`flex flex-col h-full overflow-hidden transition-all duration-300 hover:shadow-xl hover:-translate-y-1 ${isOutOfStock ? 'opacity-75 grayscale-[0.5]' : ''}`}>
       <CardContent className="p-4 flex-1 flex flex-col">
-        <div className="flex justify-between text-sm text-muted-foreground mb-2">
-          <span>No: {product.id}</span>
+        <div className="flex justify-between text-[10px] text-muted-foreground mb-2 uppercase font-mono tracking-tighter">
+          <span>ID: {product.id}</span>
           <span>SKU: {product.sku}</span>
         </div>
-        <CardTitle className="text-base font-bold leading-snug tracking-tight mb-2 flex-1">
+        
+        <CardTitle className="text-base font-bold leading-snug tracking-tight mb-1">
           {product.name}
         </CardTitle>
-        <div className="flex items-center justify-between mt-auto">
-          <p className="text-lg font-semibold text-primary">{formatPrice(product.price)}</p>
-          <div className="text-right">
-             <Badge variant={isOutOfStock ? "destructive" : currentStock <= 5 ? "secondary" : "outline"} className="text-[10px] px-1.5 py-0 h-5">
-               {isOutOfStock ? "Habis" : `Stok: ${currentStock}`}
-             </Badge>
+
+        <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-4">
+          <Store className="h-3 w-3 text-primary/70" />
+          <span className="font-semibold">{vendorName || product.vendor}</span>
+          <span className="bg-muted px-1 rounded font-mono">({product.vendor})</span>
+        </div>
+
+        <div className="mt-auto space-y-2">
+          <div className="flex items-center justify-between">
+            <p className="text-lg font-bold text-primary">{formatPrice(product.price)}</p>
+            <Badge variant={isOutOfStock ? "destructive" : currentStock <= 5 ? "secondary" : "outline"} className="text-[10px] px-1.5 py-0 h-5">
+              {isOutOfStock ? "Habis" : `Stok: ${currentStock}`}
+            </Badge>
           </div>
+
+          {mounted && quantity > 0 && (
+            <div className="flex justify-between items-center bg-primary/5 p-2 rounded-md border border-primary/10">
+              <span className="text-[10px] font-bold uppercase text-muted-foreground">Total Bayar:</span>
+              <span className="text-sm font-bold text-primary">{formatPrice(subtotal)}</span>
+            </div>
+          )}
         </div>
       </CardContent>
       <CardFooter className="p-4 pt-0">
         {!mounted || quantity === 0 ? (
           <Button 
-            className="w-full" 
+            className="w-full font-bold" 
             onClick={() => addToCart(product)} 
             disabled={isOutOfStock}
           >
@@ -71,16 +89,17 @@ export default function ProductCard({ product }: ProductCardProps) {
             )}
           </Button>
         ) : (
-          <div className="flex items-center justify-center w-full gap-2">
-            <Button size="icon" variant="outline" onClick={handleDecrease}>
+          <div className="flex items-center justify-center w-full gap-3">
+            <Button size="icon" variant="outline" onClick={handleDecrease} className="h-9 w-9 border-primary/20 hover:bg-primary/5">
               <Minus className="h-4 w-4" />
             </Button>
-            <span className="font-bold text-lg w-10 text-center">{quantity}</span>
+            <span className="font-bold text-xl w-8 text-center text-primary">{quantity}</span>
             <Button 
               size="icon" 
               variant="outline" 
               onClick={handleIncrease} 
               disabled={quantity >= currentStock}
+              className="h-9 w-9 border-primary/20 hover:bg-primary/5"
             >
               <Plus className="h-4 w-4" />
             </Button>
