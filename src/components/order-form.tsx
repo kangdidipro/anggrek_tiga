@@ -14,13 +14,12 @@ import type { CartItem } from '@/lib/types';
 import { useCart } from '@/hooks/use-cart';
 import { Loader2, QrCode, Wallet } from 'lucide-react';
 import { useState } from 'react';
-import { useUser, useFirestore, errorEmitter, FirestorePermissionError, useDoc, useMemoFirebase } from '@/firebase';
+import { useUser, useFirestore, errorEmitter, FirestorePermissionError } from '@/firebase';
 import { collection, writeBatch, doc, increment, getDoc } from 'firebase/firestore';
 import { useRouter } from 'next/navigation';
 import jsPDF from 'jspdf';
 import { formatPrice } from '@/lib/utils';
 import { format } from 'date-fns';
-import { id as localeId } from 'date-fns/locale';
 import { sendSmtpEmail, type SmtpConfig } from '@/app/actions';
 
 const formSchema = z.object({
@@ -62,10 +61,10 @@ export default function OrderForm({ cartItems, total, deliveryFee, setSheetOpen 
     if (!firestore) return;
 
     try {
-      // 1. Fetch SMTP Settings from Firestore
+      // 1. Fetch SMTP Settings from Firestore (the ones configured in Admin)
       const settingsSnap = await getDoc(doc(firestore, 'settings', 'mail'));
       if (!settingsSnap.exists()) {
-        console.warn("SMTP Settings not found in Firestore. Skipping real email.");
+        console.warn("SMTP Settings not found in Firestore. Make sure to configure them in Admin Settings.");
         return;
       }
       const smtpConfig = settingsSnap.data() as SmtpConfig;
@@ -110,8 +109,8 @@ export default function OrderForm({ cartItems, total, deliveryFee, setSheetOpen 
       
       const pdfBase64 = pdf.output('datauristring');
 
-      // 3. Send Real Email via Server Action
-      const result = await sendSmtpEmail(smtpConfig, {
+      // 3. Send Real Email via Server Action using configured SMTP
+      await sendSmtpEmail(smtpConfig, {
         to: email,
         subject: `Struk Pesanan TakjilKu #${orderId.substring(0, 7)}`,
         text: `Halo ${values.name}, rincian pesanan Anda telah kami terima. Total Bayar: ${formatPrice(total)}.`,
@@ -127,7 +126,7 @@ export default function OrderForm({ cartItems, total, deliveryFee, setSheetOpen 
               <p><strong>Alamat Pengiriman:</strong> ${values.address}</p>
             </div>
             <p>Rincian lengkap item pesanan Anda dapat dilihat pada struk PDF yang terlampir.</p>
-            <p style="text-align: center; margin-top: 30px; font-size: 12px; color: #888;">&copy; ${new Date().getFullYear()} Tim UMKM RW06</p>
+            <p style="text-align: center; margin-top: 30px; font-size: 12px; color: #888;">&copy; ${new Date().getFullYear()} Tim UMKM RW06 - Anggrek 3</p>
           </div>
         `,
         attachments: [
@@ -137,14 +136,8 @@ export default function OrderForm({ cartItems, total, deliveryFee, setSheetOpen 
           }
         ]
       });
-
-      if (result.success) {
-        console.log("Real email sent successfully!");
-      } else {
-        console.error("Failed to send real email:", result.error);
-      }
     } catch (err) {
-      console.error("Error in sendEmailReceipt:", err);
+      console.error("Error sending order receipt email:", err);
     }
   };
 
@@ -202,7 +195,8 @@ export default function OrderForm({ cartItems, total, deliveryFee, setSheetOpen 
     batch.commit()
       .then(async () => {
         if (values.email) {
-            await sendEmailReceipt(values.email, values, orderRef.id);
+            // Trigger the real email sending using SMTP Config
+            sendEmailReceipt(values.email, values, orderRef.id);
         }
 
         toast({
@@ -269,7 +263,7 @@ export default function OrderForm({ cartItems, total, deliveryFee, setSheetOpen 
                 <Input placeholder="anda@email.com" {...field} disabled={isSubmitting} />
               </FormControl>
               <FormDescription className="text-[10px]">
-                Jika diisi, struk belanja akan dikirim ke alamat email ini.
+                Struk PDF otomatis akan dikirim menggunakan Konfigurasi SMTP sistem.
               </FormDescription>
               <FormMessage />
             </FormItem>
