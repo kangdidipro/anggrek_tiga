@@ -5,7 +5,7 @@ import { useFirestore, useUser, useCollection, useMemoFirebase } from '@/firebas
 import { collectionGroup, getDocs, query, collection } from 'firebase/firestore';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Loader2, FileDown, CalendarIcon, FileText, Mail, Search, LayoutGrid, ArrowUpDown, ArrowUp, ArrowDown, Filter } from 'lucide-react';
+import { Loader2, FileDown, CalendarIcon, FileText, Mail, Search, LayoutGrid, ArrowUpDown, ArrowUp, ArrowDown, Filter, Check } from 'lucide-react';
 import { formatPrice, getVendorFromSku } from '@/lib/utils';
 import * as XLSX from 'xlsx';
 import { saveAs } from 'file-saver';
@@ -19,6 +19,8 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Checkbox } from '@/components/ui/checkbox';
+import { cn } from '@/lib/utils';
 import type { Vendor } from '@/lib/types';
 
 interface OrderItem {
@@ -72,7 +74,7 @@ export default function AdminSummaryPage() {
   const [targetEmail, setTargetEmail] = useState('');
   const [date, setDate] = useState<Date | undefined>(new Date());
   const [vendorFilter, setVendorFilter] = useState('all');
-  const [statusFilter, setStatusFilter] = useState('all');
+  const [selectedStatuses, setSelectedStatuses] = useState<string[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [groupBy, setGroupBy] = useState<'orderId' | 'vendor' | 'sku'>('orderId');
   const [sortConfig, setSortConfig] = useState<SortConfig>({ key: 'label', direction: 'asc' });
@@ -147,9 +149,9 @@ export default function AdminSummaryPage() {
             const vendor = item.vendor || getVendorFromSku(item.sku);
             const matchesVendor = vendorFilter === 'all' || vendor === vendorFilter;
             
-            // Status Filter Logic
+            // Status Filter Logic (Multi-select)
             const vStatus = order.vendorStatuses?.[vendor]?.status || 'Dipesan';
-            const matchesStatus = statusFilter === 'all' || vStatus === statusFilter;
+            const matchesStatus = selectedStatuses.length === 0 || selectedStatuses.includes(vStatus);
 
             const search = searchTerm.toLowerCase();
             const matchesSearch = searchTerm === '' || 
@@ -236,7 +238,7 @@ export default function AdminSummaryPage() {
             addresses: Array.from(data.addresses)
         };
     });
-  }, [orders, date, groupBy, vendorLookup, vendorFilter, statusFilter, searchTerm]);
+  }, [orders, date, groupBy, vendorLookup, vendorFilter, selectedStatuses, searchTerm]);
 
   const filteredSummary = useMemo(() => {
     let result = [...summaryData];
@@ -285,6 +287,14 @@ export default function AdminSummaryPage() {
   const getMitraDisplayName = (code: string) => {
     const name = vendorLookup[code];
     return name && name !== code ? `${name} (${code})` : code;
+  };
+
+  const toggleStatus = (status: string) => {
+    setSelectedStatuses(prev => 
+      prev.includes(status) 
+        ? prev.filter(s => s !== status) 
+        : [...prev, status]
+    );
   };
 
   const exportToExcel = () => {
@@ -441,18 +451,52 @@ export default function AdminSummaryPage() {
                         </SelectContent>
                     </Select>
 
-                    <Select value={statusFilter} onValueChange={setStatusFilter}>
-                        <SelectTrigger className="w-[150px] border-primary/30">
-                            <Filter className="mr-2 h-4 w-4 text-primary" />
-                            <SelectValue placeholder="Semua Status" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="all">Semua Status</SelectItem>
-                            {ALL_STATUSES.map(s => (
-                                <SelectItem key={s} value={s}>{s}</SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
+                    <Popover>
+                        <PopoverTrigger asChild>
+                            <Button variant="outline" className="w-[180px] justify-between border-primary/30">
+                                <div className="flex items-center gap-2 overflow-hidden">
+                                    <Filter className="h-4 w-4 text-primary shrink-0" />
+                                    <span className="truncate">
+                                        {selectedStatuses.length === 0 ? "Semua Status" : `Status (${selectedStatuses.length})`}
+                                    </span>
+                                </div>
+                                <ArrowDown className="h-3 w-3 opacity-50 shrink-0" />
+                            </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-[200px] p-2" align="start">
+                            <div className="space-y-2">
+                                <Button 
+                                    variant="ghost" 
+                                    size="sm" 
+                                    className="w-full justify-start font-normal text-xs h-8"
+                                    onClick={() => setSelectedStatuses([])}
+                                >
+                                    Reset Pilihan
+                                </Button>
+                                <div className="border-t pt-2 space-y-1">
+                                    {ALL_STATUSES.map(status => (
+                                        <div 
+                                            key={status} 
+                                            className="flex items-center space-x-2 p-1 rounded hover:bg-muted cursor-pointer"
+                                            onClick={() => toggleStatus(status)}
+                                        >
+                                            <Checkbox 
+                                                id={`status-${status}`} 
+                                                checked={selectedStatuses.includes(status)}
+                                                onCheckedChange={() => toggleStatus(status)}
+                                            />
+                                            <label 
+                                                htmlFor={`status-${status}`}
+                                                className="text-sm font-medium leading-none cursor-pointer flex-1"
+                                            >
+                                                {status}
+                                            </label>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        </PopoverContent>
+                    </Popover>
 
                     <Select value={groupBy} onValueChange={(val: any) => setGroupBy(val)}>
                         <SelectTrigger className="w-[180px] border-primary/50 bg-primary/5">
