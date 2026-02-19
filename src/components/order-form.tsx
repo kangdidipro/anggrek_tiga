@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useForm } from 'react-hook-form';
@@ -14,7 +15,7 @@ import { useCart } from '@/hooks/use-cart';
 import { Loader2, QrCode, Wallet } from 'lucide-react';
 import { useState } from 'react';
 import { useUser, useFirestore, errorEmitter, FirestorePermissionError } from '@/firebase';
-import { collection, writeBatch, doc } from 'firebase/firestore';
+import { collection, writeBatch, doc, increment } from 'firebase/firestore';
 import { useRouter } from 'next/navigation';
 import jsPDF from 'jspdf';
 import { formatPrice } from '@/lib/utils';
@@ -172,6 +173,12 @@ export default function OrderForm({ cartItems, total, deliveryFee, setSheetOpen 
         };
         batch.set(orderItemRef, newOrderItem);
         orderItemsForError.push(newOrderItem);
+
+        // Update stock for each menu item
+        const menuItemRef = doc(firestore, 'menuItems', item.product.id);
+        batch.update(menuItemRef, {
+            stock: increment(-item.quantity)
+        });
     });
 
     batch.commit()

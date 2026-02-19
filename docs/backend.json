@@ -1,3 +1,4 @@
+
 {
   "entities": {
     "Customer": {
@@ -70,6 +71,10 @@
         "vendor": {
           "type": "string",
           "description": "The vendor code or ID of this menu item (e.g., 'NL')."
+        },
+        "stock": {
+          "type": "number",
+          "description": "The current available stock for this menu item."
         }
       },
       "required": [
@@ -78,7 +83,8 @@
         "price",
         "sku",
         "category",
-        "vendor"
+        "vendor",
+        "stock"
       ]
     },
     "Vendor": {

@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useMemo, useRef } from 'react';
@@ -105,6 +106,7 @@ export default function AdminMenuPage() {
       sku: formData.get('sku') as string,
       category: formData.get('category') as string,
       vendor: formData.get('vendor') as string,
+      stock: Number(formData.get('stock') || 0),
     };
 
     try {
@@ -153,6 +155,7 @@ export default function AdminMenuPage() {
           const price = Number(row['Harga'] || row['Price']);
           const sku = String(row['SKU'] || row['Kode Produk'] || '');
           const category = row['Kategori'] || row['Category'] || 'Nasi & Lauk';
+          const stock = Number(row['Stok'] || row['Stock'] || 50);
           const vendor = row['Mitra'] || row['Vendor'] || row['Mitra'] || (sku.includes('-') ? sku.split('-')[0] : '');
 
           if (name && price && sku) {
@@ -163,6 +166,7 @@ export default function AdminMenuPage() {
               sku: sku,
               category: String(category),
               vendor: String(vendor),
+              stock: stock,
             };
             await setDoc(doc(firestore, 'menuItems', productData.id), productData);
             importedCount++;
@@ -253,6 +257,10 @@ export default function AdminMenuPage() {
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div className="grid gap-2">
+                      <Label htmlFor="stock">Jumlah Stok</Label>
+                      <Input id="stock" name="stock" type="number" placeholder="50" defaultValue="50" required />
+                    </div>
+                    <div className="grid gap-2">
                       <Label htmlFor="category">Kategori</Label>
                       <Select name="category" defaultValue="Nasi & Lauk" required>
                         <SelectTrigger>
@@ -268,23 +276,23 @@ export default function AdminMenuPage() {
                         </SelectContent>
                       </Select>
                     </div>
-                    <div className="grid gap-2">
-                      <Label htmlFor="vendor">Mitra / Penjual</Label>
-                      <Select name="vendor" required>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Pilih Mitra" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {vendors && vendors.length > 0 ? (
-                            vendors.map((v) => (
-                              <SelectItem key={v.id} value={v.code}>{v.name} ({v.code})</SelectItem>
-                            ))
-                          ) : (
-                            <SelectItem value="none" disabled>Belum ada mitra</SelectItem>
-                          )}
-                        </SelectContent>
-                      </Select>
-                    </div>
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="vendor">Mitra / Penjual</Label>
+                    <Select name="vendor" required>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Pilih Mitra" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {vendors && vendors.length > 0 ? (
+                          vendors.map((v) => (
+                            <SelectItem key={v.id} value={v.code}>{v.name} ({v.code})</SelectItem>
+                          ))
+                        ) : (
+                          <SelectItem value="none" disabled>Belum ada mitra</SelectItem>
+                        )}
+                      </SelectContent>
+                    </Select>
                   </div>
                 </div>
                 <DialogFooter>
@@ -372,6 +380,7 @@ export default function AdminMenuPage() {
                 <TableHead>Kategori</TableHead>
                 <TableHead>Mitra</TableHead>
                 <TableHead>SKU</TableHead>
+                <TableHead className="text-right">Stok</TableHead>
                 <TableHead className="text-right">Harga</TableHead>
                 <TableHead className="text-right">Aksi</TableHead>
               </TableRow>
@@ -379,7 +388,7 @@ export default function AdminMenuPage() {
             <TableBody>
               {filteredMenuItems.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center py-12 text-muted-foreground">
+                  <TableCell colSpan={7} className="text-center py-12 text-muted-foreground">
                     {searchTerm || nameFilter !== 'all' || categoryFilter !== 'all' || vendorFilter !== 'all' 
                       ? 'Tidak ada menu yang cocok dengan filter.' 
                       : 'Belum ada menu di database. Gunakan menu default atau tambah baru.'}
@@ -392,6 +401,9 @@ export default function AdminMenuPage() {
                     <TableCell>{item.category}</TableCell>
                     <TableCell className="font-mono text-xs font-bold">{item.vendor}</TableCell>
                     <TableCell>{item.sku}</TableCell>
+                    <TableCell className={`text-right font-bold ${item.stock <= 5 ? 'text-destructive' : ''}`}>
+                      {item.stock}
+                    </TableCell>
                     <TableCell className="text-right">{formatPrice(item.price)}</TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-2">
@@ -424,6 +436,10 @@ export default function AdminMenuPage() {
                                 </div>
                                 <div className="grid grid-cols-2 gap-4">
                                   <div className="grid gap-2">
+                                    <Label htmlFor="edit-stock">Jumlah Stok</Label>
+                                    <Input id="edit-stock" name="stock" type="number" defaultValue={item.stock} required />
+                                  </div>
+                                  <div className="grid gap-2">
                                     <Label htmlFor="edit-category">Kategori</Label>
                                     <Select name="category" defaultValue={item.category} required>
                                       <SelectTrigger>
@@ -439,23 +455,23 @@ export default function AdminMenuPage() {
                                       </SelectContent>
                                     </Select>
                                   </div>
-                                  <div className="grid gap-2">
-                                    <Label htmlFor="edit-vendor">Mitra / Penjual</Label>
-                                    <Select name="vendor" defaultValue={item.vendor} required>
-                                      <SelectTrigger>
-                                        <SelectValue placeholder="Pilih Mitra" />
-                                      </SelectTrigger>
-                                      <SelectContent>
-                                        {vendors && vendors.length > 0 ? (
-                                          vendors.map((v) => (
-                                            <SelectItem key={v.id} value={v.code}>{v.name} ({v.code})</SelectItem>
-                                          ))
-                                        ) : (
-                                          <SelectItem value="none" disabled>Belum ada mitra</SelectItem>
-                                        )}
-                                      </SelectContent>
-                                    </Select>
-                                  </div>
+                                </div>
+                                <div className="grid gap-2">
+                                  <Label htmlFor="edit-vendor">Mitra / Penjual</Label>
+                                  <Select name="vendor" defaultValue={item.vendor} required>
+                                    <SelectTrigger>
+                                      <SelectValue placeholder="Pilih Mitra" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      {vendors && vendors.length > 0 ? (
+                                        vendors.map((v) => (
+                                          <SelectItem key={v.id} value={v.code}>{v.name} ({v.code})</SelectItem>
+                                        ))
+                                      ) : (
+                                        <SelectItem value="none" disabled>Belum ada mitra</SelectItem>
+                                      )}
+                                    </SelectContent>
+                                  </Select>
                                 </div>
                               </div>
                               <DialogFooter>

@@ -6,6 +6,7 @@ export type Product = {
   category: string;
   sku: string;
   vendor: string;
+  stock: number;
 };
 
 export type Vendor = {
