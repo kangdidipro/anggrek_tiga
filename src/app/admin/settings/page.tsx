@@ -8,7 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Loader2, Mail, Database, Trash2, Save, AlertTriangle, Send, Info } from 'lucide-react';
+import { Loader2, Mail, Database, Trash2, Save, AlertTriangle, Send, Info, ExternalLink } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import {
@@ -22,6 +22,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
+import Link from 'next/link';
 
 export default function AdminSettingsPage() {
   const firestore = useFirestore();
@@ -127,13 +128,16 @@ export default function AdminSettingsPage() {
         <TabsContent value="mail" className="space-y-4 pt-4">
           <Alert className="bg-primary/5 border-primary/20">
             <Info className="h-4 w-4 text-primary" />
-            <AlertTitle className="font-bold">Panduan Gmail SMTP</AlertTitle>
-            <AlertDescription className="text-sm">
-              <p className="mb-2">Jika Anda menggunakan Gmail, pastikan untuk:</p>
-              <ol className="list-decimal pl-5 space-y-1">
-                <li>Aktifkan <strong>Verifikasi 2 Langkah</strong> di Akun Google Anda.</li>
-                <li>Gunakan <strong>App Password</strong> (16 digit) sebagai ganti kata sandi utama Anda.</li>
-                <li>Host: <code>smtp.gmail.com</code>, Port: <code>587</code> (STARTTLS) atau <code>465</code> (SSL).</li>
+            <AlertTitle className="font-bold flex items-center gap-2">
+              Panduan Penting Gmail SMTP
+            </AlertTitle>
+            <AlertDescription className="text-sm space-y-2">
+              <p>Pengaturan ini <strong>TIDAK</strong> berada di menu Settings Gmail, melainkan di halaman <strong>Akun Google</strong> Anda:</p>
+              <ol className="list-decimal pl-5 space-y-2">
+                <li>Buka <Link href="https://myaccount.google.com/security" target="_blank" className="font-bold underline inline-flex items-center gap-1">Keamanan Akun Google <ExternalLink className="h-3 w-3" /></Link>.</li>
+                <li>Aktifkan <strong>Verifikasi 2 Langkah</strong> (Wajib).</li>
+                <li>Cari menu <strong>"App Passwords"</strong> melalui kotak pencarian di bagian atas halaman Akun Google tersebut.</li>
+                <li>Buat password baru (beri nama "TakjilKu"), lalu gunakan kode <strong>16 digit</strong> yang muncul sebagai Password di form bawah ini.</li>
               </ol>
             </AlertDescription>
           </Alert>
@@ -182,7 +186,7 @@ export default function AdminSettingsPage() {
                       type="password" 
                       value={smtpSettings.pass} 
                       onChange={(e) => setSmtpSettings({...smtpSettings, pass: e.target.value})}
-                      placeholder="••••••••••••" 
+                      placeholder="Gunakan kode 16 digit App Password" 
                     />
                   </div>
                   <div className="space-y-2 md:col-span-2">
