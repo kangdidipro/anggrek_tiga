@@ -187,7 +187,11 @@ export default function OrderForm({ cartItems, total, deliveryFee, setSheetOpen 
         });
         clearCart();
         setSheetOpen(false);
-        router.push('/order-success');
+        // Redirect with params to show info on success page
+        const searchParams = new URLSearchParams();
+        if (values.email) searchParams.set('email', values.email);
+        searchParams.set('orderId', orderRef.id);
+        router.push(`/order-success?${searchParams.toString()}`);
       })
       .catch((serverError) => {
           const permissionError = new FirestorePermissionError({
