@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
@@ -74,16 +73,21 @@ export default function ProductList({ products, vendors }: ProductListProps) {
           defaultValue="Semua"
           className="w-full"
         >
-          <TabsList className="grid w-full grid-cols-2 md:grid-cols-3 lg:flex lg:flex-wrap lg:h-auto justify-center">
-            {/* We only show tabs for categories that have items, plus "Semua" */}
+          <TabsList className="flex flex-wrap h-auto bg-transparent gap-2 justify-center py-2 mb-8 border-none ring-0">
             {categories.map((category) => (
-              <TabsTrigger key={category} value={category}>{category}</TabsTrigger>
+              <TabsTrigger 
+                key={category} 
+                value={category}
+                className="rounded-full border border-primary/20 bg-card px-4 py-1.5 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:border-primary shadow-sm hover:bg-primary/5 transition-all text-xs md:text-sm h-auto"
+              >
+                {category}
+              </TabsTrigger>
             ))}
           </TabsList>
 
           {/* Content for "Semua" tab */}
           <TabsContent value="Semua">
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6 md:gap-8 pt-8">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6 md:gap-8 pt-4">
               {filteredProducts.map((product) => (
                 <ProductCard 
                   key={product.id} 
@@ -97,7 +101,7 @@ export default function ProductList({ products, vendors }: ProductListProps) {
           {/* Content for other category tabs */}
           {Object.keys(productsByCategory).map((category) => (
             <TabsContent key={category} value={category}>
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6 md:gap-8 pt-8">
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6 md:gap-8 pt-4">
                 {productsByCategory[category].map((product) => (
                   <ProductCard 
                     key={product.id} 
