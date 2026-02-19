@@ -6,7 +6,7 @@ import { collection, doc, deleteDoc, setDoc } from 'firebase/firestore';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Loader2, Plus, Pencil, Trash2, RefreshCcw, FileUp, FileDown, Search, ExternalLink, Copy } from 'lucide-react';
+import { Loader2, Plus, Pencil, Trash2, RefreshCcw, FileUp, FileDown, Search, ExternalLink, Copy, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
@@ -16,6 +16,11 @@ import * as XLSX from 'xlsx';
 import { saveAs } from 'file-saver';
 import Link from 'next/link';
 
+type SortConfig = {
+  key: keyof Vendor | null;
+  direction: 'asc' | 'desc';
+};
+
 export default function AdminVendorsPage() {
   const firestore = useFirestore();
   const { toast } = useToast();
@@ -24,6 +29,7 @@ export default function AdminVendorsPage() {
   const [isImporting, setIsImporting] = useState(false);
   const [isExcelImporting, setIsExcelImporting] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  const [sortConfig, setSortConfig] = useState<SortConfig>({ key: 'name', direction: 'asc' });
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Fetch Mitra
@@ -40,17 +46,41 @@ export default function AdminVendorsPage() {
   }, [firestore]);
   const { data: menuItems } = useCollection<Product>(menuItemsQuery);
 
+  const handleSort = (key: keyof Vendor) => {
+    let direction: 'asc' | 'desc' = 'asc';
+    if (sortConfig.key === key && sortConfig.direction === 'asc') {
+      direction = 'desc';
+    }
+    setSortConfig({ key, direction });
+  };
+
+  const getSortIcon = (key: keyof Vendor) => {
+    if (sortConfig.key !== key) return <ArrowUpDown className="ml-2 h-4 w-4 opacity-50" />;
+    return sortConfig.direction === 'asc' ? <ArrowUp className="ml-2 h-4 w-4" /> : <ArrowDown className="ml-2 h-4 w-4" />;
+  };
+
   const filteredVendors = useMemo(() => {
     if (!vendors) return [];
-    return vendors
-      .filter(vendor => 
-        vendor.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-        vendor.code.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (vendor.email && vendor.email.toLowerCase().includes(searchTerm.toLowerCase())) ||
-        (vendor.phoneNumber && vendor.phoneNumber.toLowerCase().includes(searchTerm.toLowerCase()))
-      )
-      .sort((a, b) => a.name.localeCompare(b.name));
-  }, [vendors, searchTerm]);
+    let result = vendors.filter(vendor => 
+      vendor.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+      vendor.code.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (vendor.email && vendor.email.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (vendor.phoneNumber && vendor.phoneNumber.toLowerCase().includes(searchTerm.toLowerCase()))
+    );
+
+    if (sortConfig.key) {
+      result.sort((a, b) => {
+        const valA = (a[sortConfig.key!] || '').toString().toLowerCase();
+        const valB = (b[sortConfig.key!] || '').toString().toLowerCase();
+
+        if (valA < valB) return sortConfig.direction === 'asc' ? -1 : 1;
+        if (valA > valB) return sortConfig.direction === 'asc' ? 1 : -1;
+        return 0;
+      });
+    }
+
+    return result;
+  }, [vendors, searchTerm, sortConfig]);
 
   const handleDelete = async (id: string) => {
     if (!firestore) return;
@@ -185,7 +215,8 @@ export default function AdminVendorsPage() {
   const exportToExcel = () => {
     if (!filteredVendors || filteredVendors.length === 0) return;
 
-    const dataForExport = filteredVendors.map(vendor => ({
+    const dataForExport = filteredVendors.map((vendor, index) => ({
+      'No.': index + 1,
       'Nama Mitra': vendor.name,
       'Kode': vendor.code,
       'Email': vendor.email || '-',
@@ -198,6 +229,7 @@ export default function AdminVendorsPage() {
     XLSX.utils.book_append_sheet(workbook, worksheet, "Daftar Mitra");
     
     const wscols = [
+        {wch: 5},  // No.
         {wch: 35}, // Nama Mitra
         {wch: 15}, // Kode
         {wch: 30}, // Email
@@ -307,10 +339,27 @@ export default function AdminVendorsPage() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Nama Mitra</TableHead>
-                <TableHead>Kode</TableHead>
-                <TableHead>Email</TableHead>
-                <TableHead>No HP</TableHead>
+                <TableHead className="w-[60px]">No.</TableHead>
+                <TableHead className="cursor-pointer hover:bg-muted/50" onClick={() => handleSort('name')}>
+                  <div className="flex items-center">
+                    Nama Mitra {getSortIcon('name')}
+                  </div>
+                </TableHead>
+                <TableHead className="cursor-pointer hover:bg-muted/50" onClick={() => handleSort('code')}>
+                  <div className="flex items-center">
+                    Kode {getSortIcon('code')}
+                  </div>
+                </TableHead>
+                <TableHead className="cursor-pointer hover:bg-muted/50" onClick={() => handleSort('email')}>
+                  <div className="flex items-center">
+                    Email {getSortIcon('email')}
+                  </div>
+                </TableHead>
+                <TableHead className="cursor-pointer hover:bg-muted/50" onClick={() => handleSort('phoneNumber')}>
+                  <div className="flex items-center">
+                    No HP {getSortIcon('phoneNumber')}
+                  </div>
+                </TableHead>
                 <TableHead>Link Pesanan</TableHead>
                 <TableHead className="text-right">Aksi</TableHead>
               </TableRow>
@@ -318,13 +367,14 @@ export default function AdminVendorsPage() {
             <TableBody>
               {filteredVendors.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center py-12 text-muted-foreground">
+                  <TableCell colSpan={7} className="text-center py-12 text-muted-foreground">
                     {searchTerm ? 'Tidak ada mitra yang cocok dengan pencarian.' : 'Belum ada mitra yang terdaftar.'}
                   </TableCell>
                 </TableRow>
               ) : (
-                filteredVendors.map((vendor) => (
+                filteredVendors.map((vendor, index) => (
                   <TableRow key={vendor.id}>
+                    <TableCell className="text-muted-foreground font-mono text-xs">{index + 1}</TableCell>
                     <TableCell className="font-medium">{vendor.name}</TableCell>
                     <TableCell className="font-mono font-bold">{vendor.code}</TableCell>
                     <TableCell>{vendor.email || '-'}</TableCell>
