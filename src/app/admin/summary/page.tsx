@@ -135,11 +135,9 @@ export default function AdminSummaryPage() {
       totalDeliveryFee: number;
       items: Record<string, { name: string, quantity: number, sku: string, price: number, vendor: string }>;
       addresses: Set<string>;
-      vendorsInGroup: Set<string>; // TRACK VENDOR-ORDER UNIK
     }> = {};
 
     targetDateOrders.forEach(order => {
-        // Filter item berdasarkan mitra dan search term
         const uniqueItemsForThisOrder = order.items.filter(item => {
             const vendor = item.vendor || getVendorFromSku(item.sku);
             const matchesVendor = vendorFilter === 'all' || vendor === vendorFilter;
@@ -155,7 +153,7 @@ export default function AdminSummaryPage() {
 
         if (uniqueItemsForThisOrder.length === 0) return;
 
-        const orderVendorsSeenInRow = new Set<string>();
+        const orderVendorsSeenInOrder = new Set<string>();
 
         uniqueItemsForThisOrder.forEach(item => {
             const vendor = item.vendor || getVendorFromSku(item.sku);
@@ -165,9 +163,11 @@ export default function AdminSummaryPage() {
             let subLabel = '';
 
             if (groupBy === 'orderId') {
-                key = order.id;
-                label = `Pesanan #${order.id}`;
-                subLabel = format(new Date(order.orderDateTime), 'HH:mm');
+                // Key is Sub-Order (OrderId + Vendor)
+                key = `${order.id}-${vendor}`;
+                const vName = vendorLookup[vendor];
+                label = key;
+                subLabel = `${vName || vendor} | ${format(new Date(order.orderDateTime), 'HH:mm')}`;
             } else if (groupBy === 'vendor') {
                 key = vendor;
                 const vName = vendorLookup[vendor];
@@ -186,7 +186,6 @@ export default function AdminSummaryPage() {
                     totalDeliveryFee: 0,
                     items: {}, 
                     addresses: new Set(),
-                    vendorsInGroup: new Set()
                 };
             }
             
@@ -198,11 +197,15 @@ export default function AdminSummaryPage() {
             const itemTotal = item.quantity * item.priceAtOrder;
             summaryMap[key].totalAmount += itemTotal;
             
-            // Logic Ongkir: Setiap vendor unik di dalam satu order row (berdasarkan filter) menambah 2500
+            // Ongkir Logic: Per Mitra per Order
+            // We track if this vendor has been counted for this order yet in the context of the grouping
             const vendorOrderKey = `${order.id}-${vendor}`;
-            if (!orderVendorsSeenInRow.has(vendorOrderKey)) {
-                orderVendorsSeenInRow.add(vendorOrderKey);
-                
+            
+            // If we are grouping by orderId (which is actually sub-order), each row gets 2500
+            // If we are grouping by vendor, each unique order this vendor was in gets 2500
+            // If we are grouping by SKU, we don't usually sum ongkir here as it's product-focused
+            if (!orderVendorsSeenInOrder.has(vendorOrderKey)) {
+                orderVendorsSeenInOrder.add(vendorOrderKey);
                 if (groupBy === 'orderId' || groupBy === 'vendor') {
                     summaryMap[key].totalDeliveryFee += 2500;
                 }
@@ -234,7 +237,7 @@ export default function AdminSummaryPage() {
   }, [orders, date, groupBy, vendorLookup, vendorFilter, searchTerm]);
 
   const filteredSummary = useMemo(() => {
-    let result = summaryData;
+    let result = [...summaryData];
     if (sortConfig.key) {
       result.sort((a, b) => {
         const valA = a[sortConfig.key!] ?? '';
@@ -285,25 +288,23 @@ export default function AdminSummaryPage() {
   const exportToExcel = () => {
     const dataForExport = filteredSummary.map((summary, index) => ({
         'No.': index + 1,
-        'Kategori Group': summary.label,
+        'Group (No. Order/Mitra)': summary.label,
         'Info': summary.subLabel || '',
-        'Pesanan': summary.totalOrders,
-        'Total Produk': summary.totalAmount,
+        'Total Produk (Bruto)': summary.totalAmount,
         'Admin (5%)': summary.adminFee,
-        'Bayar ke Mitra': summary.netToVendor,
+        'Bayar ke Mitra (Netto)': summary.netToVendor,
         'Ongkir': summary.totalDeliveryFee,
-        'Rincian Item': summary.items.map(i => `${i.name} [${i.sku}] (${formatPrice(i.price)} x ${i.quantity})`).join('\r\n'),
+        'Rincian Item': summary.items.map(i => `${i.name} [${i.sku}] (${i.quantity} x ${formatPrice(i.price)})`).join('\r\n'),
         'Alamat': summary.addresses.join('\r\n'),
     }));
 
     dataForExport.push({
       'No.': '',
-      'Kategori Group': 'TOTAL KESELURUHAN',
+      'Group (No. Order/Mitra)': 'TOTAL KESELURUHAN',
       'Info': '',
-      'Pesanan': grandTotals.orders,
-      'Total Produk': grandTotals.amount,
+      'Total Produk (Bruto)': grandTotals.amount,
       'Admin (5%)': grandTotals.admin,
-      'Bayar ke Mitra': grandTotals.net,
+      'Bayar ke Mitra (Netto)': grandTotals.net,
       'Ongkir': grandTotals.ongkir,
       'Rincian Item': '',
       'Alamat': ''
@@ -320,16 +321,15 @@ export default function AdminSummaryPage() {
 
   const exportToPDF = () => {
     const doc = new jsPDF('l', 'mm', 'a4');
-    const tableColumn = ["No.", "Group", "Produk", "Admin (5%)", "Bayar ke Mitra", "Ongkir", "Rincian Item", "Alamat"];
+    const tableColumn = ["No.", "ID Sub-Order / Group", "Total Produk", "Admin (5%)", "Bayar ke Mitra", "Ongkir", "Rincian Item"];
     const tableRows = filteredSummary.map((summary, index) => [
         (index + 1).toString(),
-        summary.label + (summary.subLabel ? ` (${summary.subLabel})` : ''),
+        summary.label + (summary.subLabel ? `\n(${summary.subLabel})` : ''),
         formatPrice(summary.totalAmount),
         formatPrice(summary.adminFee),
         formatPrice(summary.netToVendor),
         summary.totalDeliveryFee > 0 ? formatPrice(summary.totalDeliveryFee) : '-',
         summary.items.map(i => `${i.name} [${i.sku}]\n${i.quantity} porsi`).join('\n---\n'),
-        summary.addresses.join('\n')
     ]);
 
     tableRows.push([
@@ -339,7 +339,6 @@ export default function AdminSummaryPage() {
       formatPrice(grandTotals.admin),
       formatPrice(grandTotals.net),
       formatPrice(grandTotals.ongkir),
-      "",
       ""
     ]);
 
@@ -365,6 +364,7 @@ export default function AdminSummaryPage() {
         return;
     }
     setIsSending(true);
+    // This would typically call a server action, mimicking for now
     await new Promise(resolve => setTimeout(resolve, 2000));
     setIsSending(false);
     toast({
@@ -393,7 +393,7 @@ export default function AdminSummaryPage() {
             <CardHeader>
                 <CardTitle>Rekap Harian</CardTitle>
                 <CardDescription>
-                  Rekapitulasi total pesanan untuk tanggal {date ? format(date, 'eeee, d MMMM yyyy', { locale: id }) : 'semua waktu'}.
+                  Rekapitulasi pengerjaan pesanan per Mitra untuk tanggal {date ? format(date, 'eeee, d MMMM yyyy', { locale: id }) : 'semua waktu'}.
                 </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -439,7 +439,7 @@ export default function AdminSummaryPage() {
                             <SelectValue placeholder="Group By" />
                         </SelectTrigger>
                         <SelectContent>
-                            <SelectItem value="orderId">No. Order</SelectItem>
+                            <SelectItem value="orderId">ID Sub-Order</SelectItem>
                             <SelectItem value="vendor">Kode Mitra</SelectItem>
                             <SelectItem value="sku">SKU Produk</SelectItem>
                         </SelectContent>
@@ -474,7 +474,7 @@ export default function AdminSummaryPage() {
                                 <TableHead className="w-[50px]">No.</TableHead>
                                 <TableHead className="cursor-pointer hover:bg-muted/50" onClick={() => handleSort('label')}>
                                     <div className="flex items-center">
-                                      {groupBy === 'orderId' ? 'No. Order' : groupBy === 'vendor' ? 'Mitra' : 'SKU / Produk'}
+                                      {groupBy === 'orderId' ? 'ID Sub-Order' : groupBy === 'vendor' ? 'Mitra' : 'SKU / Produk'}
                                       {getSortIcon('label')}
                                     </div>
                                 </TableHead>
