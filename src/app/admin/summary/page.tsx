@@ -5,7 +5,7 @@ import { useFirestore, useUser, useCollection, useMemoFirebase } from '@/firebas
 import { collectionGroup, getDocs, query, collection } from 'firebase/firestore';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Loader2, FileDown, CalendarIcon, FileText, Mail, Search, LayoutGrid } from 'lucide-react';
+import { Loader2, FileDown, CalendarIcon, FileText, Mail, Search, LayoutGrid, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 import { formatPrice } from '@/lib/utils';
 import * as XLSX from 'xlsx';
 import { saveAs } from 'file-saver';
@@ -60,6 +60,11 @@ type SummaryItem = {
     addresses: string[];
 }
 
+type SortConfig = {
+  key: keyof SummaryItem | 'label';
+  direction: 'asc' | 'desc';
+};
+
 export default function AdminSummaryPage() {
   const firestore = useFirestore();
   const { user, isUserLoading } = useUser();
@@ -71,6 +76,7 @@ export default function AdminSummaryPage() {
   const [vendorFilter, setVendorFilter] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [groupBy, setGroupBy] = useState<'orderId' | 'vendor' | 'sku'>('orderId');
+  const [sortConfig, setSortConfig] = useState<SortConfig>({ key: 'label', direction: 'asc' });
   const { toast } = useToast();
 
   const vendorsQuery = useMemoFirebase(() => {
@@ -224,8 +230,20 @@ export default function AdminSummaryPage() {
                    s.addresses.some(addr => addr.toLowerCase().includes(lowerSearch));
         });
     }
+
+    if (sortConfig.key) {
+      result.sort((a, b) => {
+        const valA = a[sortConfig.key!] ?? '';
+        const valB = b[sortConfig.key!] ?? '';
+
+        if (valA < valB) return sortConfig.direction === 'asc' ? -1 : 1;
+        if (valA > valB) return sortConfig.direction === 'asc' ? 1 : -1;
+        return 0;
+      });
+    }
+
     return result;
-  }, [summaryData, searchTerm]);
+  }, [summaryData, searchTerm, sortConfig]);
 
   const trueGrandTotalOngkir = useMemo(() => {
     if (!date) return 0;
@@ -262,13 +280,27 @@ export default function AdminSummaryPage() {
     return ['all', ...Array.from(vendors).sort()];
   }, [orders]);
 
+  const handleSort = (key: keyof SummaryItem | 'label') => {
+    let direction: 'asc' | 'desc' = 'asc';
+    if (sortConfig.key === key && sortConfig.direction === 'asc') {
+      direction = 'desc';
+    }
+    setSortConfig({ key, direction });
+  };
+
+  const getSortIcon = (key: keyof SummaryItem | 'label') => {
+    if (sortConfig.key !== key) return <ArrowUpDown className="ml-2 h-4 w-4 opacity-50" />;
+    return sortConfig.direction === 'asc' ? <ArrowUp className="ml-2 h-4 w-4 text-primary" /> : <ArrowDown className="ml-2 h-4 w-4 text-primary" />;
+  };
+
   const getMitraDisplayName = (code: string) => {
     const name = vendorLookup[code];
     return name && name !== code ? `${name} (${code})` : code;
   };
 
   const exportToExcel = () => {
-    const dataForExport = filteredSummary.map(summary => ({
+    const dataForExport = filteredSummary.map((summary, index) => ({
+        'No.': index + 1,
         'Kategori Group': summary.label,
         'Info': summary.subLabel || '',
         'Pesanan': summary.totalOrders,
@@ -281,6 +313,7 @@ export default function AdminSummaryPage() {
     }));
 
     dataForExport.push({
+      'No.': '',
       'Kategori Group': 'TOTAL KESELURUHAN',
       'Info': '',
       'Pesanan': grandTotals.orders,
@@ -303,8 +336,9 @@ export default function AdminSummaryPage() {
 
   const exportToPDF = () => {
     const doc = new jsPDF('l', 'mm', 'a4');
-    const tableColumn = ["Group", "Produk", "Admin (5%)", "Bayar ke Mitra", "Ongkir", "Rincian Item", "Alamat"];
-    const tableRows = filteredSummary.map(summary => [
+    const tableColumn = ["No.", "Group", "Produk", "Admin (5%)", "Bayar ke Mitra", "Ongkir", "Rincian Item", "Alamat"];
+    const tableRows = filteredSummary.map((summary, index) => [
+        (index + 1).toString(),
         summary.label + (summary.subLabel ? ` (${summary.subLabel})` : ''),
         formatPrice(summary.totalAmount),
         formatPrice(summary.adminFee),
@@ -315,6 +349,7 @@ export default function AdminSummaryPage() {
     ]);
 
     tableRows.push([
+      "",
       "TOTAL KESELURUHAN",
       formatPrice(grandTotals.amount),
       formatPrice(grandTotals.admin),
@@ -452,13 +487,33 @@ export default function AdminSummaryPage() {
                     <Table>
                         <TableHeader>
                             <TableRow>
-                                <TableHead>
-                                    {groupBy === 'orderId' ? 'No. Order' : groupBy === 'vendor' ? 'Mitra' : 'SKU / Produk'}
+                                <TableHead className="w-[50px]">No.</TableHead>
+                                <TableHead className="cursor-pointer hover:bg-muted/50" onClick={() => handleSort('label')}>
+                                    <div className="flex items-center">
+                                      {groupBy === 'orderId' ? 'No. Order' : groupBy === 'vendor' ? 'Mitra' : 'SKU / Produk'}
+                                      {getSortIcon('label')}
+                                    </div>
                                 </TableHead>
-                                <TableHead className="text-right">Total Produk</TableHead>
-                                <TableHead className="text-right">Admin (5%)</TableHead>
-                                <TableHead className="text-right">Bayar ke Mitra</TableHead>
-                                <TableHead className="text-right">Ongkir</TableHead>
+                                <TableHead className="text-right cursor-pointer hover:bg-muted/50" onClick={() => handleSort('totalAmount')}>
+                                    <div className="flex items-center justify-end">
+                                      Total Produk {getSortIcon('totalAmount')}
+                                    </div>
+                                </TableHead>
+                                <TableHead className="text-right cursor-pointer hover:bg-muted/50" onClick={() => handleSort('adminFee')}>
+                                    <div className="flex items-center justify-end">
+                                      Admin (5%) {getSortIcon('adminFee')}
+                                    </div>
+                                </TableHead>
+                                <TableHead className="text-right cursor-pointer hover:bg-muted/50" onClick={() => handleSort('netToVendor')}>
+                                    <div className="flex items-center justify-end">
+                                      Bayar ke Mitra {getSortIcon('netToVendor')}
+                                    </div>
+                                </TableHead>
+                                <TableHead className="text-right cursor-pointer hover:bg-muted/50" onClick={() => handleSort('totalDeliveryFee')}>
+                                    <div className="flex items-center justify-end">
+                                      Ongkir {getSortIcon('totalDeliveryFee')}
+                                    </div>
+                                </TableHead>
                                 <TableHead>Rincian Item & Pembayaran per Mitra</TableHead>
                                 <TableHead>Alamat</TableHead>
                             </TableRow>
@@ -466,13 +521,14 @@ export default function AdminSummaryPage() {
                         <TableBody>
                             {filteredSummary.length === 0 ? (
                                 <TableRow>
-                                    <TableCell colSpan={7} className="text-center text-muted-foreground py-10">
+                                    <TableCell colSpan={8} className="text-center text-muted-foreground py-10">
                                     Tidak ada transaksi ditemukan.
                                     </TableCell>
                                 </TableRow>
                             ) : (
-                                filteredSummary.map(summary => (
+                                filteredSummary.map((summary, index) => (
                                     <TableRow key={summary.key}>
+                                        <TableCell className="text-muted-foreground font-mono text-xs">{index + 1}</TableCell>
                                         <TableCell className="font-medium">
                                             {summary.label}
                                             {summary.subLabel && <span className="block text-[10px] text-muted-foreground">{summary.subLabel}</span>}
@@ -526,6 +582,7 @@ export default function AdminSummaryPage() {
                         {filteredSummary.length > 0 && (
                             <TableFooter>
                                 <TableRow className="bg-primary/5 font-bold">
+                                    <TableCell></TableCell>
                                     <TableCell>TOTAL KESELURUHAN</TableCell>
                                     <TableCell className="text-right text-primary">{formatPrice(grandTotals.amount)}</TableCell>
                                     <TableCell className="text-right text-destructive">{formatPrice(grandTotals.admin)}</TableCell>
