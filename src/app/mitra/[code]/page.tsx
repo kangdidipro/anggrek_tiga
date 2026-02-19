@@ -52,6 +52,9 @@ const STATUS_FLOWS = {
   COD: ["Dipesan", "Diproses", "Dikumpulkan", "Dikirim dan Bayar", "Dibatalkan"]
 };
 
+// Kewenangan khusus Mitra: Hanya boleh memproses, mengumpulkan, atau membatalkan
+const MITRA_AUTHORITY_STATUSES = ["Diproses", "Dikumpulkan", "Dibatalkan"];
+
 export default function MitraOrderPage() {
   const params = useParams();
   const code = params.code as string;
@@ -350,6 +353,9 @@ export default function MitraOrderPage() {
             const orderNetto = orderBruto - orderAdmin;
             const vStatus = order.vendorStatuses?.[code] || { status: 'Dipesan', statusHistory: [] };
             const flow = STATUS_FLOWS[order.paymentMethod];
+            
+            // Filter hanya opsi yang boleh dipilih oleh Mitra, ditambah status saat ini (agar tidak pecah tampilannya)
+            const mitraOptions = flow.filter(s => MITRA_AUTHORITY_STATUSES.includes(s) || s === vStatus.status);
 
             return (
               <AccordionItem value={order.id} key={order.id} className="border-b-0">
@@ -394,9 +400,14 @@ export default function MitraOrderPage() {
                                 <SelectValue />
                               </SelectTrigger>
                               <SelectContent>
-                                {flow.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                                {mitraOptions.map(s => (
+                                  <SelectItem key={s} value={s}>{s}</SelectItem>
+                                ))}
                               </SelectContent>
                             </Select>
+                            <p className="text-[10px] text-muted-foreground mt-1 italic">
+                              * Mitra berwenang mengubah status ke "Diproses", "Dikumpulkan", atau "Dibatalkan".
+                            </p>
                           </div>
                           <Button variant="outline" size="sm" onClick={() => handlePrintReceipt(order)} className="shrink-0 border-primary/30">
                             <Printer className="h-4 w-4 mr-2" /> Cetak Slip
