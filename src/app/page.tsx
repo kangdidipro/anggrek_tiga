@@ -42,7 +42,7 @@ export default function Home() {
               Adapun pengantaran dikenakan <span className="font-bold text-foreground">ongkir sebesar Rp. 2.500,- per satu kali antar/paket pesanan</span> yang uangnya sepenuhnya diberikan untuk sipengantar yang merupakan anak-anak/ anggota karang taruna Anggrek 3.
             </p>
             <p className="font-bold text-foreground bg-primary/5 p-2 rounded-md">
-              Jika dalam proses pemesanan melalui aplikasi terjadi <span className="italic">trouble</span> silahkan hubungi call center kami 08111xx
+              Jika dalam proses pemesanan melalui aplikasi terjadi <span className="italic">trouble</span> silahkan hubungi call center kami +0811.9989.6567
             </p>
             <p className="italic">
               Kami <span className="font-bold uppercase text-primary">SIAP</span> Melayani Bapak & Ibu semua, terimakasih kami ucapkan, semoga berkah dan barokah.
