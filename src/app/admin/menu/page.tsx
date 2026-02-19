@@ -6,7 +6,7 @@ import { collection, doc, deleteDoc, setDoc, writeBatch } from 'firebase/firesto
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Loader2, Plus, Pencil, Trash2, RefreshCcw, Search, X, FileUp, ArrowUpDown, ArrowUp, ArrowDown, RotateCcw, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Loader2, Plus, Pencil, Trash2, RefreshCcw, Search, X, FileUp, ArrowUpDown, ArrowUp, ArrowDown, RotateCcw, ChevronLeft, ChevronRight, PackageOpen } from 'lucide-react';
 import { formatPrice } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
@@ -563,6 +563,15 @@ export default function AdminMenuPage() {
         </div>
       </Card>
 
+      <div className="flex items-center justify-between px-1">
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <PackageOpen className="h-4 w-4" />
+          <span>Total Records:</span>
+          <span className="font-bold text-foreground bg-primary/10 px-2 py-0.5 rounded">{filteredMenuItems.length}</span>
+          <span className="italic text-[10px]">(berdasarkan filter yang aktif)</span>
+        </div>
+      </div>
+
       <Card>
         <CardContent className="p-0 overflow-auto">
           <Table>
@@ -742,7 +751,7 @@ export default function AdminMenuPage() {
             <span className="text-sm text-muted-foreground">data per halaman</span>
           </div>
           <div className="text-sm text-muted-foreground border-l pl-4">
-            Total: <span className="font-bold text-foreground">{filteredMenuItems.length}</span> item
+            Filter: <span className="font-bold text-foreground">{filteredMenuItems.length}</span> / Total: <span className="font-bold text-foreground">{menuItems?.length || 0}</span> item
           </div>
         </div>
 
