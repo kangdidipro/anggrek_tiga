@@ -11,14 +11,15 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDes
 import { useToast } from '@/hooks/use-toast';
 import type { CartItem } from '@/lib/types';
 import { useCart } from '@/hooks/use-cart';
-import { Loader2, QrCode, Wallet } from 'lucide-react';
+import { Loader2, QrCode, Wallet, Truck } from 'lucide-react';
 import { useState } from 'react';
 import { useUser, useFirestore, errorEmitter, FirestorePermissionError } from '@/firebase';
 import { collection, writeBatch, doc, increment, getDoc, query, collectionGroup, getDocs } from 'firebase/firestore';
 import { useRouter } from 'next/navigation';
 import jsPDF from 'jspdf';
 import { formatPrice } from '@/lib/utils';
-import { format } from 'date-fns';
+import { format, addDays } from 'date-fns';
+import { id } from 'date-fns/locale';
 import { sendSmtpEmail, type SmtpConfig } from '@/app/actions';
 
 const formSchema = z.object({
@@ -55,6 +56,7 @@ export default function OrderForm({ cartItems, total, deliveryFee, setSheetOpen 
   });
 
   const paymentMethod = form.watch('paymentMethod');
+  const deliveryDate = addDays(new Date(), 1);
 
   const loadImage = (url: string): Promise<HTMLImageElement> => {
     return new Promise((resolve, reject) => {
@@ -105,7 +107,11 @@ export default function OrderForm({ cartItems, total, deliveryFee, setSheetOpen 
       
       pdf.text(`ID: #${orderId}`, 5, y);
       y += 4;
-      pdf.text(`Tgl: ${format(new Date(), 'dd/MM/yyyy HH:mm')}`, 5, y);
+      pdf.text(`Tgl Order: ${format(new Date(), 'dd/MM/yyyy HH:mm')}`, 5, y);
+      y += 4;
+      pdf.setFontStyle('bold');
+      pdf.text(`Tgl Kirim: ${format(deliveryDate, 'eeee, d MMM yyyy', { locale: id })}`, 5, y);
+      pdf.setFontStyle('normal');
       y += 4;
       pdf.text(`Pemesan: ${values.name}`, 5, y);
       y += 4;
@@ -137,12 +143,16 @@ export default function OrderForm({ cartItems, total, deliveryFee, setSheetOpen 
       await sendSmtpEmail(smtpConfig, {
         to: email,
         subject: `Struk Pesanan TakjilKu #${orderId}`,
-        text: `Halo ${values.name}, rincian pesanan Anda telah kami terima. Total Bayar: ${formatPrice(total)}. Lacak pesanan Anda di: ${trackingLink}`,
+        text: `Halo ${values.name}, rincian pesanan Anda telah kami terima. Jadwal Kirim: ${format(deliveryDate, 'eeee, d MMMM yyyy', { locale: id })}. Total Bayar: ${formatPrice(total)}. Lacak pesanan Anda di: ${trackingLink}`,
         html: `
           <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #eee; padding: 20px; border-radius: 10px;">
             <h2 style="color: #FF8C00; text-align: center;">Konfirmasi Pesanan TakjilKu</h2>
             <p>Halo <strong>${values.name}</strong>,</p>
-            <p>Terima kasih telah memesan di TakjilKu! Pesanan Anda telah kami terima dan sedang diproses.</p>
+            <p>Terima kasih telah memesan di TakjilKu! Pesanan Anda telah kami terima dan akan diantar sesuai jadwal berikut:</p>
+            <div style="background-color: #fff8e1; padding: 15px; border-radius: 5px; margin-bottom: 20px; border-left: 5px solid #FF8C00;">
+              <p style="margin: 0; font-weight: bold; color: #e65100;">Jadwal Pengiriman:</p>
+              <p style="margin: 5px 0 0 0; font-size: 18px;">${format(deliveryDate, 'eeee, d MMMM yyyy', { locale: id })}</p>
+            </div>
             <div style="background-color: #f9f9f9; padding: 15px; border-radius: 5px; margin-bottom: 20px;">
               <p><strong>ID Pesanan:</strong> #${orderId}</p>
               <p><strong>Total Bayar:</strong> ${formatPrice(total)}</p>
@@ -219,6 +229,7 @@ export default function OrderForm({ cartItems, total, deliveryFee, setSheetOpen 
           id: orderId,
           customerId: user.uid,
           orderDateTime: timestamp,
+          deliveryDate: deliveryDate.toISOString(),
           totalAmount: total,
           deliveryFee: deliveryFee,
           paymentMethod: values.paymentMethod,
@@ -288,6 +299,14 @@ export default function OrderForm({ cartItems, total, deliveryFee, setSheetOpen 
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+        <div className="p-3 bg-muted/50 rounded-lg border flex items-center gap-3 text-sm">
+          <Truck className="h-5 w-5 text-primary shrink-0" />
+          <div>
+            <p className="font-semibold">Tanggal Antar:</p>
+            <p className="text-primary font-bold">{format(deliveryDate, 'eeee, d MMMM yyyy', { locale: id })}</p>
+          </div>
+        </div>
+
         <FormField
           control={form.control}
           name="name"

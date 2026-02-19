@@ -1,6 +1,6 @@
 'use client';
 
-import { ShoppingCart, Trash2, Info } from 'lucide-react';
+import { ShoppingCart, Trash2, Info, Calendar } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger, SheetFooter } from '@/components/ui/sheet';
 import { useCart } from '@/hooks/use-cart';
@@ -11,6 +11,8 @@ import { ScrollArea } from './ui/scroll-area';
 import { deliveryFee } from '@/lib/constants';
 import { useState, useEffect } from 'react';
 import { Alert, AlertDescription, AlertTitle } from './ui/alert';
+import { format, addDays } from 'date-fns';
+import { id } from 'date-fns/locale';
 
 export default function Cart() {
   const { cartItems, totalItems, cartTotal, clearCart } = useCart();
@@ -22,6 +24,7 @@ export default function Cart() {
   }, []);
 
   const finalTotal = cartTotal + deliveryFee;
+  const deliveryDate = addDays(new Date(), 1);
 
   return (
     <Sheet open={open} onOpenChange={setOpen}>
@@ -77,12 +80,17 @@ export default function Cart() {
 
                 <Separator />
 
-                <Alert>
-                  <Info className="h-4 w-4" />
-                  <AlertTitle className="font-bold">Aturan Pemesanan</AlertTitle>
-                  <AlertDescription>
-                    <p>Pesanan hanya untuk diantar <strong>H+1</strong> dari tanggal pesanan.</p>
-                    <p>Batas waktu pemesanan adalah <strong>jam 4 sore</strong>.</p>
+                <Alert className="bg-primary/10 border-primary/20">
+                  <Calendar className="h-4 w-4 text-primary" />
+                  <AlertTitle className="font-bold text-primary">Jadwal Pengiriman (H+1)</AlertTitle>
+                  <AlertDescription className="space-y-2">
+                    <p className="text-xs">Pesanan Anda dijadwalkan untuk diantar pada:</p>
+                    <p className="text-lg font-bold underline underline-offset-4 decoration-primary/30">
+                      {format(deliveryDate, 'eeee, d MMMM yyyy', { locale: id })}
+                    </p>
+                    <p className="text-[10px] italic mt-2 opacity-70">
+                      * Batas waktu pemesanan adalah jam 4 sore setiap harinya untuk pengiriman esok hari.
+                    </p>
                   </AlertDescription>
                 </Alert>
 
