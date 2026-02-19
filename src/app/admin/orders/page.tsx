@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useEffect, useState, useMemo } from 'react';
@@ -278,14 +279,34 @@ export default function AdminOrdersPage() {
     doc.save(`orders_${date ? format(date, 'yyyy-MM-dd') : 'all'}_${statusFilter}.pdf`);
   };
 
-  const handlePrintReceipt = (order: Order, vendorCode?: string) => {
+  const loadImage = (url: string): Promise<HTMLImageElement> => {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => resolve(img);
+      img.onerror = reject;
+      img.src = url;
+    });
+  };
+
+  const handlePrintReceipt = async (order: Order, vendorCode?: string) => {
     const doc = new jsPDF({
       orientation: 'portrait',
       unit: 'mm',
-      format: [80, 200]
+      format: [80, 250] // Increased height for QRIS
     });
 
     const centerPos = 40;
+    let y = 10;
+
+    // Add QRIS Image at the top
+    try {
+      const qrisImg = await loadImage('/qris.jpeg');
+      doc.addImage(qrisImg, 'JPEG', 25, y, 30, 45);
+      y += 50;
+    } catch (e) {
+      console.warn("Failed to load QRIS image for receipt", e);
+    }
     
     // Filter items based on vendor if provided
     const itemsToPrint = vendorCode 
@@ -296,24 +317,28 @@ export default function AdminOrdersPage() {
     const totalToPrint = vendorCode ? subtotal : order.totalAmount;
 
     doc.setFontSize(12);
-    doc.text("TAKJILKU", centerPos, 10, { align: 'center' });
+    doc.text("TAKJILKU", centerPos, y, { align: 'center' });
+    y += 4;
     doc.setFontSize(8);
-    doc.text("Ramadhan UMKM RW06", centerPos, 14, { align: 'center' });
+    doc.text("Ramadhan UMKM RW06", centerPos, y, { align: 'center' });
+    y += 4;
     
     if (vendorCode) {
       doc.setFontSize(10);
-      doc.text(`SLIP MITRA: ${vendorCode}`, centerPos, 18, { align: 'center' });
+      doc.text(`SLIP MITRA: ${vendorCode}`, centerPos, y, { align: 'center' });
+      y += 4;
       doc.setFontSize(8);
     }
     
-    doc.text("-".repeat(40), centerPos, 22, { align: 'center' });
+    doc.text("-".repeat(40), centerPos, y + 4, { align: 'center' });
+    y += 10;
     
-    doc.text(`ID: #${order.id.substring(0, 7)}`, 5, 28);
-    doc.text(`Tgl: ${format(new Date(order.orderDateTime), 'dd/MM/yyyy HH:mm')}`, 5, 32);
-    doc.text(`Bayar: ${order.paymentMethod}`, 5, 36);
-    doc.text("-".repeat(40), centerPos, 40, { align: 'center' });
+    doc.text(`ID: #${order.id.substring(0, 7)}`, 5, y);
+    doc.text(`Tgl: ${format(new Date(order.orderDateTime), 'dd/MM/yyyy HH:mm')}`, 5, y + 4);
+    doc.text(`Bayar: ${order.paymentMethod}`, 5, y + 8);
+    doc.text("-".repeat(40), centerPos, y + 12, { align: 'center' });
     
-    let y = 46;
+    y += 18;
     itemsToPrint.forEach((item) => {
       doc.text(`${item.name}`, 5, y);
       doc.text(`${item.quantity} x ${formatPrice(item.priceAtOrder)}`, 5, y + 4);
@@ -501,6 +526,7 @@ export default function AdminOrdersPage() {
                                         </h4>
                                         <div className="flex flex-col md:flex-row gap-4 mb-4">
                                           <div className="flex-1 max-w-xs">
+                                            <span className="text-xs font-bold text-muted-foreground block mb-2">UBAH STATUS PESANAN:</span>
                                             <Select 
                                               disabled={isUpdatingStatus === order.id} 
                                               value={order.status === 'pending' ? 'Dipesan' : (order.status || 'Dipesan')} 

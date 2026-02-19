@@ -57,6 +57,16 @@ export default function OrderForm({ cartItems, total, deliveryFee, setSheetOpen 
 
   const paymentMethod = form.watch('paymentMethod');
 
+  const loadImage = (url: string): Promise<HTMLImageElement> => {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => resolve(img);
+      img.onerror = reject;
+      img.src = url;
+    });
+  };
+
   const sendEmailReceipt = async (email: string, values: z.infer<typeof formSchema>, orderId: string) => {
     if (!firestore) return;
 
@@ -73,23 +83,41 @@ export default function OrderForm({ cartItems, total, deliveryFee, setSheetOpen 
       const pdf = new jsPDF({
         orientation: 'portrait',
         unit: 'mm',
-        format: [80, 200]
+        format: [80, 250] // Increased height for QRIS
       });
 
       const centerPos = 40;
+      let y = 10;
+
+      // Add QRIS Image at the top
+      try {
+        const qrisImg = await loadImage('/qris.jpeg');
+        pdf.addImage(qrisImg, 'JPEG', 25, y, 30, 45);
+        y += 50;
+      } catch (e) {
+        console.warn("Failed to load QRIS image for PDF", e);
+      }
+
       pdf.setFontSize(12);
-      pdf.text("TAKJILKU", centerPos, 10, { align: 'center' });
+      pdf.text("TAKJILKU", centerPos, y, { align: 'center' });
+      y += 4;
       pdf.setFontSize(8);
-      pdf.text("Ramadhan UMKM RW06", centerPos, 14, { align: 'center' });
-      pdf.text("-".repeat(40), centerPos, 20, { align: 'center' });
+      pdf.text("Ramadhan UMKM RW06", centerPos, y, { align: 'center' });
+      y += 6;
+      pdf.text("-".repeat(40), centerPos, y, { align: 'center' });
+      y += 6;
       
-      pdf.text(`ID: #${orderId.substring(0, 7)}`, 5, 26);
-      pdf.text(`Tgl: ${format(new Date(), 'dd/MM/yyyy HH:mm')}`, 5, 30);
-      pdf.text(`Pemesan: ${values.name}`, 5, 34);
-      pdf.text(`Bayar: ${values.paymentMethod}`, 5, 38);
-      pdf.text("-".repeat(40), centerPos, 42, { align: 'center' });
+      pdf.text(`ID: #${orderId.substring(0, 7)}`, 5, y);
+      y += 4;
+      pdf.text(`Tgl: ${format(new Date(), 'dd/MM/yyyy HH:mm')}`, 5, y);
+      y += 4;
+      pdf.text(`Pemesan: ${values.name}`, 5, y);
+      y += 4;
+      pdf.text(`Bayar: ${values.paymentMethod}`, 5, y);
+      y += 4;
+      pdf.text("-".repeat(40), centerPos, y, { align: 'center' });
+      y += 6;
       
-      let y = 48;
       cartItems.forEach((item) => {
         pdf.text(`${item.product.name}`, 5, y);
         pdf.text(`${item.quantity} x ${formatPrice(item.product.price)}`, 5, y + 4);
