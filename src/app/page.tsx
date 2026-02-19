@@ -31,15 +31,27 @@ export default function Home() {
               ٱلسَّلَامُ عَلَيْكُمْ وَرَحْمَةُ ٱللَّٰهِ وَبَرَكَاتُهُ
             </p>
           </CardHeader>
-          <CardContent className="text-center text-muted-foreground space-y-2">
-            <p>
-              Jamaah muslim dan warga Anggrek-3 di lingkungan RW06 dan sekitarnya yang kami hormati.
+          <CardContent className="text-center text-muted-foreground space-y-4">
+            <p className="font-semibold text-foreground">
+              Kepada Yth. Bapak dan Ibu warga Anggrek 3 RW06 dan sekitarnya
             </p>
             <p>
-              Kami dari pengurus dan tim UMKM lingkungan RW06 dan sekitarnya, selama bulan Ramadhan ini akan menyediakan pemesanan takjil lewat online dengan fasilitas pesan antar (delivery) ke rumah pemesan.
-              Adapun pengantaran dikenakan ongkir sebesar Rp. 2.500,- per satu kali antar/paket pesanan yang uangnya sepenuhnya untuk sipengantar dari anggota sekuriti.
+              Kami dari pengelola/pengurus UMKM Anggrek 3 RW06 dan sekitarnya, selama bulan Ramadhan 1447 UMKM anggrek 3 akan menyediakan <span className="font-bold italic text-foreground">pemesanan takjil H-1 lewat Aplikasi online</span> dengan <span className="italic underline">fasilitas pesan antar (delivery) ke rumah pemesan.</span>
             </p>
-            <p className="font-bold">Demikian kami sampaikan semoga berguna.</p>
+            <p>
+              Adapun pengantaran dikenakan <span className="font-bold text-foreground">ongkir sebesar Rp. 2.500,- per satu kali antar/paket pesanan</span> yang uangnya sepenuhnya diberikan untuk sipengantar yang merupakan anak-anak/ anggota karang taruna Anggrek 3.
+            </p>
+            <p className="font-bold text-foreground bg-primary/5 p-2 rounded-md">
+              Jika dalam proses pemesanan melalui aplikasi terjadi <span className="italic">trouble</span> silahkan hubungi call center kami 08111xx
+            </p>
+            <p className="italic">
+              Kami <span className="font-bold uppercase text-primary">SIAP</span> Melayani Bapak & Ibu semua, terimakasih kami ucapkan, semoga berkah dan barokah.
+            </p>
+            <div className="pt-4 border-t border-primary/10">
+              <p className="font-bold text-foreground">Hormat Kami</p>
+              <p className="font-medium text-primary">Pengelola UMKM RW 06 - GDC A3</p>
+              <p className="text-xs">Anggrek 3 Grand Depok City</p>
+            </div>
           </CardContent>
         </Card>
       </section>
