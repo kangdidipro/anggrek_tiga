@@ -5,7 +5,7 @@ import { useFirestore, useUser, useCollection, useMemoFirebase } from '@/firebas
 import { collectionGroup, getDocs, query, collection } from 'firebase/firestore';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Loader2, FileDown, CalendarIcon, FileText, Mail, Search, LayoutGrid, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
+import { Loader2, FileDown, CalendarIcon, FileText, Mail, Search, LayoutGrid, ArrowUpDown, ArrowUp, ArrowDown, Filter } from 'lucide-react';
 import { formatPrice, getVendorFromSku } from '@/lib/utils';
 import * as XLSX from 'xlsx';
 import { saveAs } from 'file-saver';
@@ -38,6 +38,8 @@ interface Order {
   orderDateTime: string; // ISO string
   deliveryAddress: string;
   deliveryFee?: number;
+  paymentMethod: 'QRIS' | 'COD';
+  vendorStatuses?: Record<string, { status: string }>;
   items: OrderItem[];
 }
 
@@ -59,6 +61,8 @@ type SortConfig = {
   direction: 'asc' | 'desc';
 };
 
+const ALL_STATUSES = ["Dipesan", "Dibayar", "Diproses", "Dikumpulkan", "Dikirim", "Dikirim dan Bayar", "Dibatalkan"];
+
 export default function AdminSummaryPage() {
   const firestore = useFirestore();
   const { user, isUserLoading } = useUser();
@@ -68,6 +72,7 @@ export default function AdminSummaryPage() {
   const [targetEmail, setTargetEmail] = useState('');
   const [date, setDate] = useState<Date | undefined>(new Date());
   const [vendorFilter, setVendorFilter] = useState('all');
+  const [statusFilter, setStatusFilter] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [groupBy, setGroupBy] = useState<'orderId' | 'vendor' | 'sku'>('orderId');
   const [sortConfig, setSortConfig] = useState<SortConfig>({ key: 'label', direction: 'asc' });
@@ -142,13 +147,17 @@ export default function AdminSummaryPage() {
             const vendor = item.vendor || getVendorFromSku(item.sku);
             const matchesVendor = vendorFilter === 'all' || vendor === vendorFilter;
             
+            // Status Filter Logic
+            const vStatus = order.vendorStatuses?.[vendor]?.status || 'Dipesan';
+            const matchesStatus = statusFilter === 'all' || vStatus === statusFilter;
+
             const search = searchTerm.toLowerCase();
             const matchesSearch = searchTerm === '' || 
                 order.id.toLowerCase().includes(search) ||
                 order.deliveryAddress.toLowerCase().includes(search) ||
                 item.name.toLowerCase().includes(search);
 
-            return matchesVendor && matchesSearch;
+            return matchesVendor && matchesStatus && matchesSearch;
         });
 
         if (uniqueItemsForThisOrder.length === 0) return;
@@ -163,7 +172,6 @@ export default function AdminSummaryPage() {
             let subLabel = '';
 
             if (groupBy === 'orderId') {
-                // Key is Sub-Order (OrderId + Vendor)
                 key = `${order.id}-${vendor}`;
                 const vName = vendorLookup[vendor];
                 label = key;
@@ -197,7 +205,6 @@ export default function AdminSummaryPage() {
             const itemTotal = item.quantity * item.priceAtOrder;
             summaryMap[key].totalAmount += itemTotal;
             
-            // Ongkir Logic: Per Mitra per Order
             const vendorOrderKey = `${order.id}-${vendor}`;
             if (!orderVendorsSeenInOrder.has(vendorOrderKey)) {
                 orderVendorsSeenInOrder.add(vendorOrderKey);
@@ -229,7 +236,7 @@ export default function AdminSummaryPage() {
             addresses: Array.from(data.addresses)
         };
     });
-  }, [orders, date, groupBy, vendorLookup, vendorFilter, searchTerm]);
+  }, [orders, date, groupBy, vendorLookup, vendorFilter, statusFilter, searchTerm]);
 
   const filteredSummary = useMemo(() => {
     let result = [...summaryData];
@@ -430,6 +437,19 @@ export default function AdminSummaryPage() {
                                 <SelectItem key={v} value={v}>
                                     {getMitraDisplayName(v)}
                                 </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+
+                    <Select value={statusFilter} onValueChange={setStatusFilter}>
+                        <SelectTrigger className="w-[150px] border-primary/30">
+                            <Filter className="mr-2 h-4 w-4 text-primary" />
+                            <SelectValue placeholder="Semua Status" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="all">Semua Status</SelectItem>
+                            {ALL_STATUSES.map(s => (
+                                <SelectItem key={s} value={s}>{s}</SelectItem>
                             ))}
                         </SelectContent>
                     </Select>
