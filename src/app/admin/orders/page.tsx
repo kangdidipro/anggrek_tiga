@@ -52,6 +52,7 @@ interface Order {
   customerId: string;
   orderDateTime: string;
   totalAmount: number;
+  deliveryFee?: number;
   status: string;
   statusHistory?: StatusLog[];
   deliveryAddress: string;
@@ -303,7 +304,7 @@ export default function AdminOrdersPage() {
   };
 
   const handlePrintReceipt = async (order: Order, vendorCode?: string) => {
-    const doc = new jsPDF({
+    const docPdf = new jsPDF({
       orientation: 'portrait',
       unit: 'mm',
       format: [80, 250]
@@ -314,7 +315,7 @@ export default function AdminOrdersPage() {
 
     try {
       const qrisImg = await loadImage('/qris.jpeg');
-      doc.addImage(qrisImg, 'JPEG', 25, y, 30, 45);
+      docPdf.addImage(qrisImg, 'JPEG', 25, y, 30, 45);
       y += 50;
     } catch (e) {
       console.warn("Failed to load QRIS image for receipt", e);
@@ -327,60 +328,60 @@ export default function AdminOrdersPage() {
     const subtotal = itemsToPrint.reduce((sum, item) => sum + (item.priceAtOrder * item.quantity), 0);
     const totalToPrint = vendorCode ? subtotal : order.totalAmount;
 
-    doc.setFontSize(12);
-    doc.text("TAKJILKU", centerPos, y, { align: 'center' });
+    docPdf.setFontSize(12);
+    docPdf.text("TAKJILKU", centerPos, y, { align: 'center' });
     y += 4;
-    doc.setFontSize(8);
-    doc.text("Ramadhan UMKM RW06", centerPos, y, { align: 'center' });
+    docPdf.setFontSize(8);
+    docPdf.text("Ramadhan UMKM RW06", centerPos, y, { align: 'center' });
     y += 4;
     
     if (vendorCode) {
-      doc.setFontSize(10);
-      doc.text(`SLIP MITRA: ${vendorCode}`, centerPos, y, { align: 'center' });
+      docPdf.setFontSize(10);
+      docPdf.text(`SLIP MITRA: ${vendorCode}`, centerPos, y, { align: 'center' });
       y += 4;
-      doc.setFontSize(8);
+      docPdf.setFontSize(8);
     }
     
-    doc.text("-".repeat(40), centerPos, y + 4, { align: 'center' });
+    docPdf.text("-".repeat(40), centerPos, y + 4, { align: 'center' });
     y += 10;
     
-    doc.text(`ID: #${order.id}`, 5, y);
-    doc.text(`Tgl: ${format(new Date(order.orderDateTime), 'dd/MM/yyyy HH:mm')}`, 5, y + 4);
-    doc.text(`Bayar: ${order.paymentMethod}`, 5, y + 8);
-    doc.text("-".repeat(40), centerPos, y + 12, { align: 'center' });
+    docPdf.text(`ID: #${order.id}`, 5, y);
+    docPdf.text(`Tgl: ${format(new Date(order.orderDateTime), 'dd/MM/yyyy HH:mm')}`, 5, y + 4);
+    docPdf.text(`Bayar: ${order.paymentMethod}`, 5, y + 8);
+    docPdf.text("-".repeat(40), centerPos, y + 12, { align: 'center' });
     
     y += 18;
     itemsToPrint.forEach((item) => {
-      doc.text(`${item.name}`, 5, y);
-      doc.text(`${item.quantity} x ${formatPrice(item.priceAtOrder)}`, 5, y + 4);
-      doc.text(`${formatPrice(item.priceAtOrder * item.quantity)}`, 75, y + 4, { align: 'right' });
+      docPdf.text(`${item.name}`, 5, y);
+      docPdf.text(`${item.quantity} x ${formatPrice(item.priceAtOrder)}`, 5, y + 4);
+      docPdf.text(`${formatPrice(item.priceAtOrder * item.quantity)}`, 75, y + 4, { align: 'right' });
       y += 10;
     });
     
-    doc.text("-".repeat(40), centerPos, y, { align: 'center' });
+    docPdf.text("-".repeat(40), centerPos, y, { align: 'center' });
     y += 6;
     
     if (!vendorCode) {
-      doc.text("Ongkir (Delivery):", 5, y);
-      doc.text(`${formatPrice(2500)}`, 75, y, { align: 'right' });
+      docPdf.text("Ongkir (Delivery):", 5, y);
+      docPdf.text(`${formatPrice(order.deliveryFee || 2500)}`, 75, y, { align: 'right' });
       y += 6;
     }
     
-    doc.setFontSize(10);
-    doc.text(vendorCode ? "SUBTOTAL MITRA:" : "TOTAL:", 5, y);
-    doc.text(`${formatPrice(totalToPrint)}`, 75, y, { align: 'right' });
+    docPdf.setFontSize(10);
+    docPdf.text(vendorCode ? "SUBTOTAL MITRA:" : "TOTAL:", 5, y);
+    docPdf.text(`${formatPrice(totalToPrint)}`, 75, y, { align: 'right' });
     y += 10;
     
-    doc.setFontSize(8);
-    doc.text("Alamat Pengiriman:", 5, y);
-    const splitAddress = doc.splitTextToSize(order.deliveryAddress, 70);
-    doc.text(splitAddress, 5, y + 4);
+    docPdf.setFontSize(8);
+    docPdf.text("Alamat Pengiriman:", 5, y);
+    const splitAddress = docPdf.splitTextToSize(order.deliveryAddress, 70);
+    docPdf.text(splitAddress, 5, y + 4);
     
     y += (splitAddress.length * 4) + 10;
-    doc.text("Terima Kasih Telah Memesan!", centerPos, y, { align: 'center' });
-    doc.text("Semoga Berkah", centerPos, y + 4, { align: 'center' });
+    docPdf.text("Terima Kasih Telah Memesan!", centerPos, y, { align: 'center' });
+    docPdf.text("Semoga Berkah", centerPos, y + 4, { align: 'center' });
     
-    doc.save(`${vendorCode ? 'slip_mitra' : 'struk'}_${order.id}.pdf`);
+    docPdf.save(`${vendorCode ? 'slip_mitra' : 'struk'}_${order.id}.pdf`);
     
     toast({
       title: vendorCode ? "Slip Mitra Berhasil Dibuat" : "Struk Berhasil Dibuat",
@@ -621,6 +622,19 @@ export default function AdminOrdersPage() {
                                                   <span className="text-muted-foreground">{formatPrice(item.priceAtOrder * item.quantity)}</span>
                                               </div>
                                           ))}
+                                          
+                                          {groupBy === 'orderId' && (
+                                            <>
+                                              <div className="flex justify-between text-sm pt-2 border-t border-dashed mt-2">
+                                                <span className="text-muted-foreground italic">Ongkir (Delivery)</span>
+                                                <span className="text-muted-foreground">{formatPrice(order.deliveryFee || 2500)}</span>
+                                              </div>
+                                              <div className="flex justify-between text-sm font-bold pt-1">
+                                                <span>Total Bayar</span>
+                                                <span className="text-primary">{formatPrice(order.totalAmount)}</span>
+                                              </div>
+                                            </>
+                                          )}
                                       </div>
                                       </div>
                                       <div className="border-t pt-4">
