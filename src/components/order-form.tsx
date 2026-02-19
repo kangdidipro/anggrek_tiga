@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useForm } from 'react-hook-form';
@@ -249,6 +250,16 @@ export default function OrderForm({ cartItems, total, deliveryFee, setSheetOpen 
       const timestamp = now.toISOString();
       const finalDeliveryDate = addDays(now, isAfterCutoff ? 2 : 1).toISOString();
 
+      // Determine involved vendors
+      const uniqueVendors = Array.from(new Set(cartItems.map(item => item.product.vendor || getVendorFromSku(item.product.sku))));
+      const vendorStatuses: Record<string, any> = {};
+      uniqueVendors.forEach(v => {
+        vendorStatuses[v] = {
+          status: 'Dipesan',
+          statusHistory: [{ status: 'Dipesan', timestamp: timestamp }]
+        };
+      });
+
       const customerRef = doc(firestore, 'customers', user.uid);
       batch.set(customerRef, {
         id: user.uid,
@@ -269,10 +280,7 @@ export default function OrderForm({ cartItems, total, deliveryFee, setSheetOpen 
           totalAmount: total,
           deliveryFee: deliveryFee,
           paymentMethod: values.paymentMethod,
-          status: 'Dipesan',
-          statusHistory: [
-            { status: 'Dipesan', timestamp: timestamp }
-          ],
+          vendorStatuses: vendorStatuses,
           deliveryAddress: values.address,
       };
       batch.set(orderRef, newOrder);
@@ -287,7 +295,7 @@ export default function OrderForm({ cartItems, total, deliveryFee, setSheetOpen 
               priceAtOrder: item.product.price,
               name: item.product.name,
               sku: item.product.sku,
-              vendor: item.product.vendor,
+              vendor: item.product.vendor || getVendorFromSku(item.product.sku),
           });
 
           const menuItemRef = doc(firestore, 'menuItems', item.product.id);

@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useEffect, useState, useMemo } from 'react';
@@ -32,7 +33,7 @@ interface OrderItem {
   quantity: number;
   priceAtOrder: number;
   sku: string;
-  vendor?: string;
+  vendor: string;
 }
 
 interface Order {
@@ -40,24 +41,20 @@ interface Order {
   customerId: string;
   orderDateTime: string;
   totalAmount: number;
-  status: string;
-  statusHistory?: StatusLog[];
+  paymentMethod: 'QRIS' | 'COD';
+  vendorStatuses: Record<string, { status: string; statusHistory: StatusLog[] }>;
   deliveryAddress: string;
-  paymentMethod: string;
   items: OrderItem[];
 }
 
-const getVendorFromSku = (sku: string) => {
-  if (!sku) return 'UNKNOWN';
-  if (sku.includes('-')) return sku.split('-')[0];
-  const match = sku.match(/^[a-zA-Z]+/);
-  return match ? match[0] : sku;
+const STATUS_FLOWS = {
+  QRIS: ["Dipesan", "Dibayar", "Diproses", "Dikumpulkan", "Dikirim", "Dibatalkan"],
+  COD: ["Dipesan", "Diproses", "Dikumpulkan", "Dikirim dan Bayar", "Dibatalkan"]
 };
 
-const ORDER_STATUSES = ["Dipesan", "Diproses", "Dikirim", "Dibayar", "Dibatalkan"];
-
 export default function MitraOrderPage() {
-  const { code } = useParams();
+  const params = useParams();
+  const code = params.code as string;
   const firestore = useFirestore();
   const { user, isUserLoading: isAuthLoading } = useUser();
   const [orders, setOrders] = useState<Order[]>([]);
@@ -93,7 +90,7 @@ export default function MitraOrderPage() {
         // Filter orders that have items belonging to this mitra
         const ordersWithItems: Order[] = ordersData.map(order => ({
             ...order,
-            items: orderItemsData.filter(item => item.orderId === order.id && (item.vendor || getVendorFromSku(item.sku)) === code)
+            items: orderItemsData.filter(item => item.orderId === order.id && item.vendor === code)
         })).filter(order => order.items.length > 0)
           .sort((a, b) => new Date(b.orderDateTime).getTime() - new Date(a.orderDateTime).getTime());
 
@@ -115,7 +112,6 @@ export default function MitraOrderPage() {
     });
   }, [orders, date]);
 
-  // Financial Summaries
   const financialSummary = useMemo(() => {
     const bruto = filteredOrders.reduce((acc, order) => 
       acc + order.items.reduce((sum, item) => sum + (item.quantity * item.priceAtOrder), 0), 0
@@ -136,19 +132,20 @@ export default function MitraOrderPage() {
     const now = new Date().toISOString();
     const orderRef = doc(firestore, 'customers', order.customerId, 'orders', order.id);
     const updateData = {
-      status: newStatus,
-      statusHistory: arrayUnion({ status: newStatus, timestamp: now })
+      [`vendorStatuses.${code}.status`]: newStatus,
+      [`vendorStatuses.${code}.statusHistory`]: arrayUnion({ status: newStatus, timestamp: now })
     };
 
     updateDoc(orderRef, updateData)
       .then(() => {
         setOrders(prev => prev.map(o => {
           if (o.id === order.id) {
-            return {
-              ...o,
+            const updatedVendorStatuses = { ...o.vendorStatuses };
+            updatedVendorStatuses[code] = {
               status: newStatus,
-              statusHistory: [...(o.statusHistory || []), { status: newStatus, timestamp: now }]
+              statusHistory: [...(updatedVendorStatuses[code]?.statusHistory || []), { status: newStatus, timestamp: now }]
             };
+            return { ...o, vendorStatuses: updatedVendorStatuses };
           }
           return o;
         }));
@@ -266,12 +263,13 @@ export default function MitraOrderPage() {
   };
 
   const getStatusBadgeColor = (status: string) => {
-    const s = status === 'pending' ? 'Dipesan' : (status || 'Dipesan');
-    switch (s) {
+    switch (status) {
       case 'Dipesan': return 'bg-yellow-500 hover:bg-yellow-600';
+      case 'Dibayar': return 'bg-orange-500 hover:bg-orange-600';
       case 'Diproses': return 'bg-blue-500 hover:bg-blue-600';
-      case 'Dikirim': return 'bg-purple-500 hover:bg-purple-600';
-      case 'Dibayar': return 'bg-green-600 hover:bg-green-700';
+      case 'Dikumpulkan': return 'bg-purple-500 hover:bg-purple-600';
+      case 'Dikirim': 
+      case 'Dikirim dan Bayar': return 'bg-green-600 hover:bg-green-700';
       case 'Dibatalkan': return 'bg-destructive hover:bg-destructive/90';
       default: return 'bg-gray-500 hover:bg-gray-600';
     }
@@ -350,6 +348,8 @@ export default function MitraOrderPage() {
             const orderBruto = order.items.reduce((sum, item) => sum + (item.quantity * item.priceAtOrder), 0);
             const orderAdmin = orderBruto * 0.05;
             const orderNetto = orderBruto - orderAdmin;
+            const vStatus = order.vendorStatuses?.[code] || { status: 'Dipesan', statusHistory: [] };
+            const flow = STATUS_FLOWS[order.paymentMethod];
 
             return (
               <AccordionItem value={order.id} key={order.id} className="border-b-0">
@@ -362,7 +362,7 @@ export default function MitraOrderPage() {
                             Order #{order.id}
                           </CardTitle>
                           <CardDescription className="text-xs md:text-sm">
-                            {format(new Date(order.orderDateTime), 'HH:mm')} WIB
+                            {format(new Date(order.orderDateTime), 'HH:mm')} WIB | {order.paymentMethod}
                           </CardDescription>
                         </div>
                         <div className="text-right flex flex-col items-end gap-1">
@@ -372,8 +372,8 @@ export default function MitraOrderPage() {
                               {formatPrice(orderNetto)}
                             </p>
                           </div>
-                          <Badge className={getStatusBadgeColor(order.status)}>
-                            {order.status === 'pending' ? 'Dipesan' : (order.status || 'Dipesan')}
+                          <Badge className={getStatusBadgeColor(vStatus.status)}>
+                            {vStatus.status}
                           </Badge>
                         </div>
                       </div>
@@ -384,17 +384,17 @@ export default function MitraOrderPage() {
                       <div className="border-t pt-4">
                         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-4">
                           <div className="flex-1 w-full max-w-xs">
-                            <label className="text-xs font-bold text-muted-foreground block mb-2 uppercase tracking-tighter">Ubah Status Pesanan:</label>
+                            <label className="text-xs font-bold text-muted-foreground block mb-2 uppercase tracking-tighter">Ubah Status Pengerjaan Mitra:</label>
                             <Select 
                               disabled={isUpdatingStatus === order.id} 
-                              value={order.status === 'pending' ? 'Dipesan' : (order.status || 'Dipesan')} 
+                              value={vStatus.status} 
                               onValueChange={(val) => handleUpdateStatus(order, val)}
                             >
                               <SelectTrigger className="border-primary/20">
-                                <SelectValue placeholder="Ubah Status" />
+                                <SelectValue />
                               </SelectTrigger>
                               <SelectContent>
-                                {ORDER_STATUSES.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                                {flow.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
                               </SelectContent>
                             </Select>
                           </div>
@@ -443,11 +443,11 @@ export default function MitraOrderPage() {
 
                       <div className="border-t pt-4">
                         <h4 className="font-semibold mb-2 text-sm text-muted-foreground uppercase tracking-wider flex items-center gap-2">
-                          <Clock className="h-4 w-4" /> Riwayat Status:
+                          <Clock className="h-4 w-4" /> Riwayat Status Mitra:
                         </h4>
                         <div className="bg-muted/30 rounded-lg p-3 space-y-2">
-                          {order.statusHistory && order.statusHistory.length > 0 ? (
-                            order.statusHistory.map((log, i) => (
+                          {vStatus.statusHistory && vStatus.statusHistory.length > 0 ? (
+                            vStatus.statusHistory.map((log, i) => (
                               <div key={i} className="flex items-start gap-3 text-xs">
                                 <CheckCircle2 className="h-3 w-3 text-primary mt-0.5" />
                                 <div className="flex-1 flex justify-between">
@@ -462,7 +462,7 @@ export default function MitraOrderPage() {
                             <div className="flex items-start gap-3 text-xs">
                               <CheckCircle2 className="h-3 w-3 text-primary mt-0.5" />
                               <div className="flex-1 flex justify-between">
-                                <span className="font-bold">{order.status === 'pending' ? 'Dipesan' : (order.status || 'Dipesan')}</span>
+                                <span className="font-bold">Dipesan</span>
                                 <span className="text-muted-foreground">
                                   {format(new Date(order.orderDateTime), 'dd MMM, HH:mm', { locale: id })}
                                 </span>

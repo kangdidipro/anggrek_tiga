@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useEffect, useState, useMemo } from 'react';
@@ -36,6 +37,11 @@ interface StatusLog {
   timestamp: string;
 }
 
+interface VendorStatus {
+  status: string;
+  statusHistory: StatusLog[];
+}
+
 interface OrderItem {
   id: string;
   orderId: string;
@@ -44,7 +50,7 @@ interface OrderItem {
   quantity: number;
   priceAtOrder: number;
   sku: string;
-  vendor?: string;
+  vendor: string;
 }
 
 interface Order {
@@ -53,10 +59,9 @@ interface Order {
   orderDateTime: string;
   totalAmount: number;
   deliveryFee?: number;
-  status: string;
-  statusHistory?: StatusLog[];
+  paymentMethod: 'QRIS' | 'COD';
+  vendorStatuses: Record<string, VendorStatus>;
   deliveryAddress: string;
-  paymentMethod: string;
   items: OrderItem[];
 }
 
@@ -67,7 +72,10 @@ const getVendorFromSku = (sku: string) => {
   return match ? match[0] : sku;
 };
 
-const ORDER_STATUSES = ["Dipesan", "Diproses", "Dikirim", "Dibayar", "Dibatalkan"];
+const STATUS_FLOWS = {
+  QRIS: ["Dipesan", "Dibayar", "Diproses", "Dikumpulkan", "Dikirim", "Dibatalkan"],
+  COD: ["Dipesan", "Diproses", "Dikumpulkan", "Dikirim dan Bayar", "Dibatalkan"]
+};
 
 export default function AdminOrdersPage() {
   const firestore = useFirestore();
@@ -77,8 +85,7 @@ export default function AdminOrdersPage() {
   const [isSending, setIsSending] = useState(false);
   const [targetEmail, setTargetEmail] = useState('');
   const [date, setDate] = useState<Date | undefined>(new Date());
-  const [vendor, setVendor] = useState<string>('all');
-  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [vendorFilter, setVendorFilter] = useState<string>('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [groupBy, setGroupBy] = useState<'orderId' | 'vendor' | 'sku'>('orderId');
   const [orderToDelete, setOrderToDelete] = useState<Order | null>(null);
@@ -87,7 +94,7 @@ export default function AdminOrdersPage() {
   const { toast } = useToast();
   
   const allVendors = useMemo(() => {
-    const vendorSet = new Set(orders.flatMap(o => o.items.map(i => i.vendor || getVendorFromSku(i.sku))));
+    const vendorSet = new Set(orders.flatMap(o => o.items.map(i => i.vendor)));
     return ['all', ...Array.from(vendorSet)];
   }, [orders]);
 
@@ -108,7 +115,13 @@ export default function AdminOrdersPage() {
         const orderItemsSnapshot = await getDocs(orderItemsQuery);
         const orderItemsData = orderItemsSnapshot.docs.map(doc => {
           const pathParts = doc.ref.path.split('/');
-          return { id: doc.id, customerId: pathParts[1], orderId: pathParts[3], ...doc.data() } as OrderItem;
+          return { 
+            id: doc.id, 
+            customerId: pathParts[1], 
+            orderId: pathParts[3], 
+            ...doc.data(),
+            vendor: doc.data().vendor || getVendorFromSku(doc.data().sku)
+          } as OrderItem;
         });
         
         const ordersWithItems: Order[] = ordersData.map(order => ({
@@ -131,10 +144,7 @@ export default function AdminOrdersPage() {
     return orders.filter(order => {
         const orderDate = new Date(order.orderDateTime);
         const dateMatch = date ? orderDate.toDateString() === date.toDateString() : true;
-        const vendorMatch = vendor === 'all' ? true : order.items.some(item => (item.vendor || getVendorFromSku(item.sku)) === vendor);
-        
-        const currentStatus = order.status === 'pending' ? 'Dipesan' : (order.status || 'Dipesan');
-        const statusMatch = statusFilter === 'all' ? true : currentStatus === statusFilter;
+        const vendorMatch = vendorFilter === 'all' ? true : order.items.some(item => item.vendor === vendorFilter);
         
         const search = searchTerm.toLowerCase();
         const searchMatch = search === '' || 
@@ -142,9 +152,9 @@ export default function AdminOrdersPage() {
             order.deliveryAddress.toLowerCase().includes(search) ||
             order.items.some(item => item.name.toLowerCase().includes(search));
 
-        return dateMatch && vendorMatch && searchMatch && statusMatch;
+        return dateMatch && vendorMatch && searchMatch;
     });
-  }, [orders, date, vendor, statusFilter, searchTerm]);
+  }, [orders, date, vendorFilter, searchTerm]);
 
   const groupedData = useMemo(() => {
     const groups: Record<string, Order[]> = {};
@@ -153,7 +163,7 @@ export default function AdminOrdersPage() {
         if (groupBy === 'orderId') {
             groups[order.id] = [order];
         } else if (groupBy === 'vendor') {
-            const vendorsInOrder = new Set(order.items.map(item => item.vendor || getVendorFromSku(item.sku)));
+            const vendorsInOrder = new Set(order.items.map(item => item.vendor));
             vendorsInOrder.forEach(vendorCode => {
                 if (!groups[vendorCode]) groups[vendorCode] = [];
                 groups[vendorCode].push(order);
@@ -174,40 +184,43 @@ export default function AdminOrdersPage() {
   const groupItemsByVendor = (items: OrderItem[]) => {
     const grouped: Record<string, OrderItem[]> = {};
     items.forEach(item => {
-      const v = item.vendor || getVendorFromSku(item.sku);
+      const v = item.vendor;
       if (!grouped[v]) grouped[v] = [];
       grouped[v].push(item);
     });
     return grouped;
   };
 
-  const handleUpdateStatus = async (order: Order, newStatus: string) => {
+  const handleUpdateVendorStatus = async (order: Order, vendorCode: string, newStatus: string) => {
     if (!firestore || isUpdatingStatus) return;
-    setIsUpdatingStatus(order.id);
+    setIsUpdatingStatus(`${order.id}-${vendorCode}`);
 
     const now = new Date().toISOString();
     const orderRef = doc(firestore, 'customers', order.customerId, 'orders', order.id);
+    
+    const currentVendorStatus = order.vendorStatuses?.[vendorCode] || { status: 'Dipesan', statusHistory: [] };
     const updateData = {
-      status: newStatus,
-      statusHistory: arrayUnion({ status: newStatus, timestamp: now })
+      [`vendorStatuses.${vendorCode}.status`]: newStatus,
+      [`vendorStatuses.${vendorCode}.statusHistory`]: arrayUnion({ status: newStatus, timestamp: now })
     };
 
     updateDoc(orderRef, updateData)
       .then(() => {
         setOrders(prev => prev.map(o => {
           if (o.id === order.id) {
-            return {
-              ...o,
+            const updatedVendorStatuses = { ...o.vendorStatuses };
+            updatedVendorStatuses[vendorCode] = {
               status: newStatus,
-              statusHistory: [...(o.statusHistory || []), { status: newStatus, timestamp: now }]
+              statusHistory: [...(updatedVendorStatuses[vendorCode]?.statusHistory || []), { status: newStatus, timestamp: now }]
             };
+            return { ...o, vendorStatuses: updatedVendorStatuses };
           }
           return o;
         }));
 
         toast({
           title: "Status Diperbarui",
-          description: `Pesanan #${order.id} sekarang: ${newStatus}`,
+          description: `Status Mitra ${vendorCode} sekarang: ${newStatus}`,
         });
       })
       .catch(async (error) => {
@@ -263,13 +276,13 @@ export default function AdminOrdersPage() {
         order.items.map(item => ({
             'Tanggal Order': format(new Date(order.orderDateTime), 'yyyy-MM-dd HH:mm'),
             'Order ID': order.id,
-            'Mitra': item.vendor || getVendorFromSku(item.sku),
+            'Mitra': item.vendor,
             'Nama Item': item.name,
             'Jumlah': item.quantity,
             'Harga Satuan': item.priceAtOrder,
             'Total Harga': item.quantity * item.priceAtOrder,
             'Metode Bayar': order.paymentMethod,
-            'Status': order.status === 'pending' ? 'Dipesan' : (order.status || 'Dipesan'),
+            'Status Mitra': order.vendorStatuses?.[item.vendor]?.status || 'Dipesan',
             'Alamat': order.deliveryAddress,
         }))
     );
@@ -279,7 +292,7 @@ export default function AdminOrdersPage() {
     XLSX.utils.book_append_sheet(workbook, worksheet, "Orders");
     const excelBuffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
     const data = new Blob([excelBuffer], {type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;charset=UTF-8'});
-    saveAs(data, `orders_${date ? format(date, 'yyyy-MM-dd') : 'all'}_${statusFilter}.xlsx`);
+    saveAs(data, `orders_${date ? format(date, 'yyyy-MM-dd') : 'all'}.xlsx`);
   };
 
   const exportToPDF = () => {
@@ -289,11 +302,11 @@ export default function AdminOrdersPage() {
         order.items.map(item => [
             format(new Date(order.orderDateTime), 'dd/MM HH:mm'),
             order.id,
-            item.vendor || getVendorFromSku(item.sku),
+            item.vendor,
             item.name,
             item.quantity.toString(),
             formatPrice(item.priceAtOrder * item.quantity),
-            order.status === 'pending' ? 'Dipesan' : (order.status || 'Dipesan')
+            order.vendorStatuses?.[item.vendor]?.status || 'Dipesan'
         ])
     );
 
@@ -306,7 +319,7 @@ export default function AdminOrdersPage() {
         headStyles: { fillColor: [255, 140, 0] },
         styles: { fontSize: 8 }
     });
-    doc.save(`orders_${date ? format(date, 'yyyy-MM-dd') : 'all'}_${statusFilter}.pdf`);
+    doc.save(`orders_${date ? format(date, 'yyyy-MM-dd') : 'all'}.pdf`);
   };
 
   const loadImage = (url: string): Promise<HTMLImageElement> => {
@@ -338,7 +351,7 @@ export default function AdminOrdersPage() {
     }
     
     const itemsToPrint = vendorCode 
-      ? order.items.filter(item => (item.vendor || getVendorFromSku(item.sku)) === vendorCode)
+      ? order.items.filter(item => item.vendor === vendorCode)
       : order.items;
     
     const subtotal = itemsToPrint.reduce((sum, item) => sum + (item.priceAtOrder * item.quantity), 0);
@@ -422,33 +435,14 @@ export default function AdminOrdersPage() {
     });
   };
 
-  const sendToEmail = async () => {
-    if (!targetEmail || !targetEmail.includes('@')) {
-        toast({
-            variant: "destructive",
-            title: "Email Tidak Valid",
-            description: "Silakan masukkan alamat email yang benar.",
-        });
-        return;
-    }
-
-    setIsSending(true);
-    await new Promise(resolve => setTimeout(resolve, 2000));
-    
-    setIsSending(false);
-    toast({
-        title: "Laporan Terkirim",
-        description: `Daftar pesanan telah dikirim ke ${targetEmail}.`,
-    });
-  };
-
   const getStatusBadgeColor = (status: string) => {
-    const s = status === 'pending' ? 'Dipesan' : (status || 'Dipesan');
-    switch (s) {
+    switch (status) {
       case 'Dipesan': return 'bg-yellow-500 hover:bg-yellow-600';
+      case 'Dibayar': return 'bg-orange-500 hover:bg-orange-600';
       case 'Diproses': return 'bg-blue-500 hover:bg-blue-600';
-      case 'Dikirim': return 'bg-purple-500 hover:bg-purple-600';
-      case 'Dibayar': return 'bg-green-600 hover:bg-green-700';
+      case 'Dikumpulkan': return 'bg-purple-500 hover:bg-purple-600';
+      case 'Dikirim': 
+      case 'Dikirim dan Bayar': return 'bg-green-600 hover:bg-green-700';
       case 'Dibatalkan': return 'bg-destructive hover:bg-destructive/90';
       default: return 'bg-gray-500 hover:bg-gray-600';
     }
@@ -487,21 +481,12 @@ export default function AdminOrdersPage() {
                         <Calendar mode="single" selected={date} onSelect={setDate} initialFocus locale={id} />
                     </PopoverContent>
                 </Popover>
-                 <Select value={vendor} onValueChange={setVendor}>
+                 <Select value={vendorFilter} onValueChange={setVendorFilter}>
                     <SelectTrigger className="w-[150px]">
                         <SelectValue placeholder="Semua Mitra" />
                     </SelectTrigger>
                     <SelectContent>
                         {allVendors.map(v => <SelectItem key={v} value={v}>{v === 'all' ? 'Semua Mitra' : v}</SelectItem>)}
-                    </SelectContent>
-                </Select>
-                <Select value={statusFilter} onValueChange={setStatusFilter}>
-                    <SelectTrigger className="w-[150px]">
-                        <SelectValue placeholder="Semua Status" />
-                    </SelectTrigger>
-                    <SelectContent>
-                        <SelectItem value="all">Semua Status</SelectItem>
-                        {ORDER_STATUSES.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
                     </SelectContent>
                 </Select>
                 <Select value={groupBy} onValueChange={(val: any) => setGroupBy(val)}>
@@ -524,19 +509,6 @@ export default function AdminOrdersPage() {
                         <FileText className="mr-2 h-4 w-4" />
                         PDF
                     </Button>
-                    <div className="flex items-center gap-1 border rounded-md p-1 bg-muted/20">
-                        <Input 
-                            type="email" 
-                            placeholder="Email Tujuan" 
-                            className="h-8 w-40 text-xs border-0 bg-transparent focus-visible:ring-0" 
-                            value={targetEmail}
-                            onChange={(e) => setTargetEmail(e.target.value)}
-                        />
-                        <Button variant="default" size="sm" className="h-8" onClick={sendToEmail} disabled={filteredOrders.length === 0 || isSending || !targetEmail.includes('@')}>
-                            {isSending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Mail className="mr-2 h-4 w-4" />}
-                            Email
-                        </Button>
-                    </div>
                 </div>
             </div>
         </CardContent>
@@ -568,23 +540,20 @@ export default function AdminOrdersPage() {
                                                   Order #{order.id}
                                               </CardTitle>
                                               <CardDescription className="text-xs md:text-sm">
-                                                  {new Date(order.orderDateTime).toLocaleString('id-ID')}
+                                                  {new Date(order.orderDateTime).toLocaleString('id-ID')} | {order.paymentMethod}
                                               </CardDescription>
                                           </div>
                                           <div className="text-right flex flex-col items-end gap-1">
                                               <p className="font-semibold text-base md:text-lg text-primary">
                                                 {formatPrice(
                                                   groupBy === 'vendor' ? 
-                                                    order.items.filter(item => (item.vendor || getVendorFromSku(item.sku)) === groupKey).reduce((sum, i) => sum + (i.priceAtOrder * i.quantity), 0) :
+                                                    order.items.filter(item => item.vendor === groupKey).reduce((sum, i) => sum + (i.priceAtOrder * i.quantity), 0) :
                                                   groupBy === 'sku' ?
                                                     order.items.filter(item => item.sku === groupKey.split(']')[0].substring(1)).reduce((sum, i) => sum + (i.priceAtOrder * i.quantity), 0) :
                                                     order.totalAmount
                                                 )}
                                               </p>
                                               <span className="text-[10px] text-muted-foreground">Total Order: {formatPrice(order.totalAmount)}</span>
-                                              <Badge className={getStatusBadgeColor(order.status)}>
-                                                {order.status === 'pending' ? 'Dipesan' : (order.status || 'Dipesan')}
-                                              </Badge>
                                           </div>
                                       </div>
                                   </AccordionTrigger>
@@ -592,96 +561,97 @@ export default function AdminOrdersPage() {
                           <AccordionContent>
                                   <CardContent className="p-4 pt-0 space-y-6">
                                       <div className="border-t pt-4">
-                                        <h4 className="font-semibold mb-3 text-sm text-muted-foreground uppercase tracking-wider flex items-center gap-2">
-                                          <Clock className="h-4 w-4" /> Update Status & Riwayat:
-                                        </h4>
-                                        <div className="flex flex-col md:flex-row gap-4 mb-4">
-                                          <div className="flex-1 max-w-xs">
-                                            <span className="text-xs font-bold text-muted-foreground block mb-2">UBAH STATUS PESANAN:</span>
-                                            <Select 
-                                              disabled={isUpdatingStatus === order.id} 
-                                              value={order.status === 'pending' ? 'Dipesan' : (order.status || 'Dipesan')} 
-                                              onValueChange={(val) => handleUpdateStatus(order, val)}
-                                            >
-                                              <SelectTrigger>
-                                                <SelectValue placeholder="Ubah Status" />
-                                              </SelectTrigger>
-                                              <SelectContent>
-                                                {ORDER_STATUSES.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
-                                              </SelectContent>
-                                            </Select>
-                                          </div>
-                                        </div>
-                                        <div className="bg-muted/30 rounded-lg p-3 space-y-3">
-                                          {order.statusHistory && order.statusHistory.length > 0 ? (
-                                            order.statusHistory.map((log, i) => (
-                                              <div key={i} className="flex items-start gap-3 text-xs">
-                                                <div className="mt-1">
-                                                  <CheckCircle2 className="h-3 w-3 text-primary" />
-                                                </div>
-                                                <div className="flex-1">
-                                                  <span className="font-bold">{log.status}</span>
-                                                  <span className="text-muted-foreground ml-2">
-                                                    {format(new Date(log.timestamp), 'dd MMM yyyy, HH:mm', { locale: id })}
-                                                  </span>
-                                                </div>
-                                              </div>
-                                            ))
-                                          ) : (
-                                            <div className="flex items-start gap-3 text-xs">
-                                                <div className="mt-1">
-                                                  <CheckCircle2 className="h-3 w-3 text-primary" />
-                                                </div>
-                                                <div className="flex-1">
-                                                  <span className="font-bold">{order.status === 'pending' ? 'Dipesan' : (order.status || 'Dipesan')}</span>
-                                                  <span className="text-muted-foreground ml-2">
-                                                    {format(new Date(order.orderDateTime), 'dd MMM yyyy, HH:mm', { locale: id })}
-                                                  </span>
-                                                </div>
-                                              </div>
-                                          )}
-                                        </div>
-                                      </div>
-
-                                      <div className="border-t pt-4">
-                                      <h4 className="font-semibold mb-2 text-sm text-muted-foreground uppercase tracking-wider">Item Pesanan (Dikelompokkan per Mitra):</h4>
-                                       <div className="space-y-4 pt-2">
+                                      <h4 className="font-semibold mb-2 text-sm text-muted-foreground uppercase tracking-wider">Status & Item per Mitra:</h4>
+                                       <div className="space-y-6 pt-2">
                                           {Object.entries(groupItemsByVendor(
                                               groupBy === 'vendor' ? 
-                                                order.items.filter(item => (item.vendor || getVendorFromSku(item.sku)) === groupKey) :
+                                                order.items.filter(item => item.vendor === groupKey) :
                                               groupBy === 'sku' ?
                                                 order.items.filter(item => item.sku === groupKey.split(']')[0].substring(1)) :
                                                 order.items
                                           )).map(([vendorCode, vendorItems]) => {
                                               const subtotalMitra = vendorItems.reduce((sum, i) => sum + (i.priceAtOrder * i.quantity), 0);
+                                              const vStatus = order.vendorStatuses?.[vendorCode] || { status: 'Dipesan', statusHistory: [] };
+                                              const flow = STATUS_FLOWS[order.paymentMethod];
+
                                               return (
-                                                <div key={vendorCode} className="space-y-1">
-                                                    <div className="flex justify-between items-center bg-primary/5 px-2 py-0.5 rounded-sm border border-primary/10">
-                                                        <span className="text-[10px] font-bold text-primary/70 uppercase tracking-tighter">
+                                                <div key={vendorCode} className="space-y-3 p-3 border rounded-lg bg-muted/10">
+                                                    <div className="flex justify-between items-center bg-primary/10 px-2 py-1 rounded-sm border border-primary/20">
+                                                        <span className="text-xs font-bold text-primary uppercase">
                                                             Mitra: {vendorCode}
                                                         </span>
-                                                        <span className="text-[10px] font-bold text-primary">
-                                                            Subtotal: {formatPrice(subtotalMitra)}
-                                                        </span>
-                                                    </div>
-                                                    <div className="space-y-1.5 pl-2">
-                                                      {vendorItems.map(item => (
-                                                        <div key={item.id} className="flex justify-between text-sm border-b border-muted/20 pb-1 last:border-0">
-                                                            <div>
-                                                                <span className="font-medium">{item.name}</span>
-                                                                <span className="text-muted-foreground"> x {item.quantity}</span>
-                                                            </div>
-                                                            <span className="text-muted-foreground">{formatPrice(item.priceAtOrder * item.quantity)}</span>
+                                                        <div className="flex items-center gap-3">
+                                                            <span className="text-xs font-bold text-primary">
+                                                                Sub: {formatPrice(subtotalMitra)}
+                                                            </span>
+                                                            <Badge className={getStatusBadgeColor(vStatus.status)}>
+                                                                {vStatus.status}
+                                                            </Badge>
                                                         </div>
-                                                      ))}
+                                                    </div>
+
+                                                    <div className="flex flex-col md:flex-row gap-4 items-start">
+                                                        <div className="flex-1 w-full space-y-1.5">
+                                                            {vendorItems.map(item => (
+                                                                <div key={item.id} className="flex justify-between text-sm border-b border-muted/20 pb-1 last:border-0">
+                                                                    <div>
+                                                                        <span className="font-medium">{item.name}</span>
+                                                                        <span className="text-muted-foreground"> x {item.quantity}</span>
+                                                                    </div>
+                                                                    <span className="text-muted-foreground">{formatPrice(item.priceAtOrder * item.quantity)}</span>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                        <div className="w-full md:w-48 space-y-2">
+                                                            <span className="text-[10px] font-bold text-muted-foreground block uppercase">Ubah Status Mitra:</span>
+                                                            <Select 
+                                                                disabled={isUpdatingStatus === `${order.id}-${vendorCode}`} 
+                                                                value={vStatus.status} 
+                                                                onValueChange={(val) => handleUpdateVendorStatus(order, vendorCode, val)}
+                                                            >
+                                                                <SelectTrigger className="h-8 text-xs">
+                                                                    <SelectValue />
+                                                                </SelectTrigger>
+                                                                <SelectContent>
+                                                                    {flow.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                                                                </SelectContent>
+                                                            </Select>
+                                                            <Button 
+                                                                variant="outline" 
+                                                                size="sm" 
+                                                                className="w-full h-8 text-[10px]"
+                                                                onClick={() => handlePrintReceipt(order, vendorCode)}
+                                                            >
+                                                                <Printer className="h-3 w-3 mr-1" /> Slip Mitra
+                                                            </Button>
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="mt-2 space-y-1">
+                                                        <span className="text-[10px] font-bold text-muted-foreground uppercase flex items-center gap-1">
+                                                            <Clock className="h-3 w-3" /> Riwayat Status:
+                                                        </span>
+                                                        <div className="bg-muted/30 rounded p-2 text-[10px] space-y-1">
+                                                            {vStatus.statusHistory?.map((log, i) => (
+                                                                <div key={i} className="flex justify-between">
+                                                                    <span className="font-semibold">{log.status}</span>
+                                                                    <span className="text-muted-foreground">{format(new Date(log.timestamp), 'dd MMM, HH:mm', { locale: id })}</span>
+                                                                </div>
+                                                            )) || (
+                                                                <div className="flex justify-between">
+                                                                    <span className="font-semibold">Dipesan</span>
+                                                                    <span className="text-muted-foreground">{format(new Date(order.orderDateTime), 'dd MMM, HH:mm', { locale: id })}</span>
+                                                                </div>
+                                                            )}
+                                                        </div>
                                                     </div>
                                                 </div>
                                               );
                                           })}
                                           
                                           {groupBy === 'orderId' && (
-                                            <>
-                                              <div className="flex justify-between text-sm pt-2 border-t border-dashed mt-2">
+                                            <div className="space-y-1 px-3">
+                                              <div className="flex justify-between text-sm pt-2 border-t border-dashed">
                                                 <span className="text-muted-foreground italic">Ongkir (Delivery)</span>
                                                 <span className="text-muted-foreground">{formatPrice(order.deliveryFee || 2500)}</span>
                                               </div>
@@ -689,7 +659,7 @@ export default function AdminOrdersPage() {
                                                 <span>Total Bayar</span>
                                                 <span className="text-primary">{formatPrice(order.totalAmount)}</span>
                                               </div>
-                                            </>
+                                            </div>
                                           )}
                                       </div>
                                       </div>
@@ -698,26 +668,13 @@ export default function AdminOrdersPage() {
                                           <p className="text-sm text-muted-foreground">{order.deliveryAddress}</p>
                                       </div>
                                       <div className="border-t pt-4 flex justify-between items-center">
-                                          <div className="flex gap-2">
-                                            <Button 
-                                              variant="outline" 
-                                              size="sm" 
-                                              onClick={() => handlePrintReceipt(order, groupBy === 'vendor' ? groupKey : undefined)}
-                                            >
-                                              <Printer className="h-4 w-4 mr-2" />
-                                              {groupBy === 'vendor' ? 'Cetak Slip Mitra' : 'Cetak Struk'}
-                                            </Button>
-                                            {groupBy === 'vendor' && (
-                                              <Button 
-                                                variant="ghost" 
-                                                size="sm" 
-                                                onClick={() => handlePrintReceipt(order)}
-                                                className="text-xs text-muted-foreground"
-                                              >
-                                                Cetak Struk Full
-                                              </Button>
-                                            )}
-                                          </div>
+                                          <Button 
+                                            variant="outline" 
+                                            size="sm" 
+                                            onClick={() => handlePrintReceipt(order)}
+                                          >
+                                            <Printer className="h-4 w-4 mr-2" /> Cetak Struk Full
+                                          </Button>
                                           <Button 
                                               variant="destructive" 
                                               size="sm" 

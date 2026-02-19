@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useUser, useFirestore, useCollection, useMemoFirebase, errorEmitter, FirestorePermissionError } from '@/firebase';
@@ -35,10 +36,9 @@ interface Order {
     customerId: string;
     orderDateTime: string;
     totalAmount: number;
-    status: string;
-    statusHistory?: StatusLog[];
+    paymentMethod: 'QRIS' | 'COD';
+    vendorStatuses: Record<string, { status: string; statusHistory: StatusLog[] }>;
     deliveryAddress: string;
-    paymentMethod?: string;
     items?: OrderItem[];
 }
 
@@ -48,7 +48,7 @@ interface OrderItem {
     quantity: number;
     priceAtOrder: number;
     sku: string;
-    vendor?: string;
+    vendor: string;
 }
 
 const getVendorFromSku = (sku: string) => {
@@ -58,7 +58,20 @@ const getVendorFromSku = (sku: string) => {
   return match ? match[0] : sku;
 };
 
-function OrderItemDetails({ customerId, orderId }: { customerId: string; orderId: string }) {
+const getStatusBadgeColor = (status: string) => {
+    switch (status) {
+      case 'Dipesan': return 'bg-yellow-500 hover:bg-yellow-600';
+      case 'Dibayar': return 'bg-orange-500 hover:bg-orange-600';
+      case 'Diproses': return 'bg-blue-500 hover:bg-blue-600';
+      case 'Dikumpulkan': return 'bg-purple-500 hover:bg-purple-600';
+      case 'Dikirim': 
+      case 'Dikirim dan Bayar': return 'bg-green-600 hover:bg-green-700';
+      case 'Dibatalkan': return 'bg-destructive hover:bg-destructive/90';
+      default: return 'bg-gray-500 hover:bg-gray-600';
+    }
+};
+
+function OrderItemDetails({ customerId, orderId, vendorStatuses }: { customerId: string; orderId: string; vendorStatuses: Order['vendorStatuses'] }) {
     const firestore = useFirestore();
     const orderItemsQuery = useMemoFirebase(() => {
         if (!firestore) return null;
@@ -83,17 +96,24 @@ function OrderItemDetails({ customerId, orderId }: { customerId: string; orderId
     const grouped = groupItemsByVendor(items);
 
     return (
-        <div className="space-y-4 pt-2">
+        <div className="space-y-6 pt-2">
             {Object.entries(grouped).map(([vendorCode, vendorItems]) => {
                 const subtotalMitra = vendorItems.reduce((sum, i) => sum + (i.priceAtOrder * i.quantity), 0);
+                const vStatus = vendorStatuses?.[vendorCode] || { status: 'Dipesan', statusHistory: [] };
+                
                 return (
-                    <div key={vendorCode} className="space-y-1">
-                        <div className="flex justify-between items-center bg-primary/5 px-2 py-0.5 rounded-sm border border-primary/10">
-                            <span className="text-[10px] font-bold text-primary/70 uppercase tracking-tighter">
-                                Mitra: {vendorCode}
-                            </span>
+                    <div key={vendorCode} className="space-y-2 p-3 border rounded-lg bg-muted/5">
+                        <div className="flex justify-between items-center bg-primary/5 px-2 py-1 rounded-sm border border-primary/10">
+                            <div className="flex items-center gap-2">
+                                <span className="text-[10px] font-bold text-primary/70 uppercase tracking-tighter">
+                                    Mitra: {vendorCode}
+                                </span>
+                                <Badge className={`${getStatusBadgeColor(vStatus.status)} text-[10px] h-5 py-0 px-2`}>
+                                    {vStatus.status}
+                                </Badge>
+                            </div>
                             <span className="text-[10px] font-bold text-primary">
-                                Subtotal: {formatPrice(subtotalMitra)}
+                                Sub: {formatPrice(subtotalMitra)}
                             </span>
                         </div>
                         <div className="space-y-1.5 pl-2">
@@ -106,6 +126,11 @@ function OrderItemDetails({ customerId, orderId }: { customerId: string; orderId
                                     <span className="text-muted-foreground">{formatPrice(item.priceAtOrder * item.quantity)}</span>
                                 </div>
                             ))}
+                        </div>
+                        <div className="mt-2 pt-2 border-t border-dashed">
+                            <span className="text-[10px] font-bold text-muted-foreground uppercase flex items-center gap-1">
+                                <Clock className="h-3 w-3" /> Update Terakhir: {vStatus.statusHistory?.[vStatus.statusHistory.length - 1]?.timestamp ? format(new Date(vStatus.statusHistory[vStatus.statusHistory.length - 1].timestamp), 'dd MMM, HH:mm', { locale: id }) : '-'}
+                            </span>
                         </div>
                     </div>
                 );
@@ -152,7 +177,7 @@ export default function OrdersPage() {
             const itemsSnap = await getDocs(itemsQuery);
             const items = itemsSnap.docs.map(d => d.data() as OrderItem);
 
-            const doc = new jsPDF({
+            const docPdf = new jsPDF({
                 orientation: 'portrait',
                 unit: 'mm',
                 format: [80, 250]
@@ -163,28 +188,28 @@ export default function OrdersPage() {
 
             try {
                 const qrisImg = await loadImage('/qris.jpeg');
-                doc.addImage(qrisImg, 'JPEG', 25, y, 30, 45);
+                docPdf.addImage(qrisImg, 'JPEG', 25, y, 30, 45);
                 y += 50;
             } catch (e) {
                 console.warn("Failed to load QRIS image for receipt", e);
             }
 
-            doc.setFontSize(12);
-            doc.text("TAKJILKU", centerPos, y, { align: 'center' });
+            docPdf.setFontSize(12);
+            docPdf.text("TAKJILKU", centerPos, y, { align: 'center' });
             y += 4;
-            doc.setFontSize(8);
-            doc.text("Ramadhan UMKM RW06", centerPos, y, { align: 'center' });
+            docPdf.setFontSize(8);
+            docPdf.text("Ramadhan UMKM RW06", centerPos, y, { align: 'center' });
             y += 6;
-            doc.text("-".repeat(40), centerPos, y, { align: 'center' });
+            docPdf.text("-".repeat(40), centerPos, y, { align: 'center' });
             y += 6;
             
-            doc.text(`ID: #${order.id}`, 5, y);
+            docPdf.text(`ID: #${order.id}`, 5, y);
             y += 4;
-            doc.text(`Tgl: ${format(new Date(order.orderDateTime), 'dd/MM/yyyy HH:mm')}`, 5, y);
+            docPdf.text(`Tgl: ${format(new Date(order.orderDateTime), 'dd/MM/yyyy HH:mm')}`, 5, y);
             y += 4;
-            doc.text(`Bayar: ${order.paymentMethod || 'QRIS/COD'}`, 5, y);
+            docPdf.text(`Bayar: ${order.paymentMethod}`, 5, y);
             y += 4;
-            doc.text("-".repeat(40), centerPos, y, { align: 'center' });
+            docPdf.text("-".repeat(40), centerPos, y, { align: 'center' });
             y += 6;
             
             const grouped: Record<string, OrderItem[]> = {};
@@ -195,41 +220,41 @@ export default function OrdersPage() {
             });
 
             Object.entries(grouped).forEach(([vendorCode, vendorItems]) => {
-                doc.setFontSize(7);
-                doc.text(`MITRA: ${vendorCode}`, 5, y);
+                docPdf.setFontSize(7);
+                docPdf.text(`MITRA: ${vendorCode}`, 5, y);
                 y += 4;
-                doc.setFontSize(8);
+                docPdf.setFontSize(8);
                 
                 vendorItems.forEach((item) => {
-                    doc.text(`${item.name}`, 5, y);
-                    doc.text(`${item.quantity} x ${formatPrice(item.priceAtOrder)}`, 5, y + 4);
-                    doc.text(`${formatPrice(item.priceAtOrder * item.quantity)}`, 75, y + 4, { align: 'right' });
+                    docPdf.text(`${item.name}`, 5, y);
+                    docPdf.text(`${item.quantity} x ${formatPrice(item.priceAtOrder)}`, 5, y + 4);
+                    docPdf.text(`${formatPrice(item.priceAtOrder * item.quantity)}`, 75, y + 4, { align: 'right' });
                     y += 10;
                 });
                 y += 2;
             });
             
-            doc.text("-".repeat(40), centerPos, y, { align: 'center' });
+            docPdf.text("-".repeat(40), centerPos, y, { align: 'center' });
             y += 6;
-            doc.text("Ongkir (Delivery):", 5, y);
-            doc.text(`${formatPrice(2500)}`, 75, y, { align: 'right' });
+            docPdf.text("Ongkir (Delivery):", 5, y);
+            docPdf.text(`${formatPrice(2500)}`, 75, y, { align: 'right' });
             y += 6;
             
-            doc.setFontSize(10);
-            doc.text("TOTAL:", 5, y);
-            doc.text(`${formatPrice(order.totalAmount)}`, 75, y, { align: 'right' });
+            docPdf.setFontSize(10);
+            docPdf.text("TOTAL:", 5, y);
+            docPdf.text(`${formatPrice(order.totalAmount)}`, 75, y, { align: 'right' });
             
             y += 10;
-            doc.setFontSize(8);
-            doc.text("Alamat Pengiriman:", 5, y);
-            const splitAddress = doc.splitTextToSize(order.deliveryAddress, 70);
-            doc.text(splitAddress, 5, y + 4);
+            docPdf.setFontSize(8);
+            docPdf.text("Alamat Pengiriman:", 5, y);
+            const splitAddress = docPdf.splitTextToSize(order.deliveryAddress, 70);
+            docPdf.text(splitAddress, 5, y + 4);
             
             y += (splitAddress.length * 4) + 10;
-            doc.text("Terima Kasih Telah Memesan!", centerPos, y, { align: 'center' });
-            doc.text("Semoga Berkah", centerPos, y + 4, { align: 'center' });
+            docPdf.text("Terima Kasih Telah Memesan!", centerPos, y, { align: 'center' });
+            docPdf.text("Semoga Berkah", centerPos, y + 4, { align: 'center' });
 
-            doc.save(`struk_takjilku_${order.id}.pdf`);
+            docPdf.save(`struk_takjilku_${order.id}.pdf`);
             
             toast({
                 title: "Struk Berhasil Diunduh",
@@ -287,18 +312,6 @@ export default function OrdersPage() {
             setOrderToDelete(null);
         }
     };
-
-    const getStatusBadgeColor = (status: string) => {
-        const s = status === 'pending' ? 'Dipesan' : (status || 'Dipesan');
-        switch (s) {
-          case 'Dipesan': return 'bg-yellow-500 hover:bg-yellow-600';
-          case 'Diproses': return 'bg-blue-500 hover:bg-blue-600';
-          case 'Dikirim': return 'bg-purple-500 hover:bg-purple-600';
-          case 'Dibayar': return 'bg-green-600 hover:bg-green-700';
-          case 'Dibatalkan': return 'bg-destructive hover:bg-destructive/90';
-          default: return 'bg-gray-500 hover:bg-gray-600';
-        }
-    };
     
     if (isUserLoading || (user && areOrdersLoading)) {
         return (
@@ -343,7 +356,7 @@ export default function OrdersPage() {
             <div className="container py-8 md:py-12">
                 <div className="mb-8">
                     <h1 className="text-3xl font-bold tracking-tight font-headline">Riwayat Pesanan Saya</h1>
-                    <p className="text-muted-foreground">Berikut adalah daftar semua pesanan Anda.</p>
+                    <p className="text-muted-foreground">Berikut adalah daftar pengerjaan pesanan Anda per UMKM.</p>
                 </div>
                 <div className="space-y-6">
                     <Accordion type="single" collapsible className="w-full space-y-4">
@@ -363,14 +376,11 @@ export default function OrdersPage() {
                                                             year: 'numeric',
                                                             month: 'long',
                                                             day: 'numeric'
-                                                        })}
+                                                        })} | {order.paymentMethod}
                                                     </CardDescription>
                                                 </div>
                                                 <div className="text-right flex flex-col items-end gap-2">
                                                     <p className="font-semibold text-base md:text-lg text-primary">{formatPrice(order.totalAmount)}</p>
-                                                    <Badge className={getStatusBadgeColor(order.status)}>
-                                                        {order.status === 'pending' ? 'Dipesan' : (order.status || 'Dipesan')}
-                                                    </Badge>
                                                 </div>
                                             </div>
                                         </AccordionTrigger>
@@ -379,46 +389,13 @@ export default function OrdersPage() {
                                         <CardContent className="p-4 pt-0 space-y-6">
                                             <div className="border-t pt-4">
                                                 <h4 className="font-semibold mb-3 text-sm flex items-center gap-2">
-                                                    <Clock className="h-4 w-4" /> Status & Riwayat:
+                                                    <Store className="h-4 w-4" /> Progres Pengerjaan per Mitra:
                                                 </h4>
-                                                <div className="bg-muted/30 rounded-lg p-3 space-y-3">
-                                                    {order.statusHistory && order.statusHistory.length > 0 ? (
-                                                        order.statusHistory.map((log, i) => (
-                                                            <div key={i} className="flex items-start gap-3 text-xs">
-                                                                <div className="mt-1">
-                                                                    <CheckCircle2 className="h-3 w-3 text-primary" />
-                                                                </div>
-                                                                <div className="flex-1">
-                                                                    <span className="font-bold">{log.status}</span>
-                                                                    <span className="text-muted-foreground ml-2">
-                                                                        {format(new Date(log.timestamp), 'dd MMM yyyy, HH:mm', { locale: id })}
-                                                                    </span>
-                                                                </div>
-                                                            </div>
-                                                        ))
-                                                    ) : (
-                                                        <div className="flex items-start gap-3 text-xs">
-                                                            <div className="mt-1">
-                                                                <CheckCircle2 className="h-3 w-3 text-primary" />
-                                                            </div>
-                                                            <div className="flex-1">
-                                                                <span className="font-bold">{order.status === 'pending' ? 'Dipesan' : (order.status || 'Dipesan')}</span>
-                                                                <span className="text-muted-foreground ml-2">
-                                                                    {format(new Date(order.orderDateTime), 'dd MMM yyyy, HH:mm', { locale: id })}
-                                                                </span>
-                                                            </div>
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            </div>
-
-                                            <div className="border-t pt-4">
-                                                <h4 className="font-semibold mb-2 text-sm">Detail Item:</h4>
-                                                <OrderItemDetails customerId={user.uid} orderId={order.id} />
+                                                <OrderItemDetails customerId={user.uid} orderId={order.id} vendorStatuses={order.vendorStatuses} />
                                             </div>
                                             <div className="border-t pt-4">
                                                 <h4 className="font-semibold mb-2 text-sm">Alamat Pengiriman:</h4>
-                                                <p className="text-sm text-muted-foreground">{order.deliveryAddress}</p>
+                                                <p className="text-sm text-muted-foreground italic">{order.deliveryAddress}</p>
                                             </div>
                                             <div className="border-t pt-4 flex justify-end gap-2">
                                                 <Button 

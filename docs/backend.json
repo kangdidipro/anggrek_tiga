@@ -1,3 +1,4 @@
+
 {
   "entities": {
     "Customer": {
@@ -150,24 +151,25 @@
         "paymentMethod": {
           "type": "string",
           "description": "The chosen payment method for the order.",
-          "format": "enum",
-          "items": {
-            "type": "string"
-          }
+          "enum": ["QRIS", "COD"]
         },
-        "status": {
-          "type": "string",
-          "description": "The current processing status of the order.",
-          "enum": ["Dipesan", "Diproses", "Dikirim", "Dibayar", "Dibatalkan"]
-        },
-        "statusHistory": {
-          "type": "array",
-          "description": "The historical log of status changes for the order.",
-          "items": {
+        "vendorStatuses": {
+          "type": "object",
+          "description": "A map of vendor codes to their processing status within this order.",
+          "additionalProperties": {
             "type": "object",
             "properties": {
               "status": { "type": "string" },
-              "timestamp": { "type": "string", "format": "date-time" }
+              "statusHistory": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "status": { "type": "string" },
+                    "timestamp": { "type": "string", "format": "date-time" }
+                  }
+                }
+              }
             }
           }
         },
@@ -183,7 +185,7 @@
         "totalAmount",
         "deliveryFee",
         "paymentMethod",
-        "status",
+        "vendorStatuses",
         "deliveryAddress"
       ]
     },
