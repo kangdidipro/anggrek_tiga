@@ -189,8 +189,8 @@ export default function AdminSettingsPage() {
               <ol className="list-decimal pl-5 space-y-2">
                 <li>Buka <Link href="https://myaccount.google.com/security" target="_blank" className="font-bold underline inline-flex items-center gap-1">Keamanan Akun Google <ExternalLink className="h-3 w-3" /></Link>.</li>
                 <li>Aktifkan <strong>Verifikasi 2 Langkah</strong> (Wajib).</li>
-                <li>Cari menu <strong>"App Passwords"</strong> melalui kotak pencarian di bagian atas halaman Akun Google tersebut.</li>
-                <li>Buat password baru (beri nama "TakjilKu"), lalu gunakan kode <strong>16 digit</strong> yang muncul sebagai Password di form bawah ini.</li>
+                <li>Cari menu <strong>&quot;App Passwords&quot;</strong> melalui kotak pencarian di bagian atas halaman Akun Google tersebut.</li>
+                <li>Buat password baru (beri nama &quot;TakjilKu&quot;), lalu gunakan kode <strong>16 digit</strong> yang muncul sebagai Password di form bawah ini.</li>
               </ol>
             </AlertDescription>
           </Alert>
@@ -251,7 +251,7 @@ export default function AdminSettingsPage() {
                       placeholder="TakjilKu <anda@gmail.com>" 
                     />
                     <p className="text-[10px] text-muted-foreground italic">
-                      Tips: Gunakan format "Nama <email@anda.com>". Email harus sama dengan Username di atas agar tidak ditolak oleh Gmail.
+                      Tips: Gunakan format &quot;Nama &lt;email@anda.com&gt;&quot;. Email harus sama dengan Username di atas agar tidak ditolak oleh Gmail.
                     </p>
                   </div>
                 </div>
