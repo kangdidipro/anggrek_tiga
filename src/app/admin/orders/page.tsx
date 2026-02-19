@@ -5,7 +5,7 @@ import { useFirestore, useUser, errorEmitter, FirestorePermissionError } from '@
 import { collectionGroup, getDocs, query, writeBatch, doc, updateDoc, arrayUnion } from 'firebase/firestore';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Loader2, FileDown, CalendarIcon, Trash2, FileText, Mail, Search, Clock, CheckCircle2, Printer, LayoutGrid } from 'lucide-react';
+import { Loader2, FileDown, CalendarIcon, Trash2, FileText, Mail, Search, Clock, CheckCircle2, Printer, LayoutGrid, Store } from 'lucide-react';
 import { formatPrice } from '@/lib/utils';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import * as XLSX from 'xlsx';
@@ -170,6 +170,16 @@ export default function AdminOrdersPage() {
     });
     return groups;
   }, [filteredOrders, groupBy]);
+
+  const groupItemsByVendor = (items: OrderItem[]) => {
+    const grouped: Record<string, OrderItem[]> = {};
+    items.forEach(item => {
+      const v = item.vendor || getVendorFromSku(item.sku);
+      if (!grouped[v]) grouped[v] = [];
+      grouped[v].push(item);
+    });
+    return grouped;
+  };
 
   const handleUpdateStatus = async (order: Order, newStatus: string) => {
     if (!firestore || isUpdatingStatus) return;
@@ -519,10 +529,14 @@ export default function AdminOrdersPage() {
       ) : (
         Object.entries(groupedData).map(([groupKey, groupOrders]) => (
             <div key={groupKey} className="mb-8">
-                <h2 className="text-xl font-bold mb-4 bg-primary/10 p-2 rounded px-4 text-primary">
-                    {groupBy === 'orderId' ? `Pesanan #${groupKey}` : 
-                     groupBy === 'vendor' ? `Mitra: ${groupKey}` : 
-                     `Produk: ${groupKey}`}
+                <h2 className="text-xl font-bold mb-4 bg-primary/10 p-2 rounded px-4 text-primary flex items-center gap-2">
+                    {groupBy === 'orderId' ? (
+                      <>Order #{groupKey}</>
+                    ) : groupBy === 'vendor' ? (
+                      <><Store className="h-5 w-5" /> Mitra: {groupKey}</>
+                    ) : (
+                      <><Store className="h-5 w-5" /> Produk: {groupKey}</>
+                    )}
                 </h2>
                 <Accordion type="single" collapsible className="w-full space-y-4">
                   {groupOrders.map((order) => (
@@ -612,20 +626,30 @@ export default function AdminOrdersPage() {
                                       </div>
 
                                       <div className="border-t pt-4">
-                                      <h4 className="font-semibold mb-2 text-sm text-muted-foreground uppercase tracking-wider">Item Pesanan:</h4>
-                                       <div className="space-y-2 pt-2">
-                                          {(groupBy === 'vendor' ? 
-                                              order.items.filter(item => (item.vendor || getVendorFromSku(item.sku)) === groupKey) :
-                                            groupBy === 'sku' ?
-                                              order.items.filter(item => item.sku === groupKey.split(']')[0].substring(1)) :
-                                              order.items
-                                          ).map(item => (
-                                              <div key={item.id} className="flex justify-between text-sm">
-                                                  <div>
-                                                      <span className="font-medium">{item.name}</span>
-                                                      <span className="text-muted-foreground"> x {item.quantity}</span>
+                                      <h4 className="font-semibold mb-2 text-sm text-muted-foreground uppercase tracking-wider">Item Pesanan (Dikelompokkan per Mitra):</h4>
+                                       <div className="space-y-4 pt-2">
+                                          {Object.entries(groupItemsByVendor(
+                                              groupBy === 'vendor' ? 
+                                                order.items.filter(item => (item.vendor || getVendorFromSku(item.sku)) === groupKey) :
+                                              groupBy === 'sku' ?
+                                                order.items.filter(item => item.sku === groupKey.split(']')[0].substring(1)) :
+                                                order.items
+                                          )).map(([vendorCode, vendorItems]) => (
+                                              <div key={vendorCode} className="space-y-1">
+                                                  <div className="text-[10px] font-bold text-primary/70 uppercase tracking-tighter bg-primary/5 px-2 py-0.5 rounded-sm inline-block border border-primary/10">
+                                                    Mitra: {vendorCode}
                                                   </div>
-                                                  <span className="text-muted-foreground">{formatPrice(item.priceAtOrder * item.quantity)}</span>
+                                                  <div className="space-y-1.5 pl-2">
+                                                    {vendorItems.map(item => (
+                                                      <div key={item.id} className="flex justify-between text-sm border-b border-muted/20 pb-1 last:border-0">
+                                                          <div>
+                                                              <span className="font-medium">{item.name}</span>
+                                                              <span className="text-muted-foreground"> x {item.quantity}</span>
+                                                          </div>
+                                                          <span className="text-muted-foreground">{formatPrice(item.priceAtOrder * item.quantity)}</span>
+                                                      </div>
+                                                    ))}
+                                                  </div>
                                               </div>
                                           ))}
                                           
