@@ -114,7 +114,7 @@ export default function AdminSettingsPage() {
       toast({
         variant: "destructive",
         title: "Test Gagal",
-        description: error.message || "Terjadi kesalahan saat mencoba mengirim email. Cek kembali host/port/password.",
+        description: error.message || "Terjadi kesalahan. Pastikan App Password dan alamat From benar.",
       });
     } finally {
       setIsTestingEmail(false);
@@ -189,7 +189,7 @@ export default function AdminSettingsPage() {
               <ol className="list-decimal pl-5 space-y-2">
                 <li>Buka <Link href="https://myaccount.google.com/security" target="_blank" className="font-bold underline inline-flex items-center gap-1">Keamanan Akun Google <ExternalLink className="h-3 w-3" /></Link>.</li>
                 <li>Aktifkan <strong>Verifikasi 2 Langkah</strong> (Wajib).</li>
-                <li>Cari menu <strong>&quot;App Passwords&quot;</strong> melalui kotak pencarian di bagian atas halaman Akun Google tersebut.</li>
+                <li>Cari menu <strong>&quot;App Passwords&quot;</strong> melalui kotak pencarian di bagian atas halaman Akun Google.</li>
                 <li>Buat password baru (beri nama &quot;TakjilKu&quot;), lalu gunakan kode <strong>16 digit</strong> yang muncul sebagai Password di form bawah ini.</li>
               </ol>
             </AlertDescription>
@@ -243,15 +243,15 @@ export default function AdminSettingsPage() {
                     />
                   </div>
                   <div className="space-y-2 md:col-span-2">
-                    <Label htmlFor="smtp-from">Email Pengirim (From)</Label>
+                    <Label htmlFor="smtp-from">Email Pengirim (From Display Name)</Label>
                     <Input 
                       id="smtp-from" 
                       value={smtpSettings.from} 
                       onChange={(e) => setSmtpSettings({...smtpSettings, from: e.target.value})}
-                      placeholder="TakjilKu <anda@gmail.com>" 
+                      placeholder="Isi Nama Toko (Contoh: TakjilKu)" 
                     />
                     <p className="text-[10px] text-muted-foreground italic">
-                      Tips: Gunakan format &quot;Nama &lt;email@anda.com&gt;&quot;. Email harus sama dengan Username di atas agar tidak ditolak oleh Gmail.
+                      Tips: Isi dengan nama toko Anda. Sistem akan secara otomatis menyertakan email utama Anda di belakang nama tersebut agar tidak ditolak oleh Gmail.
                     </p>
                   </div>
                 </div>

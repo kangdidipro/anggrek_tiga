@@ -55,11 +55,33 @@ export async function sendSmtpEmail(config: SmtpConfig, options: MailOptions) {
         user: config.user,
         pass: config.pass,
       },
+      // Increase timeout for slow connections
+      connectionTimeout: 10000,
     });
 
-    // CRITICAL: For Gmail, the 'from' should ideally match the auth user
-    // or at least be formatted correctly to prevent 'Message Rejected'
-    const fromAddress = config.from.includes('@') ? config.from : config.user;
+    /**
+     * CRITICAL for Gmail: The 'from' address email part MUST match the auth user
+     * to prevent "Message Rejected" (Error 69585).
+     * We'll construct a safe from header: "Name <auth_user@gmail.com>"
+     */
+    let fromAddress = config.user;
+    
+    if (config.from) {
+      // If user provided something like "TakjilKu <test@email.com>" 
+      // or just "TakjilKu", extract the name part.
+      let displayName = config.from;
+      if (config.from.includes('<')) {
+        displayName = config.from.split('<')[0].trim();
+      }
+      
+      // If displayName is not a raw email, wrap it in quotes
+      if (displayName && !displayName.includes('@')) {
+        fromAddress = `"${displayName}" <${config.user}>`;
+      } else {
+        // Default to the auth user if the display name is messy
+        fromAddress = config.user;
+      }
+    }
 
     const info = await transporter.sendMail({
       from: fromAddress,
@@ -73,10 +95,10 @@ export async function sendSmtpEmail(config: SmtpConfig, options: MailOptions) {
       })),
     });
 
-    console.log('Email sent: %s', info.messageId);
+    console.log('Email sent successfully: %s', info.messageId);
     return { success: true, messageId: info.messageId };
   } catch (error: any) {
-    console.error('SMTP Send Error:', error);
+    console.error('SMTP Send Error details:', error);
     return { success: false, error: error.message };
   }
 }
@@ -84,7 +106,6 @@ export async function sendSmtpEmail(config: SmtpConfig, options: MailOptions) {
 export async function submitOrder(payload: OrderPayload) {
   try {
     orderSchema.parse(payload);
-    console.log("submitOrder server action called");
   } catch (error) {
     if (error instanceof z.ZodError) {
       return { success: false, message: 'Validasi gagal', errors: error.errors };
