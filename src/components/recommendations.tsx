@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -18,20 +17,34 @@ export default function Recommendations({ products }: RecommendationsProps) {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
+    let isMounted = true;
+
     const fetchRecommendations = async () => {
       setIsLoading(true);
       try {
+        // Attempt to fetch recommendations with a timeout safety
         const response = await getRecommendedTakjil({});
-        setAiResponse(response);
+        if (isMounted) {
+          setAiResponse(response);
+        }
       } catch (error) {
-        console.error('Error fetching AI recommendations.', error);
-        setAiResponse(null);
+        // Catch network errors (like "Failed to fetch") silently to avoid UI crash
+        console.warn('Network error or timeout while fetching recommendations.');
+        if (isMounted) {
+          setAiResponse({ recommendations: [] });
+        }
       } finally {
-        setIsLoading(false);
+        if (isMounted) {
+          setIsLoading(false);
+        }
       }
     };
 
     fetchRecommendations();
+
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   if (isLoading) {
@@ -57,7 +70,7 @@ export default function Recommendations({ products }: RecommendationsProps) {
   }
 
   const recommendedProducts = aiResponse.recommendations
-    .map(name => products.find(p => p.name === name))
+    .map(name => products.find(p => p.name.toLowerCase() === name.toLowerCase()))
     .filter((p): p is Product => Boolean(p));
 
   if (recommendedProducts.length === 0) {
