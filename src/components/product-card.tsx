@@ -18,8 +18,9 @@ export default function ProductCard({ product }: ProductCardProps) {
   const quantity = getItemQuantity(product.id);
   const [mounted, setMounted] = useState(false);
 
-  // Pastikan stok memiliki nilai default 20 jika undefined (untuk data lama)
-  const currentStock = product.stock ?? 20;
+  // Pastikan stok memiliki nilai default 20 jika undefined, dan tidak negatif untuk tampilan
+  const dbStock = product.stock ?? 20;
+  const currentStock = Math.max(0, dbStock);
 
   useEffect(() => {
     setMounted(true);

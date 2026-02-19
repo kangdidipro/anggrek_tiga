@@ -134,6 +134,8 @@ export default function AdminMenuPage() {
     if (!firestore) return;
 
     const formData = new FormData(e.currentTarget);
+    const stockValue = Number(formData.get('stock'));
+    
     const productData: Product = {
       id: isEditing?.id || (Math.floor(Math.random() * 1000) + 100).toString(),
       name: formData.get('name') as string,
@@ -141,7 +143,7 @@ export default function AdminMenuPage() {
       sku: formData.get('sku') as string,
       category: formData.get('category') as string,
       vendor: formData.get('vendor') as string,
-      stock: Number(formData.get('stock') || 20),
+      stock: Math.max(0, stockValue), // Ensure stock is not negative
     };
 
     try {
@@ -201,7 +203,7 @@ export default function AdminMenuPage() {
               sku: sku,
               category: String(category),
               vendor: String(vendor),
-              stock: stock,
+              stock: Math.max(0, stock), // Ensure stock is not negative
             };
             await setDoc(doc(firestore, 'menuItems', productData.id), productData);
             importedCount++;
@@ -284,7 +286,7 @@ export default function AdminMenuPage() {
                   <div className="grid grid-cols-2 gap-4">
                     <div className="grid gap-2">
                       <Label htmlFor="price">Harga (Rp)</Label>
-                      <Input id="price" name="price" type="number" placeholder="12000" required />
+                      <Input id="price" name="price" type="number" placeholder="12000" min="0" required />
                     </div>
                     <div className="grid gap-2">
                       <Label htmlFor="sku">SKU / Kode Produk</Label>
@@ -294,7 +296,7 @@ export default function AdminMenuPage() {
                   <div className="grid grid-cols-2 gap-4">
                     <div className="grid gap-2">
                       <Label htmlFor="stock">Jumlah Stok</Label>
-                      <Input id="stock" name="stock" type="number" placeholder="20" defaultValue="20" required />
+                      <Input id="stock" name="stock" type="number" placeholder="20" defaultValue="20" min="0" required />
                     </div>
                     <div className="grid gap-2">
                       <Label htmlFor="category">Kategori</Label>
@@ -461,8 +463,8 @@ export default function AdminMenuPage() {
                     <TableCell>{item.category}</TableCell>
                     <TableCell className="font-mono text-xs font-bold">{item.vendor}</TableCell>
                     <TableCell>{item.sku}</TableCell>
-                    <TableCell className={`text-right font-bold ${item.stock <= 5 ? 'text-destructive' : ''}`}>
-                      {item.stock}
+                    <TableCell className={`text-right font-bold ${(item.stock ?? 0) <= 5 ? 'text-destructive' : ''}`}>
+                      {Math.max(0, item.stock ?? 0)}
                     </TableCell>
                     <TableCell className="text-right">{formatPrice(item.price)}</TableCell>
                     <TableCell className="text-right">
@@ -487,7 +489,7 @@ export default function AdminMenuPage() {
                                 <div className="grid grid-cols-2 gap-4">
                                   <div className="grid gap-2">
                                     <Label htmlFor="edit-price">Harga (Rp)</Label>
-                                    <Input id="edit-price" name="price" type="number" defaultValue={item.price} required />
+                                    <Input id="edit-price" name="price" type="number" defaultValue={item.price} min="0" required />
                                   </div>
                                   <div className="grid gap-2">
                                     <Label htmlFor="edit-sku">SKU / Kode Produk</Label>
@@ -497,7 +499,7 @@ export default function AdminMenuPage() {
                                 <div className="grid grid-cols-2 gap-4">
                                   <div className="grid gap-2">
                                     <Label htmlFor="edit-stock">Jumlah Stok</Label>
-                                    <Input id="edit-stock" name="stock" type="number" defaultValue={item.stock} required />
+                                    <Input id="edit-stock" name="stock" type="number" defaultValue={Math.max(0, item.stock ?? 0)} min="0" required />
                                   </div>
                                   <div className="grid gap-2">
                                     <Label htmlFor="edit-category">Kategori</Label>
