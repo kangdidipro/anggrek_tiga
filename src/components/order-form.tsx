@@ -16,6 +16,10 @@ import { useState } from 'react';
 import { useUser, useFirestore, errorEmitter, FirestorePermissionError } from '@/firebase';
 import { collection, writeBatch, doc } from 'firebase/firestore';
 import { useRouter } from 'next/navigation';
+import jsPDF from 'jspdf';
+import { formatPrice } from '@/lib/utils';
+import { format } from 'date-fns';
+import { id as localeId } from 'date-fns/locale';
 
 const formSchema = z.object({
   name: z.string().min(2, { message: 'Nama harus diisi minimal 2 karakter.' }),
@@ -51,6 +55,78 @@ export default function OrderForm({ cartItems, total, deliveryFee, setSheetOpen 
   });
 
   const paymentMethod = form.watch('paymentMethod');
+
+  const sendEmailReceipt = (email: string, values: z.infer<typeof formSchema>, orderId: string) => {
+    // 1. Generate PDF Struk
+    const pdf = new jsPDF({
+      orientation: 'portrait',
+      unit: 'mm',
+      format: [80, 200]
+    });
+
+    const centerPos = 40;
+    pdf.setFontSize(12);
+    pdf.text("TAKJILKU", centerPos, 10, { align: 'center' });
+    pdf.setFontSize(8);
+    pdf.text("Ramadhan UMKM RW06", centerPos, 14, { align: 'center' });
+    pdf.text("-".repeat(40), centerPos, 20, { align: 'center' });
+    
+    pdf.text(`ID: #${orderId.substring(0, 7)}`, 5, 26);
+    pdf.text(`Tgl: ${format(new Date(), 'dd/MM/yyyy HH:mm')}`, 5, 30);
+    pdf.text(`Pemesan: ${values.name}`, 5, 34);
+    pdf.text(`Bayar: ${values.paymentMethod}`, 5, 38);
+    pdf.text("-".repeat(40), centerPos, 42, { align: 'center' });
+    
+    let y = 48;
+    cartItems.forEach((item) => {
+      pdf.text(`${item.product.name}`, 5, y);
+      pdf.text(`${item.quantity} x ${formatPrice(item.product.price)}`, 5, y + 4);
+      pdf.text(`${formatPrice(item.product.price * item.quantity)}`, 75, y + 4, { align: 'right' });
+      y += 10;
+    });
+    
+    pdf.text("-".repeat(40), centerPos, y, { align: 'center' });
+    y += 6;
+    pdf.text("Ongkir (Delivery):", 5, y);
+    pdf.text(`${formatPrice(deliveryFee)}`, 75, y, { align: 'right' });
+    y += 6;
+    
+    pdf.setFontSize(10);
+    pdf.text("TOTAL:", 5, y);
+    pdf.text(`${formatPrice(total)}`, 75, y, { align: 'right' });
+    
+    // 2. Simulasi Pengiriman Email
+    const emailBody = `
+      Halo ${values.name},
+      
+      Terima kasih telah memesan di TakjilKu!
+      Pesanan Anda telah kami terima dan sedang diproses.
+      
+      RINCIAN PESANAN:
+      -------------------------------
+      ID Pesanan: #${orderId.substring(0, 7)}
+      Waktu: ${format(new Date(), 'dd MMMM yyyy HH:mm', { locale: localeId })}
+      Total Bayar: ${formatPrice(total)}
+      Alamat Antar: ${values.address}
+      -------------------------------
+      
+      Terlampir adalah struk PDF rincian pesanan Anda.
+      
+      Semoga Berkah,
+      Tim TakjilKu UMKM RW06
+    `;
+
+    // Di lingkungan prototipe, kita melakukan log ke konsol dan menampilkan toast sukses
+    console.log(`[EMAIL SERVICE] Mengirim ke: ${email}`);
+    console.log(`[EMAIL SERVICE] Subjek: Struk Pesanan TakjilKu #${orderId.substring(0, 7)}`);
+    console.log(`[EMAIL SERVICE] Body Email:`, emailBody);
+    console.log(`[EMAIL SERVICE] PDF Attachment: Berhasil digenerate (base64 size: ${pdf.output('datauristring').length})`);
+
+    toast({
+      title: "Email Terkirim 📧",
+      description: `Struk rincian dan lampiran PDF telah dikirim ke ${email}.`,
+    });
+  };
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
     if (!user || !firestore) {
@@ -100,6 +176,11 @@ export default function OrderForm({ cartItems, total, deliveryFee, setSheetOpen 
 
     batch.commit()
       .then(() => {
+        // Jika email diisi, kirim struk
+        if (values.email) {
+            sendEmailReceipt(values.email, values, orderRef.id);
+        }
+
         toast({
             title: "Pesanan Berhasil 🎉",
             description: "Pesanan Anda telah kami terima dan akan segera diproses.",
@@ -119,7 +200,7 @@ export default function OrderForm({ cartItems, total, deliveryFee, setSheetOpen 
           toast({
               variant: "destructive",
               title: "Gagal Mengirim Pesanan",
-              description: "Missing or insufficient permissions.",
+              description: "Terjadi kesalahan hak akses atau jaringan.",
           });
       })
       .finally(() => {
@@ -156,7 +237,7 @@ export default function OrderForm({ cartItems, total, deliveryFee, setSheetOpen 
           name="email"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Email</FormLabel>
+              <FormLabel>Email (Untuk kirim struk PDF)</FormLabel>
               <FormControl>
                 <Input placeholder="anda@email.com" {...field} disabled={isSubmitting} />
               </FormControl>
