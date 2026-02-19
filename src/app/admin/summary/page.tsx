@@ -24,6 +24,7 @@ import type { Vendor } from '@/lib/types';
 interface OrderItem {
   id: string;
   orderId: string;
+  customerId: string;
   name: string;
   quantity: number;
   priceAtOrder: number;
@@ -33,6 +34,7 @@ interface OrderItem {
 
 interface Order {
   id: string;
+  customerId: string;
   orderDateTime: string; // ISO string
   deliveryAddress: string;
   items: OrderItem[];
@@ -41,7 +43,6 @@ interface Order {
 const getVendorFromSku = (sku: string) => {
   if (!sku) return 'UNKNOWN';
   if (sku.includes('-')) return sku.split('-')[0];
-  // If no hyphen, extract the alphabetic prefix (e.g., UDA4 -> UDA)
   const match = sku.match(/^[a-zA-Z]+/);
   return match ? match[0] : sku;
 };
@@ -91,15 +92,21 @@ export default function AdminSummaryPage() {
       try {
         const ordersQuery = query(collectionGroup(firestore, 'orders'));
         const ordersSnapshot = await getDocs(ordersQuery);
-        const ordersData = ordersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Omit<Order, 'items'>));
+        const ordersData = ordersSnapshot.docs.map(doc => {
+          const pathParts = doc.ref.path.split('/');
+          return { id: doc.id, customerId: pathParts[1], ...doc.data() } as Omit<Order, 'items'>;
+        });
 
         const orderItemsQuery = query(collectionGroup(firestore, 'orderItems'));
         const orderItemsSnapshot = await getDocs(orderItemsQuery);
-        const orderItemsData = orderItemsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as OrderItem));
+        const orderItemsData = orderItemsSnapshot.docs.map(doc => {
+          const pathParts = doc.ref.path.split('/');
+          return { id: doc.id, customerId: pathParts[1], orderId: pathParts[3], ...doc.data() } as OrderItem;
+        });
         
         const ordersWithItems: Order[] = ordersData.map(order => ({
             ...order,
-            items: orderItemsData.filter(item => item.orderId === order.id)
+            items: orderItemsData.filter(item => item.orderId === order.id && item.customerId === order.customerId)
         }));
 
         setOrders(ordersWithItems);
@@ -130,6 +137,9 @@ export default function AdminSummaryPage() {
         order.items.forEach(item => {
             const vendor = item.vendor || getVendorFromSku(item.sku);
             
+            // Respect vendor filter during aggregation to keep totals consistent
+            if (vendorFilter !== 'all' && vendor !== vendorFilter) return;
+
             let key = '';
             let label = '';
             let subLabel = '';
@@ -174,7 +184,7 @@ export default function AdminSummaryPage() {
         items: Object.values(data.items),
         addresses: Array.from(data.addresses)
     }));
-  }, [orders, date, groupBy, vendorLookup]);
+  }, [orders, date, groupBy, vendorLookup, vendorFilter]);
 
   const availableVendors = useMemo(() => {
     const vendors = new Set<string>();
@@ -185,14 +195,8 @@ export default function AdminSummaryPage() {
   const filteredSummary = useMemo(() => {
     let result = summaryData;
     
-    if (vendorFilter !== 'all') {
-      if (groupBy === 'vendor') {
-        result = result.filter(s => s.key === vendorFilter);
-      } else {
-        result = result.filter(s => s.items.some(i => (i.vendor || getVendorFromSku(i.sku)) === vendorFilter));
-      }
-    }
-    
+    // Summary is already filtered by vendor inside summaryData aggregation logic
+    // We just need to handle the Search Term here
     if (searchTerm.trim() !== '') {
         const lowerSearch = searchTerm.toLowerCase();
         result = result.filter(s => {
@@ -203,7 +207,7 @@ export default function AdminSummaryPage() {
     }
     
     return result;
-  }, [summaryData, vendorFilter, searchTerm, groupBy]);
+  }, [summaryData, searchTerm]);
 
   const grandTotals = useMemo(() => {
     return filteredSummary.reduce((acc, curr) => ({

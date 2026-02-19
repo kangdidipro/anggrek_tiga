@@ -99,15 +99,21 @@ export default function AdminOrdersPage() {
       try {
         const ordersQuery = query(collectionGroup(firestore, 'orders'));
         const ordersSnapshot = await getDocs(ordersQuery);
-        const ordersData = ordersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Omit<Order, 'items'>));
+        const ordersData = ordersSnapshot.docs.map(doc => {
+          const pathParts = doc.ref.path.split('/');
+          return { id: doc.id, customerId: pathParts[1], ...doc.data() } as Omit<Order, 'items'>;
+        });
 
         const orderItemsQuery = query(collectionGroup(firestore, 'orderItems'));
         const orderItemsSnapshot = await getDocs(orderItemsQuery);
-        const orderItemsData = orderItemsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as OrderItem));
+        const orderItemsData = orderItemsSnapshot.docs.map(doc => {
+          const pathParts = doc.ref.path.split('/');
+          return { id: doc.id, customerId: pathParts[1], orderId: pathParts[3], ...doc.data() } as OrderItem;
+        });
         
         const ordersWithItems: Order[] = ordersData.map(order => ({
             ...order,
-            items: orderItemsData.filter(item => item.orderId === order.id)
+            items: orderItemsData.filter(item => item.orderId === order.id && item.customerId === order.customerId)
         })).filter(order => order.items.length > 0)
           .sort((a, b) => new Date(b.orderDateTime).getTime() - new Date(a.orderDateTime).getTime());
 
@@ -691,7 +697,7 @@ export default function AdminOrdersPage() {
                   </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
-                  <AlertDialogCancel onClick={() => setOrderToDelete(null)} disabled={isDeleting}>
+                  <AlertDialogCancel onClick={() => !isDeleting && setOrderToDelete(null)} disabled={isDeleting}>
                       Batal
                   </AlertDialogCancel>
                   <AlertDialogAction onClick={handleDeleteOrder} disabled={isDeleting} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
