@@ -6,7 +6,7 @@ import { collectionGroup, getDocs, query, collection, where, doc, updateDoc, arr
 import { useParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Loader2, CalendarIcon, ShoppingBag, Clock, CheckCircle2, Printer } from 'lucide-react';
+import { Loader2, CalendarIcon, ShoppingBag, Clock, CheckCircle2, Printer, Calculator, Banknote } from 'lucide-react';
 import { formatPrice } from '@/lib/utils';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -81,7 +81,10 @@ export default function MitraOrderPage() {
       try {
         const ordersQuery = query(collectionGroup(firestore, 'orders'));
         const ordersSnapshot = await getDocs(ordersQuery);
-        const ordersData = ordersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Omit<Order, 'items'>));
+        const ordersData = ordersSnapshot.docs.map(doc => {
+          const pathParts = doc.ref.path.split('/');
+          return { id: doc.id, customerId: pathParts[1], ...doc.data() } as Omit<Order, 'items'>;
+        });
 
         const orderItemsQuery = query(collectionGroup(firestore, 'orderItems'));
         const orderItemsSnapshot = await getDocs(orderItemsQuery);
@@ -97,10 +100,6 @@ export default function MitraOrderPage() {
         setOrders(ordersWithItems);
       } catch (error: any) {
         console.error("Error fetching orders:", error);
-        errorEmitter.emit('permission-error', new FirestorePermissionError({
-          path: 'collectionGroup(orders)',
-          operation: 'list',
-        }));
       } finally {
         setIsLoading(false);
       }
@@ -115,6 +114,20 @@ export default function MitraOrderPage() {
         return orderDate.toDateString() === date.toDateString();
     });
   }, [orders, date]);
+
+  // Financial Summaries
+  const financialSummary = useMemo(() => {
+    const bruto = filteredOrders.reduce((acc, order) => 
+      acc + order.items.reduce((sum, item) => sum + (item.quantity * item.priceAtOrder), 0), 0
+    );
+    const admin = bruto * 0.05;
+    const netto = bruto - admin;
+    const totalItems = filteredOrders.reduce((acc, order) => 
+      acc + order.items.reduce((sum, item) => sum + item.quantity, 0), 0
+    );
+
+    return { bruto, admin, netto, totalItems };
+  }, [filteredOrders]);
 
   const handleUpdateStatus = async (order: Order, newStatus: string) => {
     if (!firestore || isUpdatingStatus) return;
@@ -187,7 +200,9 @@ export default function MitraOrderPage() {
     }
     
     const itemsToPrint = order.items;
-    const subtotal = itemsToPrint.reduce((sum, item) => sum + (item.priceAtOrder * item.quantity), 0);
+    const bruto = itemsToPrint.reduce((sum, item) => sum + (item.priceAtOrder * item.quantity), 0);
+    const admin = bruto * 0.05;
+    const netto = bruto - admin;
 
     docPdf.setFontSize(12);
     docPdf.text("TAKJILKU", centerPos, y, { align: 'center' });
@@ -220,9 +235,17 @@ export default function MitraOrderPage() {
     docPdf.text("-".repeat(40), centerPos, y, { align: 'center' });
     y += 6;
     
+    docPdf.setFontSize(9);
+    docPdf.text("SUBTOTAL BRUTO:", 5, y);
+    docPdf.text(`${formatPrice(bruto)}`, 75, y, { align: 'right' });
+    y += 5;
+    docPdf.text("ADMIN (5%):", 5, y);
+    docPdf.text(`- ${formatPrice(admin)}`, 75, y, { align: 'right' });
+    y += 6;
+    
     docPdf.setFontSize(10);
-    docPdf.text("SUBTOTAL MITRA:", 5, y);
-    docPdf.text(`${formatPrice(subtotal)}`, 75, y, { align: 'right' });
+    docPdf.text("NETTO DITERIMA:", 5, y);
+    docPdf.text(`${formatPrice(netto)}`, 75, y, { align: 'right' });
     y += 10;
     
     docPdf.setFontSize(8);
@@ -269,15 +292,15 @@ export default function MitraOrderPage() {
   const vendor = vendorInfo[0];
 
   return (
-    <div className="container py-8 max-w-4xl mx-auto">
+    <div className="container py-8 max-w-5xl mx-auto px-4">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight font-headline">Daftar Pesanan Mitra</h1>
+          <h1 className="text-3xl font-bold tracking-tight font-headline">Panel Mitra TakjilKu</h1>
           <p className="text-muted-foreground text-lg">{vendor.name} ({vendor.code})</p>
         </div>
         <Popover>
           <PopoverTrigger asChild>
-            <Button variant={"outline"} className="w-[240px] justify-start text-left font-normal border-primary/20">
+            <Button variant={"outline"} className="w-full md:w-[240px] justify-start text-left font-normal border-primary/20">
               <CalendarIcon className="mr-2 h-4 w-4" />
               {date ? format(date, "PPP", { locale: id }) : <span>Pilih tanggal</span>}
             </Button>
@@ -288,27 +311,29 @@ export default function MitraOrderPage() {
         </Popover>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
         <Card className="bg-primary/5 border-primary/20">
           <CardContent className="p-4 text-center">
-            <p className="text-sm font-medium text-muted-foreground uppercase">Total Pesanan</p>
+            <p className="text-xs font-bold text-muted-foreground uppercase mb-1">Pesanan</p>
             <p className="text-2xl font-bold text-primary">{filteredOrders.length}</p>
           </CardContent>
         </Card>
         <Card className="bg-primary/5 border-primary/20">
           <CardContent className="p-4 text-center">
-            <p className="text-sm font-medium text-muted-foreground uppercase">Total Item</p>
-            <p className="text-2xl font-bold text-primary">
-              {filteredOrders.reduce((acc, order) => acc + order.items.reduce((sum, item) => sum + item.quantity, 0), 0)}
-            </p>
+            <p className="text-xs font-bold text-muted-foreground uppercase mb-1">Omzet Bruto</p>
+            <p className="text-2xl font-bold text-primary">{formatPrice(financialSummary.bruto)}</p>
           </CardContent>
         </Card>
-        <Card className="bg-primary/5 border-primary/20">
+        <Card className="bg-destructive/5 border-destructive/20">
           <CardContent className="p-4 text-center">
-            <p className="text-sm font-medium text-muted-foreground uppercase">Total Omzet</p>
-            <p className="text-2xl font-bold text-primary">
-              {formatPrice(filteredOrders.reduce((acc, order) => acc + order.items.reduce((sum, item) => sum + (item.quantity * item.priceAtOrder), 0), 0))}
-            </p>
+            <p className="text-xs font-bold text-destructive/70 uppercase mb-1">Potongan Admin (5%)</p>
+            <p className="text-2xl font-bold text-destructive">{formatPrice(financialSummary.admin)}</p>
+          </CardContent>
+        </Card>
+        <Card className="bg-green-500/5 border-green-500/20">
+          <CardContent className="p-4 text-center">
+            <p className="text-xs font-bold text-green-600 uppercase mb-1">Netto Diterima</p>
+            <p className="text-2xl font-bold text-green-600">{formatPrice(financialSummary.netto)}</p>
           </CardContent>
         </Card>
       </div>
@@ -320,113 +345,144 @@ export default function MitraOrderPage() {
         </div>
       ) : (
         <Accordion type="single" collapsible className="w-full space-y-4">
-          {filteredOrders.map((order) => (
-            <AccordionItem value={order.id} key={order.id} className="border-b-0">
-              <Card className="shadow-sm overflow-hidden border-primary/10">
-                <CardHeader className="p-4">
-                  <AccordionTrigger className="w-full p-0 hover:no-underline">
-                    <div className="flex justify-between items-center w-full">
-                      <div className="text-left">
-                        <CardTitle className="text-base md:text-lg">
-                          Order #{order.id.substring(0, 7)}
-                        </CardTitle>
-                        <CardDescription className="text-xs md:text-sm">
-                          {format(new Date(order.orderDateTime), 'HH:mm')} WIB
-                        </CardDescription>
-                      </div>
-                      <div className="text-right flex flex-col items-end gap-2">
-                        <p className="font-semibold text-base md:text-lg text-primary">
-                          {formatPrice(order.items.reduce((sum, item) => sum + (item.quantity * item.priceAtOrder), 0))}
-                        </p>
-                        <Badge className={getStatusBadgeColor(order.status)}>
-                          {order.status === 'pending' ? 'Dipesan' : (order.status || 'Dipesan')}
-                        </Badge>
-                      </div>
-                    </div>
-                  </AccordionTrigger>
-                </CardHeader>
-                <AccordionContent>
-                  <CardContent className="p-4 pt-0 space-y-6">
-                    <div className="border-t pt-4">
-                      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-4">
-                        <div className="flex-1 w-full max-w-xs">
-                          <label className="text-xs font-bold text-muted-foreground block mb-2 uppercase tracking-tighter">Ubah Status Pesanan:</label>
-                          <Select 
-                            disabled={isUpdatingStatus === order.id} 
-                            value={order.status === 'pending' ? 'Dipesan' : (order.status || 'Dipesan')} 
-                            onValueChange={(val) => handleUpdateStatus(order, val)}
-                          >
-                            <SelectTrigger className="border-primary/20">
-                              <SelectValue placeholder="Ubah Status" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {ORDER_STATUSES.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
-                            </SelectContent>
-                          </Select>
+          {filteredOrders.map((order) => {
+            const orderBruto = order.items.reduce((sum, item) => sum + (item.quantity * item.priceAtOrder), 0);
+            const orderAdmin = orderBruto * 0.05;
+            const orderNetto = orderBruto - orderAdmin;
+
+            return (
+              <AccordionItem value={order.id} key={order.id} className="border-b-0">
+                <Card className="shadow-sm overflow-hidden border-primary/10">
+                  <CardHeader className="p-4">
+                    <AccordionTrigger className="w-full p-0 hover:no-underline">
+                      <div className="flex justify-between items-center w-full">
+                        <div className="text-left">
+                          <CardTitle className="text-base md:text-lg">
+                            Order #{order.id.substring(0, 7)}
+                          </CardTitle>
+                          <CardDescription className="text-xs md:text-sm">
+                            {format(new Date(order.orderDateTime), 'HH:mm')} WIB
+                          </CardDescription>
                         </div>
-                        <Button variant="outline" size="sm" onClick={() => handlePrintReceipt(order)} className="shrink-0 border-primary/30">
-                          <Printer className="h-4 w-4 mr-2" /> Cetak Slip
-                        </Button>
-                      </div>
-                    </div>
-
-                    <div className="border-t pt-4">
-                      <h4 className="font-semibold mb-2 text-sm text-muted-foreground uppercase tracking-wider">Item Pesanan:</h4>
-                      <div className="space-y-2 pt-2">
-                        {order.items.map(item => (
-                          <div key={item.id} className="flex justify-between text-sm bg-muted/30 p-2 rounded">
-                            <div>
-                              <span className="font-medium">{item.name}</span>
-                              <span className="text-muted-foreground"> x {item.quantity}</span>
-                            </div>
-                            <span className="font-bold">{formatPrice(item.priceAtOrder * item.quantity)}</span>
+                        <div className="text-right flex flex-col items-end gap-1">
+                          <div className="flex items-center gap-2">
+                            <span className="text-[10px] text-muted-foreground font-bold">NETTO:</span>
+                            <p className="font-bold text-base md:text-lg text-green-600">
+                              {formatPrice(orderNetto)}
+                            </p>
                           </div>
-                        ))}
+                          <Badge className={getStatusBadgeColor(order.status)}>
+                            {order.status === 'pending' ? 'Dipesan' : (order.status || 'Dipesan')}
+                          </Badge>
+                        </div>
                       </div>
-                    </div>
+                    </AccordionTrigger>
+                  </CardHeader>
+                  <AccordionContent>
+                    <CardContent className="p-4 pt-0 space-y-6">
+                      <div className="border-t pt-4">
+                        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-4">
+                          <div className="flex-1 w-full max-w-xs">
+                            <label className="text-xs font-bold text-muted-foreground block mb-2 uppercase tracking-tighter">Ubah Status Pesanan:</label>
+                            <Select 
+                              disabled={isUpdatingStatus === order.id} 
+                              value={order.status === 'pending' ? 'Dipesan' : (order.status || 'Dipesan')} 
+                              onValueChange={(val) => handleUpdateStatus(order, val)}
+                            >
+                              <SelectTrigger className="border-primary/20">
+                                <SelectValue placeholder="Ubah Status" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {ORDER_STATUSES.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <Button variant="outline" size="sm" onClick={() => handlePrintReceipt(order)} className="shrink-0 border-primary/30">
+                            <Printer className="h-4 w-4 mr-2" /> Cetak Slip
+                          </Button>
+                        </div>
+                      </div>
 
-                    <div className="border-t pt-4">
-                      <h4 className="font-semibold mb-2 text-sm text-muted-foreground uppercase tracking-wider flex items-center gap-2">
-                        <Clock className="h-4 w-4" /> Riwayat Status:
-                      </h4>
-                      <div className="bg-muted/30 rounded-lg p-3 space-y-2">
-                        {order.statusHistory && order.statusHistory.length > 0 ? (
-                          order.statusHistory.map((log, i) => (
-                            <div key={i} className="flex items-start gap-3 text-xs">
+                      <div className="border-t pt-4">
+                        <h4 className="font-semibold mb-2 text-sm text-muted-foreground uppercase tracking-wider flex items-center gap-2">
+                          <Calculator className="h-4 w-4" /> Perhitungan Pembayaran:
+                        </h4>
+                        <div className="bg-muted/30 rounded-lg p-4 space-y-2">
+                          <div className="flex justify-between text-sm">
+                            <span className="text-muted-foreground">Omzet Bruto (Penjualan):</span>
+                            <span className="font-medium">{formatPrice(orderBruto)}</span>
+                          </div>
+                          <div className="flex justify-between text-sm text-destructive">
+                            <span>Biaya Admin UMKM (5%):</span>
+                            <span>- {formatPrice(orderAdmin)}</span>
+                          </div>
+                          <div className="border-t border-dashed pt-2 flex justify-between font-bold text-green-600">
+                            <span className="flex items-center gap-1">
+                              <Banknote className="h-4 w-4" /> Bayar ke Mitra (Netto):
+                            </span>
+                            <span>{formatPrice(orderNetto)}</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="border-t pt-4">
+                        <h4 className="font-semibold mb-2 text-sm text-muted-foreground uppercase tracking-wider">Item Pesanan:</h4>
+                        <div className="space-y-2 pt-2">
+                          {order.items.map(item => (
+                            <div key={item.id} className="flex justify-between text-sm bg-muted/30 p-2 rounded">
+                              <div>
+                                <span className="font-medium">{item.name}</span>
+                                <span className="text-muted-foreground"> x {item.quantity}</span>
+                              </div>
+                              <span className="font-bold">{formatPrice(item.priceAtOrder * item.quantity)}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="border-t pt-4">
+                        <h4 className="font-semibold mb-2 text-sm text-muted-foreground uppercase tracking-wider flex items-center gap-2">
+                          <Clock className="h-4 w-4" /> Riwayat Status:
+                        </h4>
+                        <div className="bg-muted/30 rounded-lg p-3 space-y-2">
+                          {order.statusHistory && order.statusHistory.length > 0 ? (
+                            order.statusHistory.map((log, i) => (
+                              <div key={i} className="flex items-start gap-3 text-xs">
+                                <CheckCircle2 className="h-3 w-3 text-primary mt-0.5" />
+                                <div className="flex-1 flex justify-between">
+                                  <span className="font-bold">{log.status}</span>
+                                  <span className="text-muted-foreground">
+                                    {format(new Date(log.timestamp), 'dd MMM, HH:mm', { locale: id })}
+                                  </span>
+                                </div>
+                              </div>
+                            ))
+                          ) : (
+                            <div className="flex items-start gap-3 text-xs">
                               <CheckCircle2 className="h-3 w-3 text-primary mt-0.5" />
                               <div className="flex-1 flex justify-between">
-                                <span className="font-bold">{log.status}</span>
+                                <span className="font-bold">{order.status === 'pending' ? 'Dipesan' : (order.status || 'Dipesan')}</span>
                                 <span className="text-muted-foreground">
-                                  {format(new Date(log.timestamp), 'dd MMM, HH:mm', { locale: id })}
+                                  {format(new Date(order.orderDateTime), 'dd MMM, HH:mm', { locale: id })}
                                 </span>
                               </div>
                             </div>
-                          ))
-                        ) : (
-                          <div className="flex items-start gap-3 text-xs">
-                            <CheckCircle2 className="h-3 w-3 text-primary mt-0.5" />
-                            <div className="flex-1 flex justify-between">
-                              <span className="font-bold">{order.status === 'pending' ? 'Dipesan' : (order.status || 'Dipesan')}</span>
-                              <span className="text-muted-foreground">
-                                {format(new Date(order.orderDateTime), 'dd MMM, HH:mm', { locale: id })}
-                              </span>
-                            </div>
-                          </div>
-                        )}
+                          )}
+                        </div>
                       </div>
-                    </div>
 
-                    <div className="border-t pt-4">
-                      <h4 className="font-semibold mb-2 text-sm text-muted-foreground uppercase tracking-wider">Alamat Pengiriman:</h4>
-                      <p className="text-sm p-3 bg-primary/5 rounded border border-primary/10 italic">
-                        {order.deliveryAddress}
-                      </p>
-                    </div>
-                  </CardContent>
-                </AccordionContent>
-              </Card>
-            </AccordionItem>
-          ))}
+                      <div className="border-t pt-4">
+                        <h4 className="font-semibold mb-2 text-sm text-muted-foreground uppercase tracking-wider">Alamat Pengiriman:</h4>
+                        <p className="text-sm p-3 bg-primary/5 rounded border border-primary/10 italic">
+                          {order.deliveryAddress}
+                        </p>
+                      </div>
+                    </CardContent>
+                  </AccordionContent>
+                </Card>
+              </AccordionItem>
+            );
+          })}
         </Accordion>
       )}
     </div>
