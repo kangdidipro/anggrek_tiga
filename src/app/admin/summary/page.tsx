@@ -5,7 +5,7 @@ import { useFirestore, useUser, useCollection, useMemoFirebase } from '@/firebas
 import { collectionGroup, getDocs, query, collection } from 'firebase/firestore';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Loader2, FileDown, CalendarIcon, FileText, Mail, Search } from 'lucide-react';
+import { Loader2, FileDown, CalendarIcon, FileText, Mail, Search, LayoutGrid } from 'lucide-react';
 import { formatPrice } from '@/lib/utils';
 import * as XLSX from 'xlsx';
 import { saveAs } from 'file-saver';
@@ -39,8 +39,10 @@ interface Order {
 
 const getVendorFromSku = (sku: string) => sku.split('-')[0];
 
-type DailySummary = {
-    vendor: string;
+type SummaryItem = {
+    key: string;
+    label: string;
+    subLabel?: string;
     totalOrders: number;
     totalAmount: number;
     items: { name: string, quantity: number, sku: string, price: number }[];
@@ -57,6 +59,7 @@ export default function AdminSummaryPage() {
   const [date, setDate] = useState<Date | undefined>(new Date());
   const [vendorFilter, setVendorFilter] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
+  const [groupBy, setGroupBy] = useState<'orderId' | 'vendor' | 'sku'>('orderId');
   const { toast } = useToast();
 
   const vendorsQuery = useMemoFirebase(() => {
@@ -102,12 +105,14 @@ export default function AdminSummaryPage() {
     fetchOrders();
   }, [firestore, user, isUserLoading]);
 
-  const dailySummary: DailySummary[] = useMemo(() => {
+  const summaryData: SummaryItem[] = useMemo(() => {
     if (!date) return [];
     
     const targetDateOrders = orders.filter(order => new Date(order.orderDateTime).toDateString() === date.toDateString());
     
     const summaryMap: Record<string, { 
+      label: string;
+      subLabel?: string;
       totalOrders: Set<string>; 
       totalAmount: number; 
       items: Record<string, { name: string, quantity: number, sku: string, price: number }>;
@@ -118,59 +123,80 @@ export default function AdminSummaryPage() {
         order.items.forEach(item => {
             const vendor = getVendorFromSku(item.sku);
             
-            if (!summaryMap[vendor]) {
-                summaryMap[vendor] = { totalOrders: new Set(), totalAmount: 0, items: {}, addresses: new Set() };
+            let key = '';
+            let label = '';
+            let subLabel = '';
+
+            if (groupBy === 'orderId') {
+                key = order.id;
+                label = `Pesanan #${order.id}`;
+                subLabel = format(new Date(order.orderDateTime), 'HH:mm');
+            } else if (groupBy === 'vendor') {
+                key = vendor;
+                const vName = vendorLookup[vendor];
+                label = vName && vName !== vendor ? `${vName} (${vendor})` : vendor;
+            } else if (groupBy === 'sku') {
+                key = item.sku;
+                label = `[${item.sku}] ${item.name}`;
             }
-            summaryMap[vendor].totalOrders.add(order.id);
+
+            if (!summaryMap[key]) {
+                summaryMap[key] = { label, subLabel, totalOrders: new Set(), totalAmount: 0, items: {}, addresses: new Set() };
+            }
+            summaryMap[key].totalOrders.add(order.id);
             if (order.deliveryAddress) {
-              summaryMap[vendor].addresses.add(order.deliveryAddress);
+              summaryMap[key].addresses.add(order.deliveryAddress);
             }
             const itemTotal = item.quantity * item.priceAtOrder;
-            summaryMap[vendor].totalAmount += itemTotal;
+            summaryMap[key].totalAmount += itemTotal;
             
             const itemKey = item.sku;
-            if (!summaryMap[vendor].items[itemKey]) {
-                summaryMap[vendor].items[itemKey] = { name: item.name, quantity: 0, sku: item.sku, price: item.priceAtOrder };
+            if (!summaryMap[key].items[itemKey]) {
+                summaryMap[key].items[itemKey] = { name: item.name, quantity: 0, sku: item.sku, price: item.priceAtOrder };
             }
-            summaryMap[vendor].items[itemKey].quantity += item.quantity;
+            summaryMap[key].items[itemKey].quantity += item.quantity;
         });
     });
 
-    return Object.entries(summaryMap).map(([vendor, data]) => ({
-        vendor,
+    return Object.entries(summaryMap).map(([key, data]) => ({
+        key,
+        label: data.label,
+        subLabel: data.subLabel,
         totalOrders: data.totalOrders.size,
         totalAmount: data.totalAmount,
         items: Object.values(data.items),
         addresses: Array.from(data.addresses)
     }));
-  }, [orders, date]);
+  }, [orders, date, groupBy, vendorLookup]);
 
   const availableVendors = useMemo(() => {
     const vendors = new Set<string>();
-    dailySummary.forEach(s => vendors.add(s.vendor));
+    orders.forEach(order => order.items.forEach(item => vendors.add(getVendorFromSku(item.sku))));
     return ['all', ...Array.from(vendors).sort()];
-  }, [dailySummary]);
+  }, [orders]);
 
   const filteredSummary = useMemo(() => {
-    let result = dailySummary;
+    let result = summaryData;
     
     if (vendorFilter !== 'all') {
-      result = result.filter(s => s.vendor === vendorFilter);
+      if (groupBy === 'vendor') {
+        result = result.filter(s => s.key === vendorFilter);
+      } else {
+        result = result.filter(s => s.items.some(i => getVendorFromSku(i.sku) === vendorFilter));
+      }
     }
     
     if (searchTerm.trim() !== '') {
         const lowerSearch = searchTerm.toLowerCase();
         result = result.filter(s => {
-            const vName = vendorLookup[s.vendor] || '';
-            return s.vendor.toLowerCase().includes(lowerSearch) ||
-                   vName.toLowerCase().includes(lowerSearch) ||
+            return s.label.toLowerCase().includes(lowerSearch) ||
                    s.items.some(item => item.name.toLowerCase().includes(lowerSearch)) ||
                    s.addresses.some(addr => addr.toLowerCase().includes(lowerSearch));
         });
     }
     
     return result;
-  }, [dailySummary, vendorFilter, searchTerm, vendorLookup]);
+  }, [summaryData, vendorFilter, searchTerm, groupBy]);
 
   const grandTotals = useMemo(() => {
     return filteredSummary.reduce((acc, curr) => ({
@@ -186,7 +212,8 @@ export default function AdminSummaryPage() {
 
   const exportToExcel = () => {
     const dataForExport = filteredSummary.map(summary => ({
-        'Mitra': getMitraDisplayName(summary.vendor),
+        'Kategori Group': summary.label,
+        'Info': summary.subLabel || '',
         'Total Pesanan': summary.totalOrders,
         'Total Pemesanan': summary.totalAmount,
         'Rincian Item, Harga & SKU': summary.items.map(i => `${i.name} [${i.sku}] (${formatPrice(i.price)} x ${i.quantity} = ${formatPrice(i.price * i.quantity)})`).join('\r\n'),
@@ -194,7 +221,8 @@ export default function AdminSummaryPage() {
     }));
 
     dataForExport.push({
-      'Mitra': 'TOTAL KESELURUHAN',
+      'Kategori Group': 'TOTAL KESELURUHAN',
+      'Info': '',
       'Total Pesanan': grandTotals.orders,
       'Total Pemesanan': grandTotals.amount,
       'Rincian Item, Harga & SKU': '',
@@ -207,6 +235,7 @@ export default function AdminSummaryPage() {
     
     const wscols = [
         {wch: 40}, // Mitra
+        {wch: 15}, // Info
         {wch: 15}, // Total Pesanan
         {wch: 20}, // Total Pemesanan
         {wch: 70}, // Rincian
@@ -216,14 +245,14 @@ export default function AdminSummaryPage() {
 
     const excelBuffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
     const dataBlob = new Blob([excelBuffer], {type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;charset=UTF-8'});
-    saveAs(dataBlob, `rekap_harian_${date ? date.toISOString().split('T')[0] : 'semua'}.xlsx`);
+    saveAs(dataBlob, `rekap_${groupBy}_${date ? date.toISOString().split('T')[0] : 'semua'}.xlsx`);
   };
 
   const exportToPDF = () => {
     const doc = new jsPDF('l', 'mm', 'a4');
-    const tableColumn = ["Mitra", "Pesanan", "Total", "Rincian Item, Harga & SKU", "Alamat Pengiriman"];
+    const tableColumn = ["Group", "Pesanan", "Total", "Rincian Item, Harga & SKU", "Alamat Pengiriman"];
     const tableRows = filteredSummary.map(summary => [
-        getMitraDisplayName(summary.vendor),
+        summary.label + (summary.subLabel ? ` (${summary.subLabel})` : ''),
         summary.totalOrders.toString(),
         formatPrice(summary.totalAmount),
         summary.items.map(i => `${i.name} [${i.sku}]\n${formatPrice(i.price)} x ${i.quantity} = ${formatPrice(i.price * i.quantity)}`).join('\n---\n'),
@@ -253,7 +282,7 @@ export default function AdminSummaryPage() {
             4: { cellWidth: 60 }
         }
     });
-    doc.save(`rekap_harian_${date ? date.toISOString().split('T')[0] : 'semua'}.pdf`);
+    doc.save(`rekap_${groupBy}_${date ? date.toISOString().split('T')[0] : 'semua'}.pdf`);
   };
 
   const sendToEmail = async () => {
@@ -286,7 +315,7 @@ export default function AdminSummaryPage() {
             <CardHeader>
                 <CardTitle>Rekap Harian</CardTitle>
                 <CardDescription>
-                  Rekapitulasi total pesanan per mitra untuk tanggal {date ? format(date, 'eeee, d MMMM yyyy', { locale: id }) : 'semua waktu'}.
+                  Rekapitulasi total pesanan per {groupBy === 'orderId' ? 'No. Order' : groupBy === 'vendor' ? 'Mitra' : 'SKU'} untuk tanggal {date ? format(date, 'eeee, d MMMM yyyy', { locale: id }) : 'semua waktu'}.
                 </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -294,7 +323,7 @@ export default function AdminSummaryPage() {
                     <div className="relative flex-1 min-w-[240px]">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                         <Input 
-                            placeholder="Cari Mitra, Item, atau Alamat..." 
+                            placeholder="Cari kata kunci..." 
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
                             className="pl-10"
@@ -326,6 +355,18 @@ export default function AdminSummaryPage() {
                         </SelectContent>
                     </Select>
 
+                    <Select value={groupBy} onValueChange={(val: any) => setGroupBy(val)}>
+                        <SelectTrigger className="w-[180px] border-primary/50 bg-primary/5">
+                            <LayoutGrid className="mr-2 h-4 w-4 text-primary" />
+                            <SelectValue placeholder="Group By" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="orderId">No. Order</SelectItem>
+                            <SelectItem value="vendor">Kode Mitra</SelectItem>
+                            <SelectItem value="sku">SKU Produk</SelectItem>
+                        </SelectContent>
+                    </Select>
+
                     <div className="flex flex-wrap gap-2 items-center">
                         <Button variant="outline" size="sm" onClick={exportToExcel} disabled={filteredSummary.length === 0}>
                             <FileDown className="mr-2 h-4 w-4" />
@@ -354,7 +395,9 @@ export default function AdminSummaryPage() {
                 <Table>
                     <TableHeader>
                         <TableRow>
-                            <TableHead>Mitra</TableHead>
+                            <TableHead>
+                                {groupBy === 'orderId' ? 'No. Order' : groupBy === 'vendor' ? 'Mitra' : 'SKU / Produk'}
+                            </TableHead>
                             <TableHead className="text-right">Pesanan</TableHead>
                             <TableHead className="text-right">Total</TableHead>
                             <TableHead>Rincian Item, Harga & SKU</TableHead>
@@ -370,9 +413,10 @@ export default function AdminSummaryPage() {
                             </TableRow>
                         ) : (
                             filteredSummary.map(summary => (
-                                <TableRow key={summary.vendor}>
+                                <TableRow key={summary.key}>
                                     <TableCell className="font-medium">
-                                        {getMitraDisplayName(summary.vendor)}
+                                        {summary.label}
+                                        {summary.subLabel && <span className="block text-[10px] text-muted-foreground">{summary.subLabel}</span>}
                                     </TableCell>
                                     <TableCell className="text-right">{summary.totalOrders}</TableCell>
                                     <TableCell className="text-right">{formatPrice(summary.totalAmount)}</TableCell>
