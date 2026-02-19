@@ -1,12 +1,13 @@
+
 'use client';
 
 import { useState, useMemo, useRef } from 'react';
-import { useFirestore, useCollection, useMemoFirebase } from '@/firebase';
-import { collection, doc, deleteDoc, setDoc } from 'firebase/firestore';
+import { useFirestore, useCollection, useMemoFirebase, useDoc } from '@/firebase';
+import { collection, doc, deleteDoc, setDoc, writeBatch } from 'firebase/firestore';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Loader2, Plus, Pencil, Trash2, RefreshCcw, Search, X, FileUp, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
+import { Loader2, Plus, Pencil, Trash2, RefreshCcw, Search, X, FileUp, ArrowUpDown, ArrowUp, ArrowDown, RotateCcw } from 'lucide-react';
 import { formatPrice } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
@@ -16,6 +17,17 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { products as initialProducts } from '@/lib/products';
 import type { Product, Vendor } from '@/lib/types';
 import * as XLSX from 'xlsx';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
 
 type SortConfig = {
   key: keyof Product | null;
@@ -28,6 +40,7 @@ export default function AdminMenuPage() {
   const [isEditing, setIsEditing] = useState<Product | null>(null);
   const [isAdding, setIsAdding] = useState(false);
   const [isSeeding, setIsSeeding] = useState(false);
+  const [isResetting, setIsResetting] = useState(false);
   const [isExcelImporting, setIsExcelImporting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   
@@ -53,6 +66,13 @@ export default function AdminMenuPage() {
     return collection(firestore, 'vendors');
   }, [firestore]);
   const { data: vendors, isLoading: isVendorsLoading } = useCollection<Vendor>(vendorsQuery);
+
+  // Fetch Inventory Settings for Reset
+  const invDocRef = useMemoFirebase(() => {
+    if (!firestore) return null;
+    return doc(firestore, 'settings', 'inventory');
+  }, [firestore]);
+  const { data: inventorySettings } = useDoc<{ defaultStock: number }>(invDocRef);
 
   // Unique values for dropdown filters
   const uniqueNames = useMemo(() => {
@@ -88,7 +108,6 @@ export default function AdminMenuPage() {
   const filteredMenuItems = useMemo(() => {
     if (!menuItems) return [];
     
-    // First, filter
     const filtered = menuItems.filter((item) => {
       const search = searchTerm.toLowerCase();
       const matchesSearch = 
@@ -104,11 +123,10 @@ export default function AdminMenuPage() {
       return matchesSearch && matchesName && matchesCategory && matchesVendor;
     });
 
-    // Then, sort
     if (sortConfig.key) {
       filtered.sort((a, b) => {
-        const valA = a[sortConfig.key!];
-        const valB = b[sortConfig.key!];
+        const valA = a[sortConfig.key!] ?? '';
+        const valB = b[sortConfig.key!] ?? '';
 
         if (valA < valB) return sortConfig.direction === 'asc' ? -1 : 1;
         if (valA > valB) return sortConfig.direction === 'asc' ? 1 : -1;
@@ -143,7 +161,7 @@ export default function AdminMenuPage() {
       sku: formData.get('sku') as string,
       category: formData.get('category') as string,
       vendor: formData.get('vendor') as string,
-      stock: Math.max(0, stockValue), // Ensure stock is not negative
+      stock: Math.max(0, stockValue),
     };
 
     try {
@@ -156,6 +174,31 @@ export default function AdminMenuPage() {
     }
   };
 
+  const handleResetStock = async () => {
+    if (!firestore || !menuItems) return;
+    setIsResetting(true);
+    
+    const defaultStockValue = inventorySettings?.defaultStock ?? 20;
+    const batch = writeBatch(firestore);
+    
+    try {
+      menuItems.forEach(item => {
+        const itemRef = doc(firestore, 'menuItems', item.id);
+        batch.update(itemRef, { stock: defaultStockValue });
+      });
+      
+      await batch.commit();
+      toast({
+        title: "Stok Berhasil Direset",
+        description: `Seluruh menu kini memiliki stok: ${defaultStockValue}`,
+      });
+    } catch (error) {
+      toast({ variant: "destructive", title: "Gagal", description: "Tidak dapat mereset stok." });
+    } finally {
+      setIsResetting(false);
+    }
+  };
+
   const seedDefaultMenu = async () => {
     if (!firestore) return;
     setIsSeeding(true);
@@ -163,9 +206,9 @@ export default function AdminMenuPage() {
       for (const product of initialProducts) {
         await setDoc(doc(firestore, 'menuItems', product.id), product);
       }
-      toast({ title: "Berhasil", description: "Menu default telah diunggah ke database." });
+      toast({ title: "Berhasil", description: "Menu default telah diunggah." });
     } catch (error) {
-      toast({ variant: "destructive", title: "Gagal", description: "Tidak dapat mengunggah menu default." });
+      toast({ variant: "destructive", title: "Gagal", description: "Gagal mengunggah menu default." });
     } finally {
       setIsSeeding(false);
     }
@@ -193,7 +236,7 @@ export default function AdminMenuPage() {
           const sku = String(row['SKU'] || row['Kode Produk'] || '');
           const category = row['Kategori'] || row['Category'] || 'Nasi & Lauk';
           const stock = Number(row['Stok'] || row['Stock'] || 20);
-          const vendor = row['Mitra'] || row['Vendor'] || row['Mitra'] || (sku.includes('-') ? sku.split('-')[0] : '');
+          const vendor = row['Mitra'] || row['Vendor'] || (sku.includes('-') ? sku.split('-')[0] : '');
 
           if (name && price && sku) {
             const productData: Product = {
@@ -203,7 +246,7 @@ export default function AdminMenuPage() {
               sku: sku,
               category: String(category),
               vendor: String(vendor),
-              stock: Math.max(0, stock), // Ensure stock is not negative
+              stock: Math.max(0, stock),
             };
             await setDoc(doc(firestore, 'menuItems', productData.id), productData);
             importedCount++;
@@ -212,15 +255,10 @@ export default function AdminMenuPage() {
 
         toast({
           title: "Import Selesai",
-          description: `${importedCount} menu berhasil diimport dari Excel.`,
+          description: `${importedCount} menu berhasil diimport.`,
         });
       } catch (error) {
-        console.error("Excel import error:", error);
-        toast({
-          variant: "destructive",
-          title: "Gagal Import",
-          description: "Pastikan format file Excel benar (Nama, Harga, SKU wajib ada).",
-        });
+        toast({ variant: "destructive", title: "Gagal Import", description: "Pastikan format file benar." });
       } finally {
         setIsExcelImporting(false);
         if (fileInputRef.current) fileInputRef.current.value = '';
@@ -260,10 +298,34 @@ export default function AdminMenuPage() {
             {isExcelImporting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileUp className="mr-2 h-4 w-4" />}
             Import Excel
           </Button>
+          
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button variant="outline" size="sm" className="border-orange-500 text-orange-600 hover:bg-orange-50" disabled={isResetting || !menuItems?.length}>
+                {isResetting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RotateCcw className="mr-2 h-4 w-4" />}
+                Reset Stok
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Reset Seluruh Stok?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Semua menu akan diatur ke angka stok default ({inventorySettings?.defaultStock ?? 20}) yang ada di menu Pengaturan. Tindakan ini tidak dapat dibatalkan.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Batal</AlertDialogCancel>
+                <AlertDialogAction onClick={handleResetStock} className="bg-orange-600 hover:bg-orange-700">
+                  Ya, Reset Semua
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+
           {(!menuItems || menuItems.length === 0) && (
             <Button variant="outline" size="sm" onClick={seedDefaultMenu} disabled={isSeeding}>
               {isSeeding ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCcw className="mr-2 h-4 w-4" />}
-              Gunakan Menu Default
+              Menu Default
             </Button>
           )}
           <Dialog open={isAdding} onOpenChange={setIsAdding}>
@@ -342,7 +404,6 @@ export default function AdminMenuPage() {
         </div>
       </div>
 
-      {/* Filter Section */}
       <Card className="p-4">
         <div className="flex flex-wrap gap-4 items-end">
           <div className="space-y-2 flex-1 min-w-[200px]">
@@ -451,9 +512,7 @@ export default function AdminMenuPage() {
               {filteredMenuItems.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={7} className="text-center py-12 text-muted-foreground">
-                    {searchTerm || nameFilter !== 'all' || categoryFilter !== 'all' || vendorFilter !== 'all' 
-                      ? 'Tidak ada menu yang cocok dengan filter.' 
-                      : 'Belum ada menu di database. Gunakan menu default atau tambah baru.'}
+                    Tidak ada menu yang cocok.
                   </TableCell>
                 </TableRow>
               ) : (

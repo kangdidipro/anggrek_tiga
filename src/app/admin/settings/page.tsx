@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
@@ -8,7 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Loader2, Mail, Database, Trash2, Save, AlertTriangle, Send, Info, ExternalLink, Download, Upload, FileJson } from 'lucide-react';
+import { Loader2, Mail, Database, Trash2, Save, AlertTriangle, Send, Info, ExternalLink, Download, Upload, FileJson, Package } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { sendSmtpEmail, type SmtpConfig } from '@/app/actions';
@@ -30,6 +31,7 @@ export default function AdminSettingsPage() {
   const [isDeleting, setIsDeleting] = useState(false);
   const [isSavingEmail, setIsSavingEmail] = useState(false);
   const [isTestingEmail, setIsTestingEmail] = useState(false);
+  const [isSavingStok, setIsSavingStok] = useState(false);
   const [isBackingUp, setIsBackingUp] = useState(false);
   const [isRestoring, setIsRestoring] = useState(false);
   const restoreFileInputRef = useRef<HTMLInputElement>(null);
@@ -43,25 +45,40 @@ export default function AdminSettingsPage() {
     from: '',
   });
 
-  // Load settings from Firestore
-  const settingsDocRef = useMemoFirebase(() => {
+  // Inventory Settings State
+  const [defaultStock, setDefaultStock] = useState<number>(20);
+
+  // Load Email Settings from Firestore
+  const mailDocRef = useMemoFirebase(() => {
     if (!firestore) return null;
     return doc(firestore, 'settings', 'mail');
   }, [firestore]);
+  const { data: savedMailSettings, isLoading: isLoadingMail } = useDoc<SmtpConfig>(mailDocRef);
 
-  const { data: savedSettings, isLoading: isLoadingSettings } = useDoc<SmtpConfig>(settingsDocRef);
+  // Load Inventory Settings from Firestore
+  const invDocRef = useMemoFirebase(() => {
+    if (!firestore) return null;
+    return doc(firestore, 'settings', 'inventory');
+  }, [firestore]);
+  const { data: savedInvSettings, isLoading: isLoadingInv } = useDoc<{ defaultStock: number }>(invDocRef);
 
   useEffect(() => {
-    if (savedSettings) {
+    if (savedMailSettings) {
       setSmtpSettings({
-        host: savedSettings.host || 'smtp.gmail.com',
-        port: savedSettings.port || '587',
-        user: savedSettings.user || '',
-        pass: savedSettings.pass || '',
-        from: savedSettings.from || '',
+        host: savedMailSettings.host || 'smtp.gmail.com',
+        port: savedMailSettings.port || '587',
+        user: savedMailSettings.user || '',
+        pass: savedMailSettings.pass || '',
+        from: savedMailSettings.from || '',
       });
     }
-  }, [savedSettings]);
+  }, [savedMailSettings]);
+
+  useEffect(() => {
+    if (savedInvSettings) {
+      setDefaultStock(savedInvSettings.defaultStock ?? 20);
+    }
+  }, [savedInvSettings]);
 
   const handleSaveEmailSettings = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -82,6 +99,29 @@ export default function AdminSettingsPage() {
       }));
     } finally {
       setIsSavingEmail(false);
+    }
+  };
+
+  const handleSaveStokSettings = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!firestore) return;
+    
+    setIsSavingStok(true);
+    const data = { defaultStock };
+    try {
+      await setDoc(doc(firestore, 'settings', 'inventory'), data);
+      toast({
+        title: "Stok Default Disimpan",
+        description: "Nilai stok default telah diperbarui.",
+      });
+    } catch (error: any) {
+      errorEmitter.emit('permission-error', new FirestorePermissionError({
+        path: 'settings/inventory',
+        operation: 'write',
+        requestResourceData: data
+      }));
+    } finally {
+      setIsSavingStok(false);
     }
   };
 
@@ -136,7 +176,6 @@ export default function AdminSettingsPage() {
         orderItems: []
       };
 
-      // 1. Fetch Top Level Collections
       const menuItemsSnap = await getDocs(collection(firestore, 'menuItems'));
       menuItemsSnap.forEach(d => backupData.menuItems.push({ id: d.id, ...d.data() }));
 
@@ -146,7 +185,6 @@ export default function AdminSettingsPage() {
       const settingsSnap = await getDocs(collection(firestore, 'settings'));
       settingsSnap.forEach(d => backupData.settings.push({ id: d.id, ...d.data() }));
 
-      // 2. Fetch Nested (Orders & OrderItems) using collectionGroup
       const ordersSnap = await getDocs(query(collectionGroup(firestore, 'orders')));
       ordersSnap.forEach(d => {
         const pathParts = d.ref.path.split('/');
@@ -192,7 +230,6 @@ export default function AdminSettingsPage() {
         const backupData = JSON.parse(event.target?.result as string);
         const batch = writeBatch(firestore);
 
-        // Restore MenuItems
         if (backupData.menuItems) {
           backupData.menuItems.forEach((item: any) => {
             const { id, ...data } = item;
@@ -200,7 +237,6 @@ export default function AdminSettingsPage() {
           });
         }
 
-        // Restore Vendors
         if (backupData.vendors) {
           backupData.vendors.forEach((v: any) => {
             const { id, ...data } = v;
@@ -208,7 +244,6 @@ export default function AdminSettingsPage() {
           });
         }
 
-        // Restore Settings
         if (backupData.settings) {
           backupData.settings.forEach((s: any) => {
             const { id, ...data } = s;
@@ -216,7 +251,6 @@ export default function AdminSettingsPage() {
           });
         }
 
-        // Restore Orders
         if (backupData.orders) {
           backupData.orders.forEach((o: any) => {
             const { customerId, id, data } = o;
@@ -224,7 +258,6 @@ export default function AdminSettingsPage() {
           });
         }
 
-        // Restore OrderItems
         if (backupData.orderItems) {
           backupData.orderItems.forEach((oi: any) => {
             const { customerId, orderId, id, data } = oi;
@@ -279,7 +312,7 @@ export default function AdminSettingsPage() {
     }
   };
 
-  if (isLoadingSettings) {
+  if (isLoadingMail || isLoadingInv) {
     return <div className="flex h-full items-center justify-center p-24"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
   }
 
@@ -291,10 +324,14 @@ export default function AdminSettingsPage() {
       </div>
 
       <Tabs defaultValue="mail" className="w-full">
-        <TabsList className="grid w-full grid-cols-3 max-w-lg">
+        <TabsList className="grid w-full grid-cols-4 max-w-xl">
           <TabsTrigger value="mail" className="flex items-center gap-2">
             <Mail className="h-4 w-4" />
             Mail Server
+          </TabsTrigger>
+          <TabsTrigger value="stok" className="flex items-center gap-2">
+            <Package className="h-4 w-4" />
+            Set Stok
           </TabsTrigger>
           <TabsTrigger value="data" className="flex items-center gap-2">
             <Database className="h-4 w-4" />
@@ -302,7 +339,7 @@ export default function AdminSettingsPage() {
           </TabsTrigger>
           <TabsTrigger value="backup" className="flex items-center gap-2">
             <FileJson className="h-4 w-4" />
-            Backup &amp; Restore
+            Backup
           </TabsTrigger>
         </TabsList>
 
@@ -327,7 +364,7 @@ export default function AdminSettingsPage() {
             <CardHeader>
               <CardTitle>Konfigurasi SMTP</CardTitle>
               <CardDescription>
-                Atur server SMTP untuk mengirimkan struk PDF dan laporan rekap harian secara otomatis.
+                Atur server SMTP untuk mengirimkan struk PDF secara otomatis.
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -379,7 +416,7 @@ export default function AdminSettingsPage() {
                       placeholder="Isi Nama Toko (Contoh: TakjilKu)" 
                     />
                     <p className="text-[10px] text-muted-foreground italic">
-                      Tips: Isi dengan nama toko Anda. Sistem akan secara otomatis menyertakan email utama Anda di belakang nama tersebut agar tidak ditolak oleh Gmail.
+                      Tips: Isi dengan nama toko Anda. Sistem akan otomatis menyertakan email utama Anda di belakang nama tersebut.
                     </p>
                   </div>
                 </div>
@@ -398,6 +435,36 @@ export default function AdminSettingsPage() {
                     Simpan Konfigurasi
                   </Button>
                 </div>
+              </form>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="stok" className="space-y-4 pt-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Pengaturan Stok Default</CardTitle>
+              <CardDescription>
+                Tentukan angka stok default yang akan digunakan saat melakukan "Reset Stok" di halaman Manajemen Menu.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <form onSubmit={handleSaveStokSettings} className="space-y-4">
+                <div className="max-w-xs space-y-2">
+                  <Label htmlFor="default-stock">Angka Stok Default</Label>
+                  <Input 
+                    id="default-stock" 
+                    type="number" 
+                    min="0"
+                    value={defaultStock} 
+                    onChange={(e) => setDefaultStock(Number(e.target.value))}
+                    placeholder="Contoh: 20" 
+                  />
+                </div>
+                <Button type="submit" disabled={isSavingStok}>
+                  {isSavingStok ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+                  Simpan Stok Default
+                </Button>
               </form>
             </CardContent>
           </Card>
@@ -463,45 +530,13 @@ export default function AdminSettingsPage() {
                     <AlertDialogHeader>
                       <AlertDialogTitle>Hapus Seluruh Menu?</AlertDialogTitle>
                       <AlertDialogDescription>
-                        Daftar menu takjil akan dikosongkan. Anda harus mengunggah ulang menu atau menggunakan menu default.
+                        Daftar menu takjil akan dikosongkan.
                       </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
                       <AlertDialogCancel>Batal</AlertDialogCancel>
                       <AlertDialogAction 
                         onClick={() => clearCollection('menuItems', 'Menu')}
-                        className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                      >
-                        Ya, Hapus Semua
-                      </AlertDialogAction>
-                    </AlertDialogFooter>
-                  </AlertDialogContent>
-                </AlertDialog>
-              </div>
-
-              <div className="flex flex-col md:flex-row items-start md:items-center justify-between p-4 border rounded-lg gap-4">
-                <div>
-                  <h4 className="font-bold">Hapus Seluruh Mitra</h4>
-                  <p className="text-sm text-muted-foreground">Menghapus semua data mitra (Master Mitra) dari database.</p>
-                </div>
-                <AlertDialog>
-                  <AlertDialogAction asChild>
-                    <Button variant="outline" size="sm" className="text-destructive hover:bg-destructive/10" disabled={isDeleting}>
-                      {isDeleting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
-                      Hapus Mitra
-                    </Button>
-                  </AlertDialogAction>
-                  <AlertDialogContent>
-                    <AlertDialogHeader>
-                      <AlertDialogTitle>Hapus Seluruh Mitra?</AlertDialogTitle>
-                      <AlertDialogDescription>
-                        Seluruh data mitra akan dihapus. Ini dapat menyebabkan data pesanan yang sudah ada kehilangan referensi mitra.
-                      </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                      <AlertDialogCancel>Batal</AlertDialogCancel>
-                      <AlertDialogAction 
-                        onClick={() => clearCollection('vendors', 'Mitra')}
                         className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                       >
                         Ya, Hapus Semua
@@ -519,7 +554,7 @@ export default function AdminSettingsPage() {
             <CardHeader>
               <CardTitle>Ekspor &amp; Impor Data (JSON)</CardTitle>
               <CardDescription>
-                Cadangkan seluruh data sistem ke dalam file JSON atau pulihkan data dari file pencadangan sebelumnya.
+                Cadangkan seluruh data sistem ke dalam file JSON atau pulihkan data.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
@@ -527,9 +562,9 @@ export default function AdminSettingsPage() {
                 <div className="space-y-1">
                   <h4 className="font-bold flex items-center gap-2">
                     <Download className="h-4 w-4 text-primary" />
-                    Pencadangan Penuh (Full Backup)
+                    Pencadangan Penuh
                   </h4>
-                  <p className="text-sm text-muted-foreground">Unduh seluruh Menu, Mitra, Pengaturan, dan Riwayat Pesanan dalam satu file.</p>
+                  <p className="text-sm text-muted-foreground">Unduh seluruh Menu, Mitra, Pengaturan, dan Riwayat Pesanan.</p>
                 </div>
                 <Button onClick={handleBackup} disabled={isBackingUp} className="min-w-[150px]">
                   {isBackingUp ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
@@ -541,9 +576,9 @@ export default function AdminSettingsPage() {
                 <div className="space-y-1">
                   <h4 className="font-bold flex items-center gap-2">
                     <Upload className="h-4 w-4 text-green-600" />
-                    Pemulihan Data (Restore)
+                    Pemulihan Data
                   </h4>
-                  <p className="text-sm text-muted-foreground">Unggah file backup JSON untuk memulihkan seluruh data ke Firestore.</p>
+                  <p className="text-sm text-muted-foreground">Unggah file backup JSON untuk memulihkan data.</p>
                 </div>
                 <div className="flex flex-col items-end gap-2">
                   <input
@@ -564,14 +599,6 @@ export default function AdminSettingsPage() {
                   </Button>
                 </div>
               </div>
-
-              <Alert variant="default" className="bg-blue-50 border-blue-200">
-                <Info className="h-4 w-4 text-blue-600" />
-                <AlertTitle className="text-blue-800">Tips Pencadangan</AlertTitle>
-                <AlertDescription className="text-blue-700 text-xs">
-                  Sangat disarankan untuk melakukan backup setiap minggu atau sebelum melakukan penghapusan data masal (maintenance). Simpan file JSON di tempat yang aman.
-                </AlertDescription>
-              </Alert>
             </CardContent>
           </Card>
         </TabsContent>
