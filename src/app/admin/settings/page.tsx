@@ -8,7 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Loader2, Mail, Database, Trash2, Save, AlertTriangle, Send, Info, ExternalLink, Download, Upload, FileJson, Package } from 'lucide-react';
+import { Loader2, Mail, Database, Trash2, Save, AlertTriangle, Send, Info, ExternalLink, Download, Upload, FileJson, Package, Skull } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { sendSmtpEmail, type SmtpConfig } from '@/app/actions';
@@ -21,8 +21,18 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
+  AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import Link from 'next/link';
+
+const TABLES = [
+  { id: 'menuItems', label: 'Menu Takjil', description: 'Daftar makanan & minuman yang dijual.' },
+  { id: 'vendors', label: 'Master Mitra', description: 'Data UMKM / Penjual.' },
+  { id: 'customers', label: 'Data Pelanggan', description: 'Profil warga yang pernah memesan.' },
+  { id: 'orders', label: 'Data Pesanan', description: 'Riwayat pesanan (Orders).' },
+  { id: 'orderItems', label: 'Detail Pesanan', description: 'Rincian item di dalam pesanan.' },
+  { id: 'settings', label: 'Pengaturan Sistem', description: 'Konfigurasi SMTP & Stok Default.' },
+];
 
 export default function AdminSettingsPage() {
   const firestore = useFirestore();
@@ -34,6 +44,10 @@ export default function AdminSettingsPage() {
   const [isBackingUp, setIsBackingUp] = useState(false);
   const [isRestoring, setIsRestoring] = useState(false);
   const restoreFileInputRef = useRef<HTMLInputElement>(null);
+
+  // Maintenance States
+  const [confirmInput, setConfirmInput] = useState('');
+  const [actionTarget, setActionTarget] = useState<{ id: string, label: string } | null>(null);
 
   // Email Server Settings State
   const [smtpSettings, setSmtpSettings] = useState<SmtpConfig>({
@@ -288,37 +302,50 @@ export default function AdminSettingsPage() {
     reader.readAsText(file);
   };
 
-  const clearCollection = async (collectionPath: string, label: string) => {
-    if (!firestore) return;
+  const executeClear = async () => {
+    if (!firestore || !actionTarget) return;
     setIsDeleting(true);
+    
     try {
-      let q;
-      if (collectionPath.includes('/')) {
-         q = query(collectionGroup(firestore, collectionPath.split('/').pop()!));
-      } else {
-         q = query(collection(firestore, collectionPath));
-      }
-      
-      const snapshot = await getDocs(q);
       const batch = writeBatch(firestore);
       
-      snapshot.docs.forEach((doc) => {
-        batch.delete(doc.ref);
-      });
+      if (actionTarget.id === 'ALL') {
+        // Clear all tables
+        const allPaths = TABLES.map(t => t.id);
+        for (const path of allPaths) {
+          let q;
+          if (['orders', 'orderItems'].includes(path)) {
+            q = query(collectionGroup(firestore, path));
+          } else {
+            q = query(collection(firestore, path));
+          }
+          const snapshot = await getDocs(q);
+          snapshot.docs.forEach(d => batch.delete(d.ref));
+        }
+      } else {
+        // Clear specific table
+        let q;
+        if (['orders', 'orderItems'].includes(actionTarget.id)) {
+          q = query(collectionGroup(firestore, actionTarget.id));
+        } else {
+          q = query(collection(firestore, actionTarget.id));
+        }
+        const snapshot = await getDocs(q);
+        snapshot.docs.forEach(d => batch.delete(d.ref));
+      }
 
       await batch.commit();
       toast({
-        title: "Berhasil",
-        description: `Seluruh data pada tabel ${label} telah dihapus.`,
+        title: "Pembersihan Berhasil",
+        description: `Seluruh data pada ${actionTarget.label} telah dihapus selamanya.`,
       });
     } catch (error: any) {
-      console.error(`Error clearing ${label}:`, error);
-      errorEmitter.emit('permission-error', new FirestorePermissionError({
-        path: collectionPath,
-        operation: 'delete',
-      }));
+      console.error(`Error clearing ${actionTarget.label}:`, error);
+      toast({ variant: 'destructive', title: 'Gagal', description: 'Terjadi kesalahan hak akses saat menghapus data.' });
     } finally {
       setIsDeleting(false);
+      setActionTarget(null);
+      setConfirmInput('');
     }
   };
 
@@ -485,75 +512,44 @@ export default function AdminSettingsPage() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-destructive">
                 <AlertTriangle className="h-5 w-5" />
-                Zona Berbahaya
+                Zona Berbahaya (Maintenance)
               </CardTitle>
               <CardDescription>
-                Hapus data secara permanen dari basis data. Tindakan ini tidak dapat dibatalkan.
+                Kosongkan data tabel secara permanen. Tindakan ini memerlukan konfirmasi kata kunci.
               </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="flex flex-col md:flex-row items-start md:items-center justify-between p-4 border rounded-lg bg-destructive/5 gap-4">
-                <div>
-                  <h4 className="font-bold">Kosongkan Semua Pesanan</h4>
-                  <p className="text-sm text-muted-foreground">Menghapus seluruh riwayat pesanan (Orders &amp; Order Items) dari semua pelanggan.</p>
-                </div>
-                <AlertDialog>
-                  <AlertDialogAction asChild>
-                    <Button variant="destructive" size="sm" disabled={isDeleting}>
-                      {isDeleting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
-                      Hapus Pesanan
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {TABLES.map((table) => (
+                  <div key={table.id} className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/30 transition-colors">
+                    <div className="space-y-0.5">
+                      <h4 className="text-sm font-bold">{table.label}</h4>
+                      <p className="text-xs text-muted-foreground">{table.description}</p>
+                    </div>
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      className="text-destructive border-destructive/20 hover:bg-destructive/10"
+                      onClick={() => setActionTarget(table)}
+                    >
+                      <Trash2 className="h-4 w-4" />
                     </Button>
-                  </AlertDialogAction>
-                  <AlertDialogContent>
-                    <AlertDialogHeader>
-                      <AlertDialogTitle>Hapus Seluruh Pesanan?</AlertDialogTitle>
-                      <AlertDialogDescription>
-                        Ini akan menghapus semua data di tabel Orders dan OrderItems. Tindakan ini permanen.
-                      </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                      <AlertDialogCancel>Batal</AlertDialogCancel>
-                      <AlertDialogAction 
-                        onClick={() => clearCollection('orders', 'Pesanan')}
-                        className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                      >
-                        Ya, Hapus Semua
-                      </AlertDialogAction>
-                    </AlertDialogFooter>
-                  </AlertDialogContent>
-                </AlertDialog>
+                  </div>
+                ))}
               </div>
 
-              <div className="flex flex-col md:flex-row items-start md:items-center justify-between p-4 border rounded-lg gap-4">
-                <div>
-                  <h4 className="font-bold">Hapus Seluruh Menu</h4>
-                  <p className="text-sm text-muted-foreground">Menghapus semua item menu takjil yang saat ini terdaftar.</p>
-                </div>
-                <AlertDialog>
-                  <AlertDialogAction asChild>
-                    <Button variant="outline" size="sm" className="text-destructive hover:bg-destructive/10" disabled={isDeleting}>
-                      {isDeleting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
-                      Hapus Menu
-                    </Button>
-                  </AlertDialogAction>
-                  <AlertDialogContent>
-                    <AlertDialogHeader>
-                      <AlertDialogTitle>Hapus Seluruh Menu?</AlertDialogTitle>
-                      <AlertDialogDescription>
-                        Daftar menu takjil akan dikosongkan.
-                      </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                      <AlertDialogCancel>Batal</AlertDialogCancel>
-                      <AlertDialogAction 
-                        onClick={() => clearCollection('menuItems', 'Menu')}
-                        className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                      >
-                        Ya, Hapus Semua
-                      </AlertDialogAction>
-                    </AlertDialogFooter>
-                  </AlertDialogContent>
-                </AlertDialog>
+              <div className="pt-6 border-t">
+                <Button 
+                  variant="destructive" 
+                  className="w-full flex items-center gap-2 h-12 text-lg font-bold"
+                  onClick={() => setActionTarget({ id: 'ALL', label: 'SEMUA TABEL DATABASE' })}
+                >
+                  <Skull className="h-5 w-5" />
+                  HAPUS SELURUH ISI DATABASE
+                </Button>
+                <p className="text-center text-[10px] text-muted-foreground mt-2 italic">
+                  *Tindakan ini akan mengosongkan Menu, Mitra, Pelanggan, Pesanan, dan Pengaturan sekaligus.
+                </p>
               </div>
             </CardContent>
           </Card>
@@ -613,6 +609,44 @@ export default function AdminSettingsPage() {
           </Card>
         </TabsContent>
       </Tabs>
+
+      {/* Security Confirmation Dialog */}
+      <AlertDialog open={!!actionTarget} onOpenChange={(open) => !open && setActionTarget(null)}>
+        <AlertDialogContent className="border-destructive/50">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-destructive flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5" />
+              Konfirmasi Penghapusan Permanen
+            </AlertDialogTitle>
+            <AlertDialogDescription className="space-y-4">
+              <p>
+                Anda akan menghapus seluruh data pada <strong>{actionTarget?.label}</strong>. 
+                Data yang sudah dihapus tidak dapat dikembalikan lagi.
+              </p>
+              <div className="p-3 bg-destructive/10 rounded-md border border-destructive/20 space-y-2">
+                <Label className="text-destructive font-bold text-xs uppercase">Ketik "HAPUS" untuk melanjutkan:</Label>
+                <Input 
+                  value={confirmInput} 
+                  onChange={(e) => setConfirmInput(e.target.value)} 
+                  placeholder="Ketik HAPUS di sini..."
+                  className="bg-background border-destructive/30 focus-visible:ring-destructive"
+                />
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => { setConfirmInput(''); setActionTarget(null); }}>Batal</AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={executeClear} 
+              disabled={confirmInput !== 'HAPUS' || isDeleting}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {isDeleting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Ya, Hapus Sekarang
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
