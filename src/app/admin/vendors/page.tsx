@@ -2,7 +2,7 @@
 
 import { useState, useRef, useMemo } from 'react';
 import { useFirestore, useCollection, useMemoFirebase } from '@/firebase';
-import { collection, doc, deleteDoc, setDoc } from 'firebase/firestore';
+import { collection, doc, deleteDoc, setDoc, writeBatch } from 'firebase/firestore';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -11,10 +11,22 @@ import { useToast } from '@/hooks/use-toast';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Checkbox } from '@/components/ui/checkbox';
 import type { Vendor, Product } from '@/lib/types';
 import * as XLSX from 'xlsx';
 import { saveAs } from 'file-saver';
 import Link from 'next/link';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
 
 type SortConfig = {
   key: keyof Vendor | null;
@@ -28,8 +40,10 @@ export default function AdminVendorsPage() {
   const [isAdding, setIsAdding] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
   const [isExcelImporting, setIsExcelImporting] = useState(false);
+  const [isBulkDeleting, setIsBulkDeleting] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [sortConfig, setSortConfig] = useState<SortConfig>({ key: 'name', direction: 'asc' });
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Fetch Mitra
@@ -82,13 +96,61 @@ export default function AdminVendorsPage() {
     return result;
   }, [vendors, searchTerm, sortConfig]);
 
+  const toggleSelectAll = () => {
+    if (selectedIds.size === filteredVendors.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(filteredVendors.map(v => v.id)));
+    }
+  };
+
+  const toggleSelect = (id: string) => {
+    const newSelected = new Set(selectedIds);
+    if (newSelected.has(id)) {
+      newSelected.delete(id);
+    } else {
+      newSelected.add(id);
+    }
+    setSelectedIds(newSelected);
+  };
+
   const handleDelete = async (id: string) => {
     if (!firestore) return;
     try {
       await deleteDoc(doc(firestore, 'vendors', id));
       toast({ title: "Berhasil", description: "Mitra telah dihapus." });
+      const newSelected = new Set(selectedIds);
+      newSelected.delete(id);
+      setSelectedIds(newSelected);
     } catch (error) {
       toast({ variant: "destructive", title: "Gagal", description: "Tidak dapat menghapus mitra." });
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    if (!firestore || selectedIds.size === 0) return;
+    setIsBulkDeleting(true);
+    
+    const batch = writeBatch(firestore);
+    selectedIds.forEach(id => {
+      batch.delete(doc(firestore, 'vendors', id));
+    });
+
+    try {
+      await batch.commit();
+      toast({
+        title: "Berhasil",
+        description: `${selectedIds.size} mitra telah dihapus.`,
+      });
+      setSelectedIds(new Set());
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        title: "Gagal",
+        description: "Terjadi kesalahan saat menghapus data terpilih.",
+      });
+    } finally {
+      setIsBulkDeleting(false);
     }
   };
 
@@ -285,6 +347,33 @@ export default function AdminVendorsPage() {
               Import dari Menu
             </Button>
           )}
+
+          {selectedIds.size > 0 && (
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button variant="destructive" size="sm">
+                  <Trash2 className="mr-2 h-4 w-4" />
+                  Hapus Terpilih ({selectedIds.size})
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Hapus {selectedIds.size} Mitra?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    Tindakan ini akan menghapus seluruh data mitra yang telah Anda pilih secara permanen.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Batal</AlertDialogCancel>
+                  <AlertDialogAction onClick={handleBulkDelete} className="bg-destructive hover:bg-destructive/90">
+                    {isBulkDeleting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                    Ya, Hapus Semua
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          )}
+
           <Dialog open={isAdding} onOpenChange={setIsAdding}>
             <DialogTrigger asChild>
               <Button size="sm">
@@ -339,6 +428,13 @@ export default function AdminVendorsPage() {
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead className="w-[50px]">
+                  <Checkbox 
+                    checked={filteredVendors.length > 0 && selectedIds.size === filteredVendors.length}
+                    onCheckedChange={toggleSelectAll}
+                    aria-label="Pilih semua"
+                  />
+                </TableHead>
                 <TableHead className="w-[60px]">No.</TableHead>
                 <TableHead className="cursor-pointer hover:bg-muted/50" onClick={() => handleSort('name')}>
                   <div className="flex items-center">
@@ -367,13 +463,20 @@ export default function AdminVendorsPage() {
             <TableBody>
               {filteredVendors.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center py-12 text-muted-foreground">
+                  <TableCell colSpan={8} className="text-center py-12 text-muted-foreground">
                     {searchTerm ? 'Tidak ada mitra yang cocok dengan pencarian.' : 'Belum ada mitra yang terdaftar.'}
                   </TableCell>
                 </TableRow>
               ) : (
                 filteredVendors.map((vendor, index) => (
-                  <TableRow key={vendor.id}>
+                  <TableRow key={vendor.id} className={selectedIds.has(vendor.id) ? 'bg-muted/50' : ''}>
+                    <TableCell>
+                      <Checkbox 
+                        checked={selectedIds.has(vendor.id)}
+                        onCheckedChange={() => toggleSelect(vendor.id)}
+                        aria-label={`Pilih ${vendor.name}`}
+                      />
+                    </TableCell>
                     <TableCell className="text-muted-foreground font-mono text-xs">{index + 1}</TableCell>
                     <TableCell className="font-medium">{vendor.name}</TableCell>
                     <TableCell className="font-mono font-bold">{vendor.code}</TableCell>
