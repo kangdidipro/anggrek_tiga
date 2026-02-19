@@ -15,7 +15,6 @@ service cloud.firestore {
     }
 
     // Aturan untuk pencarian lintas koleksi (Collection Group)
-    // Diperlukan agar kueri admin dan mitra dapat berjalan
     match /{path=**}/orders/{orderId} {
       allow read, write: if isSignedIn();
     }
@@ -39,7 +38,6 @@ service cloud.firestore {
       allow delete: if isOwner(customerId);
 
       match /orders/{orderId} {
-        // Pemilik bisa menulis, Admin (isSignedIn) bisa mengupdate status
         allow write: if isOwner(customerId) || isSignedIn();
 
         match /orderItems/{orderItemId} {
@@ -59,9 +57,8 @@ service cloud.firestore {
     }
 
     match /settings/{settingId} {
-      // Allow any signed-in user (including anonymous) to read/write settings.
-      // This is necessary because the admin uses a shared password/sessionStorage
-      // but Firebase Auth is still used for basic session identity.
+      // Izinkan akses baca/tulis untuk semua pengguna yang login (termasuk anonim)
+      // Dibutuhkan untuk membaca konfigurasi SMTP saat pengiriman struk email
       allow read, write: if isSignedIn();
     }
   }
