@@ -12,9 +12,9 @@ import { useToast } from '@/hooks/use-toast';
 import type { CartItem } from '@/lib/types';
 import { useCart } from '@/hooks/use-cart';
 import { Loader2, QrCode, Wallet, Truck } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useUser, useFirestore, errorEmitter, FirestorePermissionError } from '@/firebase';
-import { collection, writeBatch, doc, increment, getDoc, query, collectionGroup, getDocs } from 'firebase/firestore';
+import { collection, writeBatch, doc, increment, getDoc, query, collectionGroup, getDocs, where } from 'firebase/firestore';
 import { useRouter } from 'next/navigation';
 import jsPDF from 'jspdf';
 import { formatPrice } from '@/lib/utils';
@@ -41,6 +41,8 @@ export default function OrderForm({ cartItems, total, deliveryFee, setSheetOpen 
   const { toast } = useToast();
   const { clearCart } = useCart();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [mounted, setMounted] = useState(false);
+  const [deliveryDate, setDeliveryDate] = useState<Date>(new Date());
   const { user, isUserLoading } = useUser();
   const firestore = useFirestore();
   const router = useRouter();
@@ -56,7 +58,19 @@ export default function OrderForm({ cartItems, total, deliveryFee, setSheetOpen 
   });
 
   const paymentMethod = form.watch('paymentMethod');
-  const deliveryDate = addDays(new Date(), 1);
+
+  useEffect(() => {
+    setMounted(true);
+    const now = new Date();
+    const jakartaHour = parseInt(new Intl.DateTimeFormat('en-GB', {
+      hour: 'numeric',
+      hour12: false,
+      timeZone: 'Asia/Jakarta'
+    }).format(now));
+    
+    const daysToAdd = jakartaHour >= 16 ? 2 : 1;
+    setDeliveryDate(addDays(now, daysToAdd));
+  }, []);
 
   const loadImage = (url: string): Promise<HTMLImageElement> => {
     return new Promise((resolve, reject) => {
@@ -193,24 +207,28 @@ export default function OrderForm({ cartItems, total, deliveryFee, setSheetOpen 
     
     try {
       const now = new Date();
-      const dateStr = format(now, 'yyyyMMdd');
-      const startOfToday = new Date();
-      startOfToday.setHours(0, 0, 0, 0);
-      const startOfTodayISO = startOfToday.toISOString();
-
-      const ordersQuery = collectionGroup(firestore, 'orders');
-      const allOrdersSnapshot = await getDocs(ordersQuery);
+      const jakartaHour = parseInt(new Intl.DateTimeFormat('en-GB', {
+        hour: 'numeric',
+        hour12: false,
+        timeZone: 'Asia/Jakarta'
+      }).format(now));
       
-      const todayOrdersCount = allOrdersSnapshot.docs.filter(doc => {
-        const data = doc.data();
-        return data.orderDateTime && data.orderDateTime >= startOfTodayISO;
-      }).length;
-
-      const sequence = (todayOrdersCount + 1).toString().padStart(3, '0');
+      const isAfterCutoff = jakartaHour >= 16;
+      // Considered order date is tomorrow if after 4pm Jakarta time
+      const effectiveOrderDate = isAfterCutoff ? addDays(now, 1) : now;
+      const dateStr = format(effectiveOrderDate, 'yyyyMMdd');
+      
+      const ordersQuery = collectionGroup(firestore, 'orders');
+      // Efficiently find orders with same date prefix to determine sequence
+      const sameDayQuery = query(ordersQuery, where('id', '>=', dateStr), where('id', '<=', dateStr + '\uf8ff'));
+      const allOrdersSnapshot = await getDocs(sameDayQuery);
+      
+      const sequence = (allOrdersSnapshot.size + 1).toString().padStart(3, '0');
       const orderId = `${dateStr}-TJK-${sequence}`;
 
       const batch = writeBatch(firestore);
       const timestamp = now.toISOString();
+      const finalDeliveryDate = addDays(now, isAfterCutoff ? 2 : 1).toISOString();
 
       // Save/Update Customer Profile
       const customerRef = doc(firestore, 'customers', user.uid);
@@ -229,7 +247,7 @@ export default function OrderForm({ cartItems, total, deliveryFee, setSheetOpen 
           id: orderId,
           customerId: user.uid,
           orderDateTime: timestamp,
-          deliveryDate: deliveryDate.toISOString(),
+          deliveryDate: finalDeliveryDate,
           totalAmount: total,
           deliveryFee: deliveryFee,
           paymentMethod: values.paymentMethod,
@@ -303,7 +321,9 @@ export default function OrderForm({ cartItems, total, deliveryFee, setSheetOpen 
           <Truck className="h-5 w-5 text-primary shrink-0" />
           <div>
             <p className="font-semibold">Tanggal Antar:</p>
-            <p className="text-primary font-bold">{format(deliveryDate, 'eeee, d MMMM yyyy', { locale: id })}</p>
+            <p className="text-primary font-bold">
+              {mounted ? format(deliveryDate, 'eeee, d MMMM yyyy', { locale: id }) : 'Memuat jadwal...'}
+            </p>
           </div>
         </div>
 

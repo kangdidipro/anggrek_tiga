@@ -18,13 +18,27 @@ export default function Cart() {
   const { cartItems, totalItems, cartTotal, clearCart } = useCart();
   const [open, setOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const [deliveryDate, setDeliveryDate] = useState<Date>(new Date());
 
   useEffect(() => {
     setMounted(true);
+    const now = new Date();
+    
+    // Get current hour in Jakarta (UTC+7)
+    const jakartaHour = parseInt(new Intl.DateTimeFormat('en-GB', {
+      hour: 'numeric',
+      hour12: false,
+      timeZone: 'Asia/Jakarta'
+    }).format(now));
+    
+    // Logic: Cutoff 4 PM (16:00) Jakarta time.
+    // Before 4 PM -> Delivery Tomorrow (H+1)
+    // After 4 PM -> Considered next day order, Delivery Day After Tomorrow (H+2 from now)
+    const daysToAdd = jakartaHour >= 16 ? 2 : 1;
+    setDeliveryDate(addDays(now, daysToAdd));
   }, []);
 
   const finalTotal = cartTotal + deliveryFee;
-  const deliveryDate = addDays(new Date(), 1);
 
   return (
     <Sheet open={open} onOpenChange={setOpen}>
@@ -82,14 +96,14 @@ export default function Cart() {
 
                 <Alert className="bg-primary/10 border-primary/20">
                   <Calendar className="h-4 w-4 text-primary" />
-                  <AlertTitle className="font-bold text-primary">Jadwal Pengiriman (H+1)</AlertTitle>
+                  <AlertTitle className="font-bold text-primary">Jadwal Pengiriman</AlertTitle>
                   <AlertDescription className="space-y-2">
                     <p className="text-xs">Pesanan Anda dijadwalkan untuk diantar pada:</p>
                     <p className="text-lg font-bold underline underline-offset-4 decoration-primary/30">
-                      {format(deliveryDate, 'eeee, d MMMM yyyy', { locale: id })}
+                      {mounted ? format(deliveryDate, 'eeee, d MMMM yyyy', { locale: id }) : 'Memuat jadwal...'}
                     </p>
                     <p className="text-[10px] italic mt-2 opacity-70">
-                      * Batas waktu pemesanan adalah jam 4 sore setiap harinya untuk pengiriman esok hari.
+                      * Batas waktu pemesanan adalah jam 4 sore setiap harinya untuk pengiriman esok hari. Pesanan setelah jam 4 sore akan diantar lusa.
                     </p>
                   </AlertDescription>
                 </Alert>
