@@ -22,6 +22,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Checkbox } from '@/components/ui/checkbox';
 import { cn } from '@/lib/utils';
 import type { Vendor } from '@/lib/types';
+import { Badge } from '@/components/ui/badge';
 
 interface OrderItem {
   id: string;
@@ -56,6 +57,8 @@ type SummaryItem = {
     totalDeliveryFee: number; // Ongkir based on filter/group
     items: { name: string, quantity: number, sku: string, price: number, vendor: string }[];
     addresses: string[];
+    status?: string; // For Sub-Order view
+    statuses?: string[]; // For aggregate view
 }
 
 type SortConfig = {
@@ -93,6 +96,19 @@ export default function AdminSummaryPage() {
     });
     return map;
   }, [vendorsData]);
+
+  const getStatusBadgeColor = (status: string) => {
+    switch (status) {
+      case 'Dipesan': return 'bg-yellow-500 hover:bg-yellow-600';
+      case 'Dibayar': return 'bg-orange-500 hover:bg-orange-600';
+      case 'Diproses': return 'bg-blue-500 hover:bg-blue-600';
+      case 'Dikumpulkan': return 'bg-purple-500 hover:bg-purple-600';
+      case 'Dikirim': 
+      case 'Dikirim dan Bayar': return 'bg-green-600 hover:bg-green-700';
+      case 'Dibatalkan': return 'bg-destructive hover:bg-destructive/90';
+      default: return 'bg-gray-500 hover:bg-gray-600';
+    }
+  };
 
   useEffect(() => {
     const fetchOrders = async () => {
@@ -142,6 +158,7 @@ export default function AdminSummaryPage() {
       totalDeliveryFee: number;
       items: Record<string, { name: string, quantity: number, sku: string, price: number, vendor: string }>;
       addresses: Set<string>;
+      statuses: Set<string>;
     }> = {};
 
     targetDateOrders.forEach(order => {
@@ -149,7 +166,6 @@ export default function AdminSummaryPage() {
             const vendor = item.vendor || getVendorFromSku(item.sku);
             const matchesVendor = vendorFilter === 'all' || vendor === vendorFilter;
             
-            // Status Filter Logic (Multi-select)
             const vStatus = order.vendorStatuses?.[vendor]?.status || 'Dipesan';
             const matchesStatus = selectedStatuses.length === 0 || selectedStatuses.includes(vStatus);
 
@@ -168,6 +184,7 @@ export default function AdminSummaryPage() {
 
         uniqueItemsForThisOrder.forEach(item => {
             const vendor = item.vendor || getVendorFromSku(item.sku);
+            const currentStatus = order.vendorStatuses?.[vendor]?.status || 'Dipesan';
             
             let key = '';
             let label = '';
@@ -196,6 +213,7 @@ export default function AdminSummaryPage() {
                     totalDeliveryFee: 0,
                     items: {}, 
                     addresses: new Set(),
+                    statuses: new Set(),
                 };
             }
             
@@ -203,6 +221,7 @@ export default function AdminSummaryPage() {
             if (order.deliveryAddress) {
               summaryMap[key].addresses.add(order.deliveryAddress);
             }
+            summaryMap[key].statuses.add(currentStatus);
             
             const itemTotal = item.quantity * item.priceAtOrder;
             summaryMap[key].totalAmount += itemTotal;
@@ -225,6 +244,7 @@ export default function AdminSummaryPage() {
 
     return Object.entries(summaryMap).map(([key, data]) => {
         const adminFee = data.totalAmount * 0.05;
+        const statusesArr = Array.from(data.statuses);
         return {
             key,
             label: data.label,
@@ -235,7 +255,9 @@ export default function AdminSummaryPage() {
             netToVendor: data.totalAmount - adminFee,
             totalDeliveryFee: data.totalDeliveryFee,
             items: Object.values(data.items),
-            addresses: Array.from(data.addresses)
+            addresses: Array.from(data.addresses),
+            status: statusesArr.length === 1 ? statusesArr[0] : undefined,
+            statuses: statusesArr
         };
     });
   }, [orders, date, groupBy, vendorLookup, vendorFilter, selectedStatuses, searchTerm]);
@@ -302,6 +324,7 @@ export default function AdminSummaryPage() {
         'No.': index + 1,
         'Group (ID Sub-Order/Mitra/SKU)': summary.label,
         'Info': summary.subLabel || '',
+        'Status': summary.status || summary.statuses?.join(', '),
         'Total Produk (Bruto)': summary.totalAmount,
         'Admin (5%)': summary.adminFee,
         'Bayar ke Mitra (Netto)': summary.netToVendor,
@@ -314,6 +337,7 @@ export default function AdminSummaryPage() {
       'No.': '',
       'Group (ID Sub-Order/Mitra/SKU)': 'TOTAL KESELURUHAN',
       'Info': '',
+      'Status': '',
       'Total Produk (Bruto)': grandTotals.amount,
       'Admin (5%)': grandTotals.admin,
       'Bayar ke Mitra (Netto)': grandTotals.net,
@@ -333,10 +357,11 @@ export default function AdminSummaryPage() {
 
   const exportToPDF = () => {
     const doc = new jsPDF('l', 'mm', 'a4');
-    const tableColumn = ["No.", "ID Sub-Order / Group", "Total Produk", "Admin (5%)", "Bayar ke Mitra", "Ongkir", "Rincian Item", "Alamat"];
+    const tableColumn = ["No.", "ID Sub-Order / Group", "Status", "Total Produk", "Admin (5%)", "Bayar ke Mitra", "Ongkir", "Rincian Item", "Alamat"];
     const tableRows = filteredSummary.map((summary, index) => [
         (index + 1).toString(),
         summary.label + (summary.subLabel ? `\n(${summary.subLabel})` : ''),
+        summary.status || summary.statuses?.join(', ') || '-',
         formatPrice(summary.totalAmount),
         formatPrice(summary.adminFee),
         formatPrice(summary.netToVendor),
@@ -348,6 +373,7 @@ export default function AdminSummaryPage() {
     tableRows.push([
       "",
       "TOTAL KESELURUHAN",
+      "",
       formatPrice(grandTotals.amount),
       formatPrice(grandTotals.admin),
       formatPrice(grandTotals.net),
@@ -365,8 +391,8 @@ export default function AdminSummaryPage() {
         headStyles: { fillColor: [255, 140, 0] },
         styles: { fontSize: 7, overflow: 'linebreak' },
         columnStyles: {
-          6: { cellWidth: 40 }, // Rincian Item
-          7: { cellWidth: 40 }, // Alamat
+          7: { cellWidth: 40 }, // Rincian Item
+          8: { cellWidth: 40 }, // Alamat
         }
     });
     doc.save(`rekap_${groupBy}_${date ? date.toISOString().split('T')[0] : 'semua'}.pdf`);
@@ -543,6 +569,7 @@ export default function AdminSummaryPage() {
                                       {getSortIcon('label')}
                                     </div>
                                 </TableHead>
+                                <TableHead className="w-[120px]">Status</TableHead>
                                 <TableHead className="text-right cursor-pointer hover:bg-muted/50" onClick={() => handleSort('totalAmount')}>
                                     <div className="flex items-center justify-end">
                                       Total Produk {getSortIcon('totalAmount')}
@@ -570,7 +597,7 @@ export default function AdminSummaryPage() {
                         <TableBody>
                             {filteredSummary.length === 0 ? (
                                 <TableRow>
-                                    <TableCell colSpan={8} className="text-center text-muted-foreground py-10">
+                                    <TableCell colSpan={9} className="text-center text-muted-foreground py-10">
                                     Tidak ada transaksi ditemukan.
                                     </TableCell>
                                 </TableRow>
@@ -581,6 +608,21 @@ export default function AdminSummaryPage() {
                                         <TableCell className="font-medium">
                                             {summary.label}
                                             {summary.subLabel && <span className="block text-[10px] text-muted-foreground">{summary.subLabel}</span>}
+                                        </TableCell>
+                                        <TableCell>
+                                            {summary.status ? (
+                                                <Badge className={cn("text-[10px]", getStatusBadgeColor(summary.status))}>
+                                                    {summary.status}
+                                                </Badge>
+                                            ) : summary.statuses && summary.statuses.length > 0 ? (
+                                                <div className="flex flex-wrap gap-1">
+                                                    {summary.statuses.map(s => (
+                                                        <Badge key={s} className={cn("text-[10px]", getStatusBadgeColor(s))}>
+                                                            {s}
+                                                        </Badge>
+                                                    ))}
+                                                </div>
+                                            ) : null}
                                         </TableCell>
                                         <TableCell className="text-right">{formatPrice(summary.totalAmount)}</TableCell>
                                         <TableCell className="text-right text-destructive font-medium">{formatPrice(summary.adminFee)}</TableCell>
@@ -629,8 +671,7 @@ export default function AdminSummaryPage() {
                         {filteredSummary.length > 0 && (
                             <TableFooter>
                                 <TableRow className="bg-primary/5 font-bold">
-                                    <TableCell></TableCell>
-                                    <TableCell>TOTAL KESELURUHAN</TableCell>
+                                    <TableCell colSpan={3}></TableCell>
                                     <TableCell className="text-right text-primary">{formatPrice(grandTotals.amount)}</TableCell>
                                     <TableCell className="text-right text-destructive">{formatPrice(grandTotals.admin)}</TableCell>
                                     <TableCell className="text-right text-green-700">{formatPrice(grandTotals.net)}</TableCell>
