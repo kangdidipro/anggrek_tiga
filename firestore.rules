@@ -59,6 +59,9 @@ service cloud.firestore {
     }
 
     match /settings/{settingId} {
+      // Allow any signed-in user (including anonymous) to read/write settings.
+      // This is necessary because the admin uses a shared password/sessionStorage
+      // but Firebase Auth is still used for basic session identity.
       allow read, write: if isSignedIn();
     }
   }

@@ -227,6 +227,19 @@
         "priceAtOrder",
         "vendor"
       ]
+    },
+    "Settings": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Settings",
+      "type": "object",
+      "description": "System configuration settings, such as mail server credentials.",
+      "properties": {
+        "host": { "type": "string" },
+        "port": { "type": "string" },
+        "user": { "type": "string" },
+        "pass": { "type": "string" },
+        "from": { "type": "string" }
+      }
     }
   },
   "auth": {
@@ -324,6 +337,22 @@
             {
               "name": "orderItemId",
               "description": "The unique identifier for a specific item within an order."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/settings/{settingId}",
+        "definition": {
+          "entityName": "Settings",
+          "schema": {
+            "$ref": "#/backend/entities/Settings"
+          },
+          "description": "Stores application-wide settings.",
+          "params": [
+            {
+              "name": "settingId",
+              "description": "The unique identifier for a settings document."
             }
           ]
         }
