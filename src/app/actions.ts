@@ -1,8 +1,10 @@
+
 'use server';
 
 import { z } from 'zod';
 import type { OrderPayload } from '@/lib/types';
 import { redirect } from 'next/navigation';
+import nodemailer from 'nodemailer';
 
 const orderSchema = z.object({
   name: z.string().min(1, 'Nama wajib diisi'),
@@ -21,15 +23,65 @@ const orderSchema = z.object({
   deliveryFee: z.number(),
 });
 
-// This function is no longer called by the form, but is kept for potential future use.
-// The form now writes directly to Firestore on the client side.
+export type SmtpConfig = {
+  host: string;
+  port: string;
+  user: string;
+  pass: string;
+  from: string;
+};
+
+export type MailOptions = {
+  to: string;
+  subject: string;
+  text: string;
+  html?: string;
+  attachments?: {
+    filename: string;
+    content: string; // Base64 or Buffer
+    encoding?: string;
+  }[];
+};
+
+/**
+ * Sends an email using SMTP configuration.
+ */
+export async function sendSmtpEmail(config: SmtpConfig, options: MailOptions) {
+  try {
+    const transporter = nodemailer.createTransport({
+      host: config.host,
+      port: parseInt(config.port),
+      secure: config.port === '465', // true for 465, false for other ports
+      auth: {
+        user: config.user,
+        pass: config.pass,
+      },
+    });
+
+    const info = await transporter.sendMail({
+      from: config.from,
+      to: options.to,
+      subject: options.subject,
+      text: options.text,
+      html: options.html,
+      attachments: options.attachments?.map(att => ({
+        filename: att.filename,
+        content: Buffer.from(att.content.split('base64,')[1] || att.content, 'base64'),
+      })),
+    });
+
+    console.log('Email sent: %s', info.messageId);
+    return { success: true, messageId: info.messageId };
+  } catch (error: any) {
+    console.error('SMTP Send Error:', error);
+    return { success: false, error: error.message };
+  }
+}
+
 export async function submitOrder(payload: OrderPayload) {
   try {
     orderSchema.parse(payload);
-    // Previously, this function saved data to an Excel file.
-    // This logic has been moved to the client-side to write to Firestore directly.
-    console.log("submitOrder server action called, but it no longer saves data.");
-
+    console.log("submitOrder server action called");
   } catch (error) {
     if (error instanceof z.ZodError) {
       return { success: false, message: 'Validasi gagal', errors: error.errors };
@@ -38,6 +90,5 @@ export async function submitOrder(payload: OrderPayload) {
     return { success: false, message: 'Terjadi kesalahan saat mengirim pesanan.' };
   }
   
-  // Redirect is still here but the action is not called from the main order form.
   redirect('/order-success');
 }

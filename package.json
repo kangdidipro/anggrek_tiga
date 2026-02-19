@@ -48,6 +48,7 @@
     "jspdf-autotable": "^3.8.2",
     "lucide-react": "^0.475.0",
     "next": "15.5.9",
+    "nodemailer": "^6.9.13",
     "patch-package": "^8.0.0",
     "react": "^19.2.1",
     "react-day-picker": "^9.11.3",
@@ -62,6 +63,7 @@
   "devDependencies": {
     "@types/file-saver": "^2.0.7",
     "@types/node": "^20",
+    "@types/nodemailer": "^6.4.14",
     "@types/react": "^19.2.1",
     "@types/react-dom": "^19.2.1",
     "genkit-cli": "^1.28.0",

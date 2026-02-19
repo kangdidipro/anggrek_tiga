@@ -14,13 +14,14 @@ import type { CartItem } from '@/lib/types';
 import { useCart } from '@/hooks/use-cart';
 import { Loader2, QrCode, Wallet } from 'lucide-react';
 import { useState } from 'react';
-import { useUser, useFirestore, errorEmitter, FirestorePermissionError } from '@/firebase';
-import { collection, writeBatch, doc, increment } from 'firebase/firestore';
+import { useUser, useFirestore, errorEmitter, FirestorePermissionError, useDoc, useMemoFirebase } from '@/firebase';
+import { collection, writeBatch, doc, increment, getDoc } from 'firebase/firestore';
 import { useRouter } from 'next/navigation';
 import jsPDF from 'jspdf';
 import { formatPrice } from '@/lib/utils';
 import { format } from 'date-fns';
 import { id as localeId } from 'date-fns/locale';
+import { sendSmtpEmail, type SmtpConfig } from '@/app/actions';
 
 const formSchema = z.object({
   name: z.string().min(2, { message: 'Nama harus diisi minimal 2 karakter.' }),
@@ -57,75 +58,94 @@ export default function OrderForm({ cartItems, total, deliveryFee, setSheetOpen 
 
   const paymentMethod = form.watch('paymentMethod');
 
-  const sendEmailReceipt = (email: string, values: z.infer<typeof formSchema>, orderId: string) => {
-    // 1. Generate PDF Struk
-    const pdf = new jsPDF({
-      orientation: 'portrait',
-      unit: 'mm',
-      format: [80, 200]
-    });
+  const sendEmailReceipt = async (email: string, values: z.infer<typeof formSchema>, orderId: string) => {
+    if (!firestore) return;
 
-    const centerPos = 40;
-    pdf.setFontSize(12);
-    pdf.text("TAKJILKU", centerPos, 10, { align: 'center' });
-    pdf.setFontSize(8);
-    pdf.text("Ramadhan UMKM RW06", centerPos, 14, { align: 'center' });
-    pdf.text("-".repeat(40), centerPos, 20, { align: 'center' });
-    
-    pdf.text(`ID: #${orderId.substring(0, 7)}`, 5, 26);
-    pdf.text(`Tgl: ${format(new Date(), 'dd/MM/yyyy HH:mm')}`, 5, 30);
-    pdf.text(`Pemesan: ${values.name}`, 5, 34);
-    pdf.text(`Bayar: ${values.paymentMethod}`, 5, 38);
-    pdf.text("-".repeat(40), centerPos, 42, { align: 'center' });
-    
-    let y = 48;
-    cartItems.forEach((item) => {
-      pdf.text(`${item.product.name}`, 5, y);
-      pdf.text(`${item.quantity} x ${formatPrice(item.product.price)}`, 5, y + 4);
-      pdf.text(`${formatPrice(item.product.price * item.quantity)}`, 75, y + 4, { align: 'right' });
-      y += 10;
-    });
-    
-    pdf.text("-".repeat(40), centerPos, y, { align: 'center' });
-    y += 6;
-    pdf.text("Ongkir (Delivery):", 5, y);
-    pdf.text(`${formatPrice(deliveryFee)}`, 75, y, { align: 'right' });
-    y += 6;
-    
-    pdf.setFontSize(10);
-    pdf.text("TOTAL:", 5, y);
-    pdf.text(`${formatPrice(total)}`, 75, y, { align: 'right' });
-    
-    // 2. Simulasi Pengiriman Email
-    const emailBody = `
-      Halo ${values.name},
-      
-      Terima kasih telah memesan di TakjilKu!
-      Pesanan Anda telah kami terima dan sedang diproses.
-      
-      RINCIAN PESANAN:
-      -------------------------------
-      ID Pesanan: #${orderId.substring(0, 7)}
-      Waktu: ${format(new Date(), 'dd MMMM yyyy HH:mm', { locale: localeId })}
-      Total Bayar: ${formatPrice(total)}
-      Alamat Antar: ${values.address}
-      -------------------------------
-      
-      Terlampir adalah struk PDF rincian pesanan Anda.
-      
-      Semoga Berkah,
-      Tim TakjilKu UMKM RW06
-    `;
+    try {
+      // 1. Fetch SMTP Settings from Firestore
+      const settingsSnap = await getDoc(doc(firestore, 'settings', 'mail'));
+      if (!settingsSnap.exists()) {
+        console.warn("SMTP Settings not found in Firestore. Skipping real email.");
+        return;
+      }
+      const smtpConfig = settingsSnap.data() as SmtpConfig;
 
-    // Log ke konsol karena ini adalah lingkungan prototipe (bukan pengiriman SMTP nyata)
-    console.log(`[SIMULASI EMAIL] Mengirim ke: ${email}`);
-    console.log(`[SIMULASI EMAIL] Subjek: Struk Pesanan TakjilKu #${orderId.substring(0, 7)}`);
-    console.log(`[SIMULASI EMAIL] PDF Attachment: Berhasil digenerate (base64 size: ${pdf.output('datauristring').length})`);
+      // 2. Generate PDF Struk
+      const pdf = new jsPDF({
+        orientation: 'portrait',
+        unit: 'mm',
+        format: [80, 200]
+      });
 
-    toast({
-      title: "Simulasi Email Berhasil 📧",
-      description: `Rincian pesanan untuk ${email} telah dicatat di sistem (Fitur pengiriman SMTP nyata memerlukan integrasi layanan email).`,
-    });
+      const centerPos = 40;
+      pdf.setFontSize(12);
+      pdf.text("TAKJILKU", centerPos, 10, { align: 'center' });
+      pdf.setFontSize(8);
+      pdf.text("Ramadhan UMKM RW06", centerPos, 14, { align: 'center' });
+      pdf.text("-".repeat(40), centerPos, 20, { align: 'center' });
+      
+      pdf.text(`ID: #${orderId.substring(0, 7)}`, 5, 26);
+      pdf.text(`Tgl: ${format(new Date(), 'dd/MM/yyyy HH:mm')}`, 5, 30);
+      pdf.text(`Pemesan: ${values.name}`, 5, 34);
+      pdf.text(`Bayar: ${values.paymentMethod}`, 5, 38);
+      pdf.text("-".repeat(40), centerPos, 42, { align: 'center' });
+      
+      let y = 48;
+      cartItems.forEach((item) => {
+        pdf.text(`${item.product.name}`, 5, y);
+        pdf.text(`${item.quantity} x ${formatPrice(item.product.price)}`, 5, y + 4);
+        pdf.text(`${formatPrice(item.product.price * item.quantity)}`, 75, y + 4, { align: 'right' });
+        y += 10;
+      });
+      
+      pdf.text("-".repeat(40), centerPos, y, { align: 'center' });
+      y += 6;
+      pdf.text("Ongkir (Delivery):", 5, y);
+      pdf.text(`${formatPrice(deliveryFee)}`, 75, y, { align: 'right' });
+      y += 6;
+      
+      pdf.setFontSize(10);
+      pdf.text("TOTAL:", 5, y);
+      pdf.text(`${formatPrice(total)}`, 75, y, { align: 'right' });
+      
+      const pdfBase64 = pdf.output('datauristring');
+
+      // 3. Send Real Email via Server Action
+      const result = await sendSmtpEmail(smtpConfig, {
+        to: email,
+        subject: `Struk Pesanan TakjilKu #${orderId.substring(0, 7)}`,
+        text: `Halo ${values.name}, rincian pesanan Anda telah kami terima. Total Bayar: ${formatPrice(total)}.`,
+        html: `
+          <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #eee; padding: 20px; border-radius: 10px;">
+            <h2 style="color: #FF8C00; text-align: center;">Konfirmasi Pesanan TakjilKu</h2>
+            <p>Halo <strong>${values.name}</strong>,</p>
+            <p>Terima kasih telah memesan di TakjilKu! Pesanan Anda telah kami terima dan sedang diproses.</p>
+            <div style="background-color: #f9f9f9; padding: 15px; border-radius: 5px;">
+              <p><strong>ID Pesanan:</strong> #${orderId.substring(0, 7)}</p>
+              <p><strong>Total Bayar:</strong> ${formatPrice(total)}</p>
+              <p><strong>Metode Pembayaran:</strong> ${values.paymentMethod}</p>
+              <p><strong>Alamat Pengiriman:</strong> ${values.address}</p>
+            </div>
+            <p>Rincian lengkap item pesanan Anda dapat dilihat pada struk PDF yang terlampir.</p>
+            <p style="text-align: center; margin-top: 30px; font-size: 12px; color: #888;">&copy; ${new Date().getFullYear()} Tim UMKM RW06</p>
+          </div>
+        `,
+        attachments: [
+          {
+            filename: `struk_takjilku_${orderId.substring(0, 7)}.pdf`,
+            content: pdfBase64
+          }
+        ]
+      });
+
+      if (result.success) {
+        console.log("Real email sent successfully!");
+      } else {
+        console.error("Failed to send real email:", result.error);
+      }
+    } catch (err) {
+      console.error("Error in sendEmailReceipt:", err);
+    }
   };
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
@@ -180,9 +200,9 @@ export default function OrderForm({ cartItems, total, deliveryFee, setSheetOpen 
     });
 
     batch.commit()
-      .then(() => {
+      .then(async () => {
         if (values.email) {
-            sendEmailReceipt(values.email, values, orderRef.id);
+            await sendEmailReceipt(values.email, values, orderRef.id);
         }
 
         toast({
@@ -244,12 +264,12 @@ export default function OrderForm({ cartItems, total, deliveryFee, setSheetOpen 
           name="email"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Email (Opsional)</FormLabel>
+              <FormLabel>Email (Untuk Struk Email & PDF)</FormLabel>
               <FormControl>
                 <Input placeholder="anda@email.com" {...field} disabled={isSubmitting} />
               </FormControl>
               <FormDescription className="text-[10px]">
-                Struk PDF akan disimulasikan pengirimannya jika email diisi.
+                Jika diisi, struk belanja akan dikirim ke alamat email ini.
               </FormDescription>
               <FormMessage />
             </FormItem>

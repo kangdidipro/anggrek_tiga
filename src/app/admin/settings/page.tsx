@@ -1,8 +1,9 @@
+
 'use client';
 
-import { useState } from 'react';
-import { useFirestore, errorEmitter, FirestorePermissionError } from '@/firebase';
-import { collection, getDocs, writeBatch, query, collectionGroup } from 'firebase/firestore';
+import { useState, useEffect } from 'react';
+import { useFirestore, errorEmitter, FirestorePermissionError, useDoc, useMemoFirebase } from '@/firebase';
+import { collection, getDocs, writeBatch, query, collectionGroup, doc, setDoc } from 'firebase/firestore';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -11,6 +12,7 @@ import { Label } from '@/components/ui/label';
 import { Loader2, Mail, Database, Trash2, Save, AlertTriangle, Send, Info, ExternalLink } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { sendSmtpEmail, type SmtpConfig } from '@/app/actions';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -20,7 +22,6 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import Link from 'next/link';
 
@@ -31,8 +32,8 @@ export default function AdminSettingsPage() {
   const [isSavingEmail, setIsSavingEmail] = useState(false);
   const [isTestingEmail, setIsTestingEmail] = useState(false);
 
-  // Email Server Settings State (Mock)
-  const [smtpSettings, setSmtpSettings] = useState({
+  // Email Server Settings State
+  const [smtpSettings, setSmtpSettings] = useState<SmtpConfig>({
     host: 'smtp.gmail.com',
     port: '587',
     user: '',
@@ -40,36 +41,85 @@ export default function AdminSettingsPage() {
     from: 'TakjilKu <no-reply@takjilku.com>',
   });
 
+  // Load settings from Firestore
+  const settingsDocRef = useMemoFirebase(() => {
+    if (!firestore) return null;
+    return doc(firestore, 'settings', 'mail');
+  }, [firestore]);
+
+  const { data: savedSettings, isLoading: isLoadingSettings } = useDoc<SmtpConfig>(settingsDocRef);
+
+  useEffect(() => {
+    if (savedSettings) {
+      setSmtpSettings({
+        host: savedSettings.host || 'smtp.gmail.com',
+        port: savedSettings.port || '587',
+        user: savedSettings.user || '',
+        pass: savedSettings.pass || '',
+        from: savedSettings.from || 'TakjilKu <no-reply@takjilku.com>',
+      });
+    }
+  }, [savedSettings]);
+
   const handleSaveEmailSettings = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!firestore) return;
+    
     setIsSavingEmail(true);
-    // Simulasi penyimpanan ke Firestore atau Env
-    await new Promise(resolve => setTimeout(resolve, 1500));
-    setIsSavingEmail(false);
-    toast({
-      title: "Konfigurasi Disimpan",
-      description: "Pengaturan Mail Server telah berhasil diperbarui (Simulasi).",
-    });
+    try {
+      await setDoc(doc(firestore, 'settings', 'mail'), smtpSettings);
+      toast({
+        title: "Konfigurasi Disimpan",
+        description: "Pengaturan Mail Server telah berhasil diperbarui di database.",
+      });
+    } catch (error: any) {
+      errorEmitter.emit('permission-error', new FirestorePermissionError({
+        path: 'settings/mail',
+        operation: 'write',
+        requestResourceData: smtpSettings
+      }));
+    } finally {
+      setIsSavingEmail(false);
+    }
   };
 
   const handleTestEmail = async () => {
-    if (!smtpSettings.user || !smtpSettings.user.includes('@')) {
+    if (!smtpSettings.user || !smtpSettings.user.includes('@') || !smtpSettings.pass) {
       toast({
         variant: "destructive",
         title: "Gagal",
-        description: "Silakan masukkan email yang valid di kolom Username untuk mencoba pengiriman.",
+        description: "Silakan masukkan Username (Email) dan App Password yang valid.",
       });
       return;
     }
 
     setIsTestingEmail(true);
-    // Simulasi pengetesan koneksi SMTP
-    await new Promise(resolve => setTimeout(resolve, 2000));
-    setIsTestingEmail(false);
-    toast({
-      title: "Test Berhasil 📧",
-      description: `Email percobaan telah dikirim (simulasi) ke ${smtpSettings.user}. Jika ini sistem nyata, silakan cek kotak masuk Anda.`,
-    });
+    try {
+      const result = await sendSmtpEmail(smtpSettings, {
+        to: smtpSettings.user,
+        subject: "Test Pengiriman SMTP - TakjilKu",
+        text: "Halo! Jika Anda menerima email ini, berarti konfigurasi SMTP Anda sudah berhasil diatur dengan benar.",
+        html: "<h1>Test SMTP Berhasil!</h1><p>Halo! Jika Anda menerima email ini, berarti konfigurasi SMTP Anda sudah berhasil diatur dengan benar.</p>"
+      });
+
+      if (result.success) {
+        toast({
+          title: "Test Berhasil 📧",
+          description: `Email percobaan telah dikirim ke ${smtpSettings.user}. Silakan cek kotak masuk atau folder spam Anda.`,
+        });
+      } else {
+        throw new Error(result.error);
+      }
+    } catch (error: any) {
+      console.error("Test Email error:", error);
+      toast({
+        variant: "destructive",
+        title: "Test Gagal",
+        description: error.message || "Terjadi kesalahan saat mencoba mengirim email. Cek kembali host/port/password.",
+      });
+    } finally {
+      setIsTestingEmail(false);
+    }
   };
 
   const clearCollection = async (collectionPath: string, label: string) => {
@@ -105,6 +155,10 @@ export default function AdminSettingsPage() {
       setIsDeleting(false);
     }
   };
+
+  if (isLoadingSettings) {
+    return <div className="flex h-full items-center justify-center p-24"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
+  }
 
   return (
     <div className="space-y-6">
@@ -237,12 +291,12 @@ export default function AdminSettingsPage() {
                   <p className="text-sm text-muted-foreground">Menghapus seluruh riwayat pesanan (Orders & Order Items) dari semua pelanggan.</p>
                 </div>
                 <AlertDialog>
-                  <AlertDialogTrigger asChild>
+                  <AlertDialogAction asChild>
                     <Button variant="destructive" size="sm" disabled={isDeleting}>
                       {isDeleting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
                       Hapus Pesanan
                     </Button>
-                  </AlertDialogTrigger>
+                  </AlertDialogAction>
                   <AlertDialogContent>
                     <AlertDialogHeader>
                       <AlertDialogTitle>Hapus Seluruh Pesanan?</AlertDialogTitle>
@@ -269,12 +323,12 @@ export default function AdminSettingsPage() {
                   <p className="text-sm text-muted-foreground">Menghapus semua item menu takjil yang saat ini terdaftar.</p>
                 </div>
                 <AlertDialog>
-                  <AlertDialogTrigger asChild>
+                  <AlertDialogAction asChild>
                     <Button variant="outline" size="sm" className="text-destructive hover:bg-destructive/10" disabled={isDeleting}>
                       {isDeleting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
                       Hapus Menu
                     </Button>
-                  </AlertDialogTrigger>
+                  </AlertDialogAction>
                   <AlertDialogContent>
                     <AlertDialogHeader>
                       <AlertDialogTitle>Hapus Seluruh Menu?</AlertDialogTitle>
@@ -301,12 +355,12 @@ export default function AdminSettingsPage() {
                   <p className="text-sm text-muted-foreground">Menghapus semua data mitra (Master Mitra) dari database.</p>
                 </div>
                 <AlertDialog>
-                  <AlertDialogTrigger asChild>
+                  <AlertDialogAction asChild>
                     <Button variant="outline" size="sm" className="text-destructive hover:bg-destructive/10" disabled={isDeleting}>
                       {isDeleting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
                       Hapus Mitra
                     </Button>
-                  </AlertDialogTrigger>
+                  </AlertDialogAction>
                   <AlertDialogContent>
                     <AlertDialogHeader>
                       <AlertDialogTitle>Hapus Seluruh Mitra?</AlertDialogTitle>
