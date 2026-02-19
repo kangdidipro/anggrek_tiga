@@ -14,8 +14,8 @@ const navItems = [
   { href: '/admin/summary', label: 'Rekap Harian', icon: LayoutDashboard },
   { href: '/admin/customers', label: 'Data Pelanggan', icon: UserRound },
   { href: '/admin/vendors', label: 'Master Mitra', icon: Users },
-  { href: '/admin/technical-data', label: 'Data Teknis', icon: Database },
   { href: '/admin/settings', label: 'Pengaturan', icon: Settings },
+  { href: '/admin/technical-data', label: 'Data Teknis', icon: Database },
 ];
 
 export default function AdminSidebar() {
