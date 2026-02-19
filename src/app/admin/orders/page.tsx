@@ -1,8 +1,8 @@
 'use client';
 
 import { useEffect, useState, useMemo } from 'react';
-import { useFirestore, useUser, errorEmitter, FirestorePermissionError } from '@/firebase';
-import { collectionGroup, getDocs, query, writeBatch, doc, updateDoc, arrayUnion } from 'firebase/firestore';
+import { useFirestore, useUser, errorEmitter, FirestorePermissionError, useCollection, useMemoFirebase } from '@/firebase';
+import { collectionGroup, getDocs, query, writeBatch, doc, updateDoc, arrayUnion, collection } from 'firebase/firestore';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Loader2, FileDown, CalendarIcon, Trash2, FileText, Mail, Search, Clock, CheckCircle2, Printer, LayoutGrid, Store } from 'lucide-react';
@@ -21,6 +21,7 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
+import type { Vendor } from '@/lib/types';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -85,6 +86,21 @@ export default function AdminOrdersPage() {
   const [isDeleting, setIsDeleting] = useState(false);
   const [isUpdatingStatus, setIsUpdatingStatus] = useState<string | null>(null);
   const { toast } = useToast();
+
+  // Fetch Mitra for Lookup
+  const vendorsQuery = useMemoFirebase(() => {
+    if (!firestore) return null;
+    return collection(firestore, 'vendors');
+  }, [firestore]);
+  const { data: vendorsData } = useCollection<Vendor>(vendorsQuery);
+
+  const vendorLookup = useMemo(() => {
+    const map: Record<string, string> = {};
+    vendorsData?.forEach(v => {
+      map[v.code] = v.name;
+    });
+    return map;
+  }, [vendorsData]);
   
   const allVendors = useMemo(() => {
     const vendorSet = new Set(orders.flatMap(o => o.items.map(i => i.vendor)));
@@ -579,9 +595,14 @@ export default function AdminOrdersPage() {
                                               return (
                                                 <div key={vendorCode} className="space-y-3 p-3 border rounded-lg bg-muted/10">
                                                     <div className="flex justify-between items-center bg-primary/10 px-2 py-1 rounded-sm border border-primary/20">
-                                                        <span className="text-xs font-bold text-primary uppercase">
-                                                            ID Sub-Order: {subOrderId}
-                                                        </span>
+                                                        <div className="flex flex-col">
+                                                            <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-tight">
+                                                                {vendorLookup[vendorCode] || 'Mitra'} ({vendorCode})
+                                                            </span>
+                                                            <span className="text-xs font-bold text-primary uppercase">
+                                                                ID Sub-Order: {subOrderId}
+                                                            </span>
+                                                        </div>
                                                         <div className="flex items-center gap-3">
                                                             <span className="text-xs font-bold text-primary">
                                                                 Sub: {formatPrice(subtotalMitra)}
