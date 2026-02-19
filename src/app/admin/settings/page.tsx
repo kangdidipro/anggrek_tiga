@@ -8,7 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Loader2, Mail, Database, Trash2, Save, AlertTriangle } from 'lucide-react';
+import { Loader2, Mail, Database, Trash2, Save, AlertTriangle, Send } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import {
   AlertDialog,
@@ -27,6 +27,7 @@ export default function AdminSettingsPage() {
   const { toast } = useToast();
   const [isDeleting, setIsDeleting] = useState(false);
   const [isSavingEmail, setIsSavingEmail] = useState(false);
+  const [isTestingEmail, setIsTestingEmail] = useState(false);
 
   // Email Server Settings State (Mock)
   const [smtpSettings, setSmtpSettings] = useState({
@@ -46,6 +47,26 @@ export default function AdminSettingsPage() {
     toast({
       title: "Konfigurasi Disimpan",
       description: "Pengaturan Mail Server telah berhasil diperbarui (Simulasi).",
+    });
+  };
+
+  const handleTestEmail = async () => {
+    if (!smtpSettings.user || !smtpSettings.user.includes('@')) {
+      toast({
+        variant: "destructive",
+        title: "Gagal",
+        description: "Silakan masukkan email yang valid di kolom Username untuk mencoba pengiriman.",
+      });
+      return;
+    }
+
+    setIsTestingEmail(true);
+    // Simulasi pengetesan koneksi SMTP
+    await new Promise(resolve => setTimeout(resolve, 2000));
+    setIsTestingEmail(false);
+    toast({
+      title: "Test Berhasil 📧",
+      description: `Email percobaan telah dikirim (simulasi) ke ${smtpSettings.user}. Jika ini sistem nyata, silakan cek kotak masuk Anda.`,
     });
   };
 
@@ -160,8 +181,17 @@ export default function AdminSettingsPage() {
                     />
                   </div>
                 </div>
-                <div className="flex justify-end pt-4">
-                  <Button type="submit" disabled={isSavingEmail}>
+                <div className="flex justify-end gap-3 pt-4">
+                  <Button 
+                    type="button" 
+                    variant="outline" 
+                    onClick={handleTestEmail} 
+                    disabled={isTestingEmail || isSavingEmail}
+                  >
+                    {isTestingEmail ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
+                    Test Email
+                  </Button>
+                  <Button type="submit" disabled={isSavingEmail || isTestingEmail}>
                     {isSavingEmail ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
                     Simpan Konfigurasi
                   </Button>
