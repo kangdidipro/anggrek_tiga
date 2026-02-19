@@ -133,22 +133,28 @@ export default function OrderForm({ cartItems, total, deliveryFee, setSheetOpen 
       pdf.text(`${formatPrice(total)}`, 75, y, { align: 'right' });
       
       const pdfBase64 = pdf.output('datauristring');
+      const trackingLink = `${window.location.origin}/orders`;
 
       await sendSmtpEmail(smtpConfig, {
         to: email,
         subject: `Struk Pesanan TakjilKu #${orderId}`,
-        text: `Halo ${values.name}, rincian pesanan Anda telah kami terima. Total Bayar: ${formatPrice(total)}.`,
+        text: `Halo ${values.name}, rincian pesanan Anda telah kami terima. Total Bayar: ${formatPrice(total)}. Lacak pesanan Anda di: ${trackingLink}`,
         html: `
           <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #eee; padding: 20px; border-radius: 10px;">
             <h2 style="color: #FF8C00; text-align: center;">Konfirmasi Pesanan TakjilKu</h2>
             <p>Halo <strong>${values.name}</strong>,</p>
             <p>Terima kasih telah memesan di TakjilKu! Pesanan Anda telah kami terima dan sedang diproses.</p>
-            <div style="background-color: #f9f9f9; padding: 15px; border-radius: 5px;">
+            <div style="background-color: #f9f9f9; padding: 15px; border-radius: 5px; margin-bottom: 20px;">
               <p><strong>ID Pesanan:</strong> #${orderId}</p>
               <p><strong>Total Bayar:</strong> ${formatPrice(total)}</p>
               <p><strong>Metode Pembayaran:</strong> ${values.paymentMethod}</p>
               <p><strong>Alamat Pengiriman:</strong> ${values.address}</p>
             </div>
+
+            <div style="text-align: center; margin: 30px 0;">
+              <a href="${trackingLink}" style="background-color: #FF8C00; color: white; padding: 12px 25px; text-decoration: none; border-radius: 5px; font-weight: bold; display: inline-block;">Lacak Status Pesanan</a>
+            </div>
+
             <p>Rincian lengkap item pesanan Anda dapat dilihat pada struk PDF yang terlampir.</p>
             <p style="text-align: center; margin-top: 30px; font-size: 12px; color: #888;">&copy; ${new Date().getFullYear()} Tim UMKM RW06 - Anggrek 3</p>
           </div>
