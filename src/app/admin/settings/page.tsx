@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
@@ -172,6 +171,7 @@ export default function AdminSettingsPage() {
         menuItems: [],
         vendors: [],
         settings: [],
+        customers: [],
         orders: [],
         orderItems: []
       };
@@ -184,6 +184,9 @@ export default function AdminSettingsPage() {
 
       const settingsSnap = await getDocs(collection(firestore, 'settings'));
       settingsSnap.forEach(d => backupData.settings.push({ id: d.id, ...d.data() }));
+
+      const customersSnap = await getDocs(collection(firestore, 'customers'));
+      customersSnap.forEach(d => backupData.customers.push({ id: d.id, ...d.data() }));
 
       const ordersSnap = await getDocs(query(collectionGroup(firestore, 'orders')));
       ordersSnap.forEach(d => {
@@ -248,6 +251,13 @@ export default function AdminSettingsPage() {
           backupData.settings.forEach((s: any) => {
             const { id, ...data } = s;
             batch.set(doc(firestore, 'settings', id), data);
+          });
+        }
+
+        if (backupData.customers) {
+          backupData.customers.forEach((c: any) => {
+            const { id, ...data } = c;
+            batch.set(doc(firestore, 'customers', id), data);
           });
         }
 
@@ -564,7 +574,7 @@ export default function AdminSettingsPage() {
                     <Download className="h-4 w-4 text-primary" />
                     Pencadangan Penuh
                   </h4>
-                  <p className="text-sm text-muted-foreground">Unduh seluruh Menu, Mitra, Pengaturan, dan Riwayat Pesanan.</p>
+                  <p className="text-sm text-muted-foreground">Unduh seluruh Menu, Mitra, Pelanggan, Pengaturan, dan Riwayat Pesanan.</p>
                 </div>
                 <Button onClick={handleBackup} disabled={isBackingUp} className="min-w-[150px]">
                   {isBackingUp ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}

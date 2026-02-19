@@ -24,8 +24,9 @@ service cloud.firestore {
     }
 
     match /customers/{customerId} {
-      allow get: if isOwner(customerId);
-      allow list: if false; 
+      // Izinkan akses baca profil untuk admin (siapa saja yang login) 
+      // dan akses tulis untuk pemilik akun itu sendiri
+      allow read: if isSignedIn();
       
       allow create: if isOwner(customerId)
                        && request.resource.data.id == customerId
@@ -57,8 +58,6 @@ service cloud.firestore {
     }
 
     match /settings/{settingId} {
-      // Izinkan akses baca/tulis untuk semua pengguna yang login (termasuk anonim)
-      // Dibutuhkan untuk membaca konfigurasi SMTP saat pengiriman struk email
       allow read, write: if isSignedIn();
     }
   }

@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useForm } from 'react-hook-form';
@@ -183,11 +182,8 @@ export default function OrderForm({ cartItems, total, deliveryFee, setSheetOpen 
     setIsSubmitting(true);
     
     try {
-      // 1. Generate Custom Order ID: YYYYMMDD-TJK-[counting]
       const now = new Date();
       const dateStr = format(now, 'yyyyMMdd');
-      
-      // Fix Index Error: Fetch all orders and filter in JS to avoid Collection Group index requirement
       const startOfToday = new Date();
       startOfToday.setHours(0, 0, 0, 0);
       const startOfTodayISO = startOfToday.toISOString();
@@ -204,9 +200,21 @@ export default function OrderForm({ cartItems, total, deliveryFee, setSheetOpen 
       const orderId = `${dateStr}-TJK-${sequence}`;
 
       const batch = writeBatch(firestore);
-      const orderRef = doc(firestore, 'customers', user.uid, 'orders', orderId);
       const timestamp = now.toISOString();
-      
+
+      // Save/Update Customer Profile
+      const customerRef = doc(firestore, 'customers', user.uid);
+      batch.set(customerRef, {
+        id: user.uid,
+        googleAccountId: user.uid,
+        name: values.name,
+        email: values.email || '',
+        phoneNumber: values.phone,
+        deliveryAddress: values.address,
+        lastOrderAt: timestamp
+      }, { merge: true });
+
+      const orderRef = doc(firestore, 'customers', user.uid, 'orders', orderId);
       const newOrder = {
           id: orderId,
           customerId: user.uid,

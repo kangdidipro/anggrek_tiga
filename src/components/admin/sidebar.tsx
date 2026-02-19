@@ -5,13 +5,14 @@ import { Button } from '@/components/ui/button';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
-import { ListOrdered, LayoutDashboard, LogOut, Soup, Home, UtensilsCrossed, Users, Settings } from 'lucide-react';
+import { ListOrdered, LayoutDashboard, LogOut, Soup, Home, UtensilsCrossed, Users, Settings, UserRound } from 'lucide-react';
 
 const navItems = [
   { href: '/', label: 'Halaman Depan', icon: Home },
   { href: '/admin/menu', label: 'Atur Menu', icon: UtensilsCrossed },
   { href: '/admin/orders', label: 'List Order', icon: ListOrdered },
   { href: '/admin/summary', label: 'Rekap Harian', icon: LayoutDashboard },
+  { href: '/admin/customers', label: 'Data Pelanggan', icon: UserRound },
   { href: '/admin/vendors', label: 'Master Mitra', icon: Users },
   { href: '/admin/settings', label: 'Pengaturan', icon: Settings },
 ];
