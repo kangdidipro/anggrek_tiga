@@ -37,6 +37,13 @@ type OrderFormProps = {
     setSheetOpen: (open: boolean) => void;
 };
 
+const getVendorFromSku = (sku: string) => {
+  if (!sku) return 'UNKNOWN';
+  if (sku.includes('-')) return sku.split('-')[0];
+  const match = sku.match(/^[a-zA-Z]+/);
+  return match ? match[0] : sku;
+};
+
 export default function OrderForm({ cartItems, total, deliveryFee, setSheetOpen }: OrderFormProps) {
   const { toast } = useToast();
   const { clearCart } = useCart();
@@ -123,9 +130,8 @@ export default function OrderForm({ cartItems, total, deliveryFee, setSheetOpen 
       y += 4;
       pdf.text(`Tgl Order: ${format(new Date(), 'dd/MM/yyyy HH:mm')}`, 5, y);
       y += 4;
-      pdf.setFontStyle('bold');
+      pdf.setFontSize(8);
       pdf.text(`Tgl Kirim: ${format(deliveryDate, 'eeee, d MMM yyyy', { locale: id })}`, 5, y);
-      pdf.setFontStyle('normal');
       y += 4;
       pdf.text(`Pemesan: ${values.name}`, 5, y);
       y += 4;
@@ -134,11 +140,26 @@ export default function OrderForm({ cartItems, total, deliveryFee, setSheetOpen 
       pdf.text("-".repeat(40), centerPos, y, { align: 'center' });
       y += 6;
       
-      cartItems.forEach((item) => {
-        pdf.text(`${item.product.name}`, 5, y);
-        pdf.text(`${item.quantity} x ${formatPrice(item.product.price)}`, 5, y + 4);
-        pdf.text(`${formatPrice(item.product.price * item.quantity)}`, 75, y + 4, { align: 'right' });
-        y += 10;
+      const grouped: Record<string, CartItem[]> = {};
+      cartItems.forEach(item => {
+          const v = item.product.vendor || getVendorFromSku(item.product.sku);
+          if (!grouped[v]) grouped[v] = [];
+          grouped[v].push(item);
+      });
+
+      Object.entries(grouped).forEach(([vendorCode, vendorItems]) => {
+          pdf.setFontSize(7);
+          pdf.text(`MITRA: ${vendorCode}`, 5, y);
+          y += 4;
+          pdf.setFontSize(8);
+          
+          vendorItems.forEach((item) => {
+              pdf.text(`${item.product.name}`, 5, y);
+              pdf.text(`${item.quantity} x ${formatPrice(item.product.price)}`, 5, y + 4);
+              pdf.text(`${formatPrice(item.product.price * item.quantity)}`, 75, y + 4, { align: 'right' });
+              y += 10;
+          });
+          y += 2;
       });
       
       pdf.text("-".repeat(40), centerPos, y, { align: 'center' });
@@ -214,12 +235,10 @@ export default function OrderForm({ cartItems, total, deliveryFee, setSheetOpen 
       }).format(now));
       
       const isAfterCutoff = jakartaHour >= 16;
-      // Considered order date is tomorrow if after 4pm Jakarta time
       const effectiveOrderDate = isAfterCutoff ? addDays(now, 1) : now;
       const dateStr = format(effectiveOrderDate, 'yyyyMMdd');
       
       const ordersQuery = collectionGroup(firestore, 'orders');
-      // Efficiently find orders with same date prefix to determine sequence
       const sameDayQuery = query(ordersQuery, where('id', '>=', dateStr), where('id', '<=', dateStr + '\uf8ff'));
       const allOrdersSnapshot = await getDocs(sameDayQuery);
       
@@ -230,7 +249,6 @@ export default function OrderForm({ cartItems, total, deliveryFee, setSheetOpen 
       const timestamp = now.toISOString();
       const finalDeliveryDate = addDays(now, isAfterCutoff ? 2 : 1).toISOString();
 
-      // Save/Update Customer Profile
       const customerRef = doc(firestore, 'customers', user.uid);
       batch.set(customerRef, {
         id: user.uid,

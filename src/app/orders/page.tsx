@@ -47,7 +47,16 @@ interface OrderItem {
     name: string;
     quantity: number;
     priceAtOrder: number;
+    sku: string;
+    vendor?: string;
 }
+
+const getVendorFromSku = (sku: string) => {
+  if (!sku) return 'UNKNOWN';
+  if (sku.includes('-')) return sku.split('-')[0];
+  const match = sku.match(/^[a-zA-Z]+/);
+  return match ? match[0] : sku;
+};
 
 function OrderItemDetails({ customerId, orderId }: { customerId: string; orderId: string }) {
     const firestore = useFirestore();
@@ -61,15 +70,36 @@ function OrderItemDetails({ customerId, orderId }: { customerId: string; orderId
     if (isLoading) return <p className="text-sm text-muted-foreground">Loading items...</p>;
     if (!items || items.length === 0) return <p className="text-sm text-muted-foreground">No items found for this order.</p>;
 
+    const groupItemsByVendor = (items: OrderItem[]) => {
+        const grouped: Record<string, OrderItem[]> = {};
+        items.forEach(item => {
+            const v = item.vendor || getVendorFromSku(item.sku);
+            if (!grouped[v]) grouped[v] = [];
+            grouped[v].push(item);
+        });
+        return grouped;
+    };
+
+    const grouped = groupItemsByVendor(items);
+
     return (
-        <div className="space-y-2 pt-2">
-            {items.map(item => (
-                <div key={item.id} className="flex justify-between text-sm">
-                    <div>
-                        <span className="font-medium">{item.name}</span>
-                        <span className="text-muted-foreground"> x {item.quantity}</span>
+        <div className="space-y-4 pt-2">
+            {Object.entries(grouped).map(([vendorCode, vendorItems]) => (
+                <div key={vendorCode} className="space-y-1">
+                    <div className="text-[10px] font-bold text-primary/70 uppercase tracking-tighter bg-primary/5 px-2 py-0.5 rounded-sm inline-block border border-primary/10">
+                        Mitra: {vendorCode}
                     </div>
-                    <span className="text-muted-foreground">{formatPrice(item.priceAtOrder * item.quantity)}</span>
+                    <div className="space-y-1.5 pl-2">
+                        {vendorItems.map(item => (
+                            <div key={item.id} className="flex justify-between text-sm">
+                                <div>
+                                    <span className="font-medium">{item.name}</span>
+                                    <span className="text-muted-foreground"> x {item.quantity}</span>
+                                </div>
+                                <span className="text-muted-foreground">{formatPrice(item.priceAtOrder * item.quantity)}</span>
+                            </div>
+                        ))}
+                    </div>
                 </div>
             ))}
         </div>
@@ -110,7 +140,6 @@ export default function OrdersPage() {
         setIsPrinting(order.id);
         
         try {
-            // Fetch items first from the specific sub-collection path
             const itemsQuery = query(collection(firestore, 'customers', user.uid, 'orders', order.id, 'orderItems'));
             const itemsSnap = await getDocs(itemsQuery);
             const items = itemsSnap.docs.map(d => d.data() as OrderItem);
@@ -150,11 +179,26 @@ export default function OrdersPage() {
             doc.text("-".repeat(40), centerPos, y, { align: 'center' });
             y += 6;
             
-            items.forEach((item) => {
-                doc.text(`${item.name}`, 5, y);
-                doc.text(`${item.quantity} x ${formatPrice(item.priceAtOrder)}`, 5, y + 4);
-                doc.text(`${formatPrice(item.priceAtOrder * item.quantity)}`, 75, y + 4, { align: 'right' });
-                y += 10;
+            const grouped: Record<string, OrderItem[]> = {};
+            items.forEach(item => {
+                const v = item.vendor || getVendorFromSku(item.sku);
+                if (!grouped[v]) grouped[v] = [];
+                grouped[v].push(item);
+            });
+
+            Object.entries(grouped).forEach(([vendorCode, vendorItems]) => {
+                doc.setFontSize(7);
+                doc.text(`MITRA: ${vendorCode}`, 5, y);
+                y += 4;
+                doc.setFontSize(8);
+                
+                vendorItems.forEach((item) => {
+                    doc.text(`${item.name}`, 5, y);
+                    doc.text(`${item.quantity} x ${formatPrice(item.priceAtOrder)}`, 5, y + 4);
+                    doc.text(`${formatPrice(item.priceAtOrder * item.quantity)}`, 75, y + 4, { align: 'right' });
+                    y += 10;
+                });
+                y += 2;
             });
             
             doc.text("-".repeat(40), centerPos, y, { align: 'center' });

@@ -367,12 +367,29 @@ export default function AdminOrdersPage() {
     docPdf.text("-".repeat(40), centerPos, y + 12, { align: 'center' });
     
     y += 18;
-    itemsToPrint.forEach((item) => {
-      docPdf.text(`${item.name}`, 5, y);
-      docPdf.text(`${item.quantity} x ${formatPrice(item.priceAtOrder)}`, 5, y + 4);
-      docPdf.text(`${formatPrice(item.priceAtOrder * item.quantity)}`, 75, y + 4, { align: 'right' });
-      y += 10;
-    });
+    if (vendorCode) {
+      itemsToPrint.forEach((item) => {
+        docPdf.text(`${item.name}`, 5, y);
+        docPdf.text(`${item.quantity} x ${formatPrice(item.priceAtOrder)}`, 5, y + 4);
+        docPdf.text(`${formatPrice(item.priceAtOrder * item.quantity)}`, 75, y + 4, { align: 'right' });
+        y += 10;
+      });
+    } else {
+      const grouped = groupItemsByVendor(itemsToPrint);
+      Object.entries(grouped).forEach(([vCode, vItems]) => {
+        docPdf.setFontSize(7);
+        docPdf.text(`MITRA: ${vCode}`, 5, y);
+        y += 4;
+        docPdf.setFontSize(8);
+        vItems.forEach((item) => {
+          docPdf.text(`${item.name}`, 5, y);
+          docPdf.text(`${item.quantity} x ${formatPrice(item.priceAtOrder)}`, 5, y + 4);
+          docPdf.text(`${formatPrice(item.priceAtOrder * item.quantity)}`, 75, y + 4, { align: 'right' });
+          y += 10;
+        });
+        y += 2;
+      });
+    }
     
     docPdf.text("-".repeat(40), centerPos, y, { align: 'center' });
     y += 6;
