@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
-import { ListOrdered, LayoutDashboard, LogOut, Soup, Home, UtensilsCrossed, Users } from 'lucide-react';
+import { ListOrdered, LayoutDashboard, LogOut, Soup, Home, UtensilsCrossed, Users, Settings } from 'lucide-react';
 
 const navItems = [
   { href: '/', label: 'Halaman Depan', icon: Home },
@@ -13,6 +13,7 @@ const navItems = [
   { href: '/admin/orders', label: 'List Order', icon: ListOrdered },
   { href: '/admin/summary', label: 'Rekap Harian', icon: LayoutDashboard },
   { href: '/admin/vendors', label: 'Master Mitra', icon: Users },
+  { href: '/admin/settings', label: 'Pengaturan', icon: Settings },
 ];
 
 export default function AdminSidebar() {
