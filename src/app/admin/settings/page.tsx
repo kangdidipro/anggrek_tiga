@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useFirestore, errorEmitter, FirestorePermissionError, useDoc, useMemoFirebase } from '@/firebase';
 import { collection, getDocs, writeBatch, query, collectionGroup, doc, setDoc } from 'firebase/firestore';
 import { Button } from '@/components/ui/button';
@@ -8,7 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Loader2, Mail, Database, Trash2, Save, AlertTriangle, Send, Info, ExternalLink } from 'lucide-react';
+import { Loader2, Mail, Database, Trash2, Save, AlertTriangle, Send, Info, ExternalLink, Download, Upload, FileJson } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { sendSmtpEmail, type SmtpConfig } from '@/app/actions';
@@ -30,6 +30,9 @@ export default function AdminSettingsPage() {
   const [isDeleting, setIsDeleting] = useState(false);
   const [isSavingEmail, setIsSavingEmail] = useState(false);
   const [isTestingEmail, setIsTestingEmail] = useState(false);
+  const [isBackingUp, setIsBackingUp] = useState(false);
+  const [isRestoring, setIsRestoring] = useState(false);
+  const restoreFileInputRef = useRef<HTMLInputElement>(null);
 
   // Email Server Settings State
   const [smtpSettings, setSmtpSettings] = useState<SmtpConfig>({
@@ -121,6 +124,127 @@ export default function AdminSettingsPage() {
     }
   };
 
+  const handleBackup = async () => {
+    if (!firestore) return;
+    setIsBackingUp(true);
+    try {
+      const backupData: any = {
+        menuItems: [],
+        vendors: [],
+        settings: [],
+        orders: [],
+        orderItems: []
+      };
+
+      // 1. Fetch Top Level Collections
+      const menuItemsSnap = await getDocs(collection(firestore, 'menuItems'));
+      menuItemsSnap.forEach(d => backupData.menuItems.push({ id: d.id, ...d.data() }));
+
+      const vendorsSnap = await getDocs(collection(firestore, 'vendors'));
+      vendorsSnap.forEach(d => backupData.vendors.push({ id: d.id, ...d.data() }));
+
+      const settingsSnap = await getDocs(collection(firestore, 'settings'));
+      settingsSnap.forEach(d => backupData.settings.push({ id: d.id, ...d.data() }));
+
+      // 2. Fetch Nested (Orders & OrderItems) using collectionGroup
+      const ordersSnap = await getDocs(query(collectionGroup(firestore, 'orders')));
+      ordersSnap.forEach(d => {
+        const pathParts = d.ref.path.split('/');
+        const customerId = pathParts[1];
+        backupData.orders.push({ customerId, id: d.id, data: d.data() });
+      });
+
+      const itemsSnap = await getDocs(query(collectionGroup(firestore, 'orderItems')));
+      itemsSnap.forEach(d => {
+        const pathParts = d.ref.path.split('/');
+        const customerId = pathParts[1];
+        const orderId = pathParts[3];
+        backupData.orderItems.push({ customerId, orderId, id: d.id, data: d.data() });
+      });
+
+      const json = JSON.stringify(backupData, null, 2);
+      const blob = new Blob([json], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `takjilku_backup_${new Date().toISOString().split('T')[0]}.json`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      
+      toast({ title: "Backup Berhasil", description: "Seluruh data sistem telah dicadangkan ke file JSON." });
+    } catch (err: any) {
+      console.error("Backup error:", err);
+      toast({ variant: "destructive", title: "Backup Gagal", description: err.message });
+    } finally {
+      setIsBackingUp(false);
+    }
+  };
+
+  const handleRestore = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !firestore) return;
+
+    setIsRestoring(true);
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      try {
+        const backupData = JSON.parse(event.target?.result as string);
+        const batch = writeBatch(firestore);
+
+        // Restore MenuItems
+        if (backupData.menuItems) {
+          backupData.menuItems.forEach((item: any) => {
+            const { id, ...data } = item;
+            batch.set(doc(firestore, 'menuItems', id), data);
+          });
+        }
+
+        // Restore Vendors
+        if (backupData.vendors) {
+          backupData.vendors.forEach((v: any) => {
+            const { id, ...data } = v;
+            batch.set(doc(firestore, 'vendors', id), data);
+          });
+        }
+
+        // Restore Settings
+        if (backupData.settings) {
+          backupData.settings.forEach((s: any) => {
+            const { id, ...data } = s;
+            batch.set(doc(firestore, 'settings', id), data);
+          });
+        }
+
+        // Restore Orders
+        if (backupData.orders) {
+          backupData.orders.forEach((o: any) => {
+            const { customerId, id, data } = o;
+            batch.set(doc(firestore, 'customers', customerId, 'orders', id), data);
+          });
+        }
+
+        // Restore OrderItems
+        if (backupData.orderItems) {
+          backupData.orderItems.forEach((oi: any) => {
+            const { customerId, orderId, id, data } = oi;
+            batch.set(doc(firestore, 'customers', customerId, 'orders', orderId, 'orderItems', id), data);
+          });
+        }
+
+        await batch.commit();
+        toast({ title: "Restore Berhasil", description: "Data sistem telah dipulihkan dari file backup." });
+      } catch (err: any) {
+        console.error("Restore error:", err);
+        toast({ variant: "destructive", title: "Restore Gagal", description: "Format file tidak valid atau terjadi kesalahan database." });
+      } finally {
+        setIsRestoring(false);
+        if (restoreFileInputRef.current) restoreFileInputRef.current.value = '';
+      }
+    };
+    reader.readAsText(file);
+  };
+
   const clearCollection = async (collectionPath: string, label: string) => {
     if (!firestore) return;
     setIsDeleting(true);
@@ -163,18 +287,22 @@ export default function AdminSettingsPage() {
     <div className="space-y-6">
       <div>
         <h1 className="text-3xl font-bold tracking-tight font-headline">Pengaturan Sistem</h1>
-        <p className="text-muted-foreground">Kelola konfigurasi pengiriman email dan pemeliharaan basis data.</p>
+        <p className="text-muted-foreground">Kelola konfigurasi pengiriman email, pemeliharaan basis data, dan pencadangan.</p>
       </div>
 
       <Tabs defaultValue="mail" className="w-full">
-        <TabsList className="grid w-full grid-cols-2 max-w-md">
+        <TabsList className="grid w-full grid-cols-3 max-w-lg">
           <TabsTrigger value="mail" className="flex items-center gap-2">
             <Mail className="h-4 w-4" />
             Mail Server
           </TabsTrigger>
           <TabsTrigger value="data" className="flex items-center gap-2">
             <Database className="h-4 w-4" />
-            Manajemen Data
+            Maintenance
+          </TabsTrigger>
+          <TabsTrigger value="backup" className="flex items-center gap-2">
+            <FileJson className="h-4 w-4" />
+            Backup &amp; Restore
           </TabsTrigger>
         </TabsList>
 
@@ -290,7 +418,7 @@ export default function AdminSettingsPage() {
               <div className="flex flex-col md:flex-row items-start md:items-center justify-between p-4 border rounded-lg bg-destructive/5 gap-4">
                 <div>
                   <h4 className="font-bold">Kosongkan Semua Pesanan</h4>
-                  <p className="text-sm text-muted-foreground">Menghapus seluruh riwayat pesanan (Orders & Order Items) dari semua pelanggan.</p>
+                  <p className="text-sm text-muted-foreground">Menghapus seluruh riwayat pesanan (Orders &amp; Order Items) dari semua pelanggan.</p>
                 </div>
                 <AlertDialog>
                   <AlertDialogAction asChild>
@@ -382,6 +510,68 @@ export default function AdminSettingsPage() {
                   </AlertDialogContent>
                 </AlertDialog>
               </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="backup" className="space-y-4 pt-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Ekspor &amp; Impor Data (JSON)</CardTitle>
+              <CardDescription>
+                Cadangkan seluruh data sistem ke dalam file JSON atau pulihkan data dari file pencadangan sebelumnya.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="flex flex-col md:flex-row items-start md:items-center justify-between p-4 border rounded-lg gap-4">
+                <div className="space-y-1">
+                  <h4 className="font-bold flex items-center gap-2">
+                    <Download className="h-4 w-4 text-primary" />
+                    Pencadangan Penuh (Full Backup)
+                  </h4>
+                  <p className="text-sm text-muted-foreground">Unduh seluruh Menu, Mitra, Pengaturan, dan Riwayat Pesanan dalam satu file.</p>
+                </div>
+                <Button onClick={handleBackup} disabled={isBackingUp} className="min-w-[150px]">
+                  {isBackingUp ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
+                  Unduh Backup
+                </Button>
+              </div>
+
+              <div className="flex flex-col md:flex-row items-start md:items-center justify-between p-4 border rounded-lg gap-4">
+                <div className="space-y-1">
+                  <h4 className="font-bold flex items-center gap-2">
+                    <Upload className="h-4 w-4 text-green-600" />
+                    Pemulihan Data (Restore)
+                  </h4>
+                  <p className="text-sm text-muted-foreground">Unggah file backup JSON untuk memulihkan seluruh data ke Firestore.</p>
+                </div>
+                <div className="flex flex-col items-end gap-2">
+                  <input
+                    type="file"
+                    accept=".json"
+                    className="hidden"
+                    ref={restoreFileInputRef}
+                    onChange={handleRestore}
+                  />
+                  <Button 
+                    variant="outline" 
+                    onClick={() => restoreFileInputRef.current?.click()} 
+                    disabled={isRestoring}
+                    className="border-green-600 text-green-600 hover:bg-green-50 min-w-[150px]"
+                  >
+                    {isRestoring ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4" />}
+                    Unggah Backup
+                  </Button>
+                </div>
+              </div>
+
+              <Alert variant="default" className="bg-blue-50 border-blue-200">
+                <Info className="h-4 w-4 text-blue-600" />
+                <AlertTitle className="text-blue-800">Tips Pencadangan</AlertTitle>
+                <AlertDescription className="text-blue-700 text-xs">
+                  Sangat disarankan untuk melakukan backup setiap minggu atau sebelum melakukan penghapusan data masal (maintenance). Simpan file JSON di tempat yang aman.
+                </AlertDescription>
+              </Alert>
             </CardContent>
           </Card>
         </TabsContent>
