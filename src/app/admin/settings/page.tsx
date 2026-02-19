@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -38,7 +37,7 @@ export default function AdminSettingsPage() {
     port: '587',
     user: '',
     pass: '',
-    from: 'TakjilKu <no-reply@takjilku.com>',
+    from: '',
   });
 
   // Load settings from Firestore
@@ -56,7 +55,7 @@ export default function AdminSettingsPage() {
         port: savedSettings.port || '587',
         user: savedSettings.user || '',
         pass: savedSettings.pass || '',
-        from: savedSettings.from || 'TakjilKu <no-reply@takjilku.com>',
+        from: savedSettings.from || '',
       });
     }
   }, [savedSettings]);
@@ -249,8 +248,11 @@ export default function AdminSettingsPage() {
                       id="smtp-from" 
                       value={smtpSettings.from} 
                       onChange={(e) => setSmtpSettings({...smtpSettings, from: e.target.value})}
-                      placeholder="TakjilKu <no-reply@takjilku.com>" 
+                      placeholder="TakjilKu <anda@gmail.com>" 
                     />
+                    <p className="text-[10px] text-muted-foreground italic">
+                      Tips: Gunakan format "Nama <email@anda.com>". Email harus sama dengan Username di atas agar tidak ditolak oleh Gmail.
+                    </p>
                   </div>
                 </div>
                 <div className="flex justify-end gap-3 pt-4">

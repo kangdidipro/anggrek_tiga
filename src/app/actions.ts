@@ -1,4 +1,3 @@
-
 'use server';
 
 import { z } from 'zod';
@@ -58,8 +57,12 @@ export async function sendSmtpEmail(config: SmtpConfig, options: MailOptions) {
       },
     });
 
+    // CRITICAL: For Gmail, the 'from' should ideally match the auth user
+    // or at least be formatted correctly to prevent 'Message Rejected'
+    const fromAddress = config.from.includes('@') ? config.from : config.user;
+
     const info = await transporter.sendMail({
-      from: config.from,
+      from: fromAddress,
       to: options.to,
       subject: options.subject,
       text: options.text,
