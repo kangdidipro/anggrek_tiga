@@ -2,11 +2,11 @@
 
 import { useEffect, useState, useMemo } from 'react';
 import { useFirestore, useCollection, useMemoFirebase, useUser, errorEmitter, FirestorePermissionError } from '@/firebase';
-import { collectionGroup, getDocs, query, collection, where } from 'firebase/firestore';
+import { collectionGroup, getDocs, query, collection, where, doc, updateDoc, arrayUnion } from 'firebase/firestore';
 import { useParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Loader2, CalendarIcon, ShoppingBag, Clock, CheckCircle2 } from 'lucide-react';
+import { Loader2, CalendarIcon, ShoppingBag, Clock, CheckCircle2, Printer } from 'lucide-react';
 import { formatPrice } from '@/lib/utils';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -14,6 +14,9 @@ import { Calendar } from '@/components/ui/calendar';
 import { format } from 'date-fns';
 import { id } from 'date-fns/locale';
 import { Badge } from '@/components/ui/badge';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { useToast } from '@/hooks/use-toast';
+import jsPDF from 'jspdf';
 import type { Vendor } from '@/lib/types';
 
 interface StatusLog {
@@ -51,6 +54,8 @@ const getVendorFromSku = (sku: string) => {
   return match ? match[0] : sku;
 };
 
+const ORDER_STATUSES = ["Dipesan", "Diproses", "Dikirim", "Dibayar"];
+
 export default function MitraOrderPage() {
   const { code } = useParams();
   const firestore = useFirestore();
@@ -58,6 +63,8 @@ export default function MitraOrderPage() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [date, setDate] = useState<Date | undefined>(new Date());
+  const [isUpdatingStatus, setIsUpdatingStatus] = useState<string | null>(null);
+  const { toast } = useToast();
 
   // Fetch Mitra Info to verify it exists
   const vendorsQuery = useMemoFirebase(() => {
@@ -108,6 +115,132 @@ export default function MitraOrderPage() {
         return orderDate.toDateString() === date.toDateString();
     });
   }, [orders, date]);
+
+  const handleUpdateStatus = async (order: Order, newStatus: string) => {
+    if (!firestore || isUpdatingStatus) return;
+    setIsUpdatingStatus(order.id);
+
+    const now = new Date().toISOString();
+    const orderRef = doc(firestore, 'customers', order.customerId, 'orders', order.id);
+    const updateData = {
+      status: newStatus,
+      statusHistory: arrayUnion({ status: newStatus, timestamp: now })
+    };
+
+    updateDoc(orderRef, updateData)
+      .then(() => {
+        setOrders(prev => prev.map(o => {
+          if (o.id === order.id) {
+            return {
+              ...o,
+              status: newStatus,
+              statusHistory: [...(o.statusHistory || []), { status: newStatus, timestamp: now }]
+            };
+          }
+          return o;
+        }));
+
+        toast({
+          title: "Status Diperbarui",
+          description: `Pesanan #${order.id.substring(0, 7)} sekarang: ${newStatus}`,
+        });
+      })
+      .catch(async (error) => {
+        const permissionError = new FirestorePermissionError({
+          path: orderRef.path,
+          operation: 'update',
+          requestResourceData: updateData,
+        });
+        errorEmitter.emit('permission-error', permissionError);
+      })
+      .finally(() => {
+        setIsUpdatingStatus(null);
+      });
+  };
+
+  const loadImage = (url: string): Promise<HTMLImageElement> => {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => resolve(img);
+      img.onerror = reject;
+      img.src = url;
+    });
+  };
+
+  const handlePrintReceipt = async (order: Order) => {
+    const docPdf = new jsPDF({
+      orientation: 'portrait',
+      unit: 'mm',
+      format: [80, 250]
+    });
+
+    const centerPos = 40;
+    let y = 10;
+
+    try {
+      const qrisImg = await loadImage('/qris.jpeg');
+      docPdf.addImage(qrisImg, 'JPEG', 25, y, 30, 45);
+      y += 50;
+    } catch (e) {
+      console.warn("Failed to load QRIS image for receipt", e);
+    }
+    
+    const itemsToPrint = order.items;
+    const subtotal = itemsToPrint.reduce((sum, item) => sum + (item.priceAtOrder * item.quantity), 0);
+
+    docPdf.setFontSize(12);
+    docPdf.text("TAKJILKU", centerPos, y, { align: 'center' });
+    y += 4;
+    docPdf.setFontSize(8);
+    docPdf.text("Ramadhan UMKM RW06", centerPos, y, { align: 'center' });
+    y += 4;
+    
+    docPdf.setFontSize(10);
+    docPdf.text(`SLIP MITRA: ${code}`, centerPos, y, { align: 'center' });
+    y += 4;
+    docPdf.setFontSize(8);
+    
+    docPdf.text("-".repeat(40), centerPos, y + 4, { align: 'center' });
+    y += 10;
+    
+    docPdf.text(`ID: #${order.id}`, 5, y);
+    docPdf.text(`Tgl: ${format(new Date(order.orderDateTime), 'dd/MM/yyyy HH:mm')}`, 5, y + 4);
+    docPdf.text(`Bayar: ${order.paymentMethod}`, 5, y + 8);
+    docPdf.text("-".repeat(40), centerPos, y + 12, { align: 'center' });
+    
+    y += 18;
+    itemsToPrint.forEach((item) => {
+      docPdf.text(`${item.name}`, 5, y);
+      docPdf.text(`${item.quantity} x ${formatPrice(item.priceAtOrder)}`, 5, y + 4);
+      docPdf.text(`${formatPrice(item.priceAtOrder * item.quantity)}`, 75, y + 4, { align: 'right' });
+      y += 10;
+    });
+    
+    docPdf.text("-".repeat(40), centerPos, y, { align: 'center' });
+    y += 6;
+    
+    docPdf.setFontSize(10);
+    docPdf.text("SUBTOTAL MITRA:", 5, y);
+    docPdf.text(`${formatPrice(subtotal)}`, 75, y, { align: 'right' });
+    y += 10;
+    
+    docPdf.setFontSize(8);
+    docPdf.text("Alamat Pengiriman:", 5, y);
+    const splitAddress = docPdf.splitTextToSize(order.deliveryAddress, 70);
+    docPdf.text(splitAddress, 5, y + 4);
+    
+    y += (splitAddress.length * 4) + 10;
+    docPdf.text("Terima Kasih!", centerPos, y, { align: 'center' });
+    docPdf.text("Semoga Berkah", centerPos, y + 4, { align: 'center' });
+    
+    docPdf.save(`slip_mitra_${code}_${order.id.substring(0, 7)}.pdf`);
+    
+    toast({
+      title: "Slip Mitra Berhasil Dibuat",
+      description: "File PDF telah diunduh.",
+    });
+  };
 
   const getStatusBadgeColor = (status: string) => {
     const s = status === 'pending' ? 'Dipesan' : (status || 'Dipesan');
@@ -215,7 +348,30 @@ export default function MitraOrderPage() {
                 <AccordionContent>
                   <CardContent className="p-4 pt-0 space-y-6">
                     <div className="border-t pt-4">
-                      <h4 className="font-semibold mb-2 text-sm text-muted-foreground uppercase tracking-wider">Item Pesanan Anda:</h4>
+                      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-4">
+                        <div className="flex-1 w-full max-w-xs">
+                          <label className="text-xs font-bold text-muted-foreground block mb-2 uppercase tracking-tighter">Ubah Status Pesanan:</label>
+                          <Select 
+                            disabled={isUpdatingStatus === order.id} 
+                            value={order.status === 'pending' ? 'Dipesan' : (order.status || 'Dipesan')} 
+                            onValueChange={(val) => handleUpdateStatus(order, val)}
+                          >
+                            <SelectTrigger className="border-primary/20">
+                              <SelectValue placeholder="Ubah Status" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {ORDER_STATUSES.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <Button variant="outline" size="sm" onClick={() => handlePrintReceipt(order)} className="shrink-0 border-primary/30">
+                          <Printer className="h-4 w-4 mr-2" /> Cetak Slip
+                        </Button>
+                      </div>
+                    </div>
+
+                    <div className="border-t pt-4">
+                      <h4 className="font-semibold mb-2 text-sm text-muted-foreground uppercase tracking-wider">Item Pesanan:</h4>
                       <div className="space-y-2 pt-2">
                         {order.items.map(item => (
                           <div key={item.id} className="flex justify-between text-sm bg-muted/30 p-2 rounded">
