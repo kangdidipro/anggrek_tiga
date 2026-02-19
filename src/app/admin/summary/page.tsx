@@ -316,6 +316,16 @@ export default function AdminSummaryPage() {
     });
   };
 
+  const groupItemsByVendor = (items: SummaryItem['items']) => {
+    const grouped: Record<string, SummaryItem['items']> = {};
+    items.forEach(item => {
+      const v = item.vendor;
+      if (!grouped[v]) grouped[v] = [];
+      grouped[v].push(item);
+    });
+    return grouped;
+  };
+
   if (isLoading || isUserLoading) {
     return <div className="flex h-full items-center justify-center p-24"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
   }
@@ -432,20 +442,31 @@ export default function AdminSummaryPage() {
                                     <TableCell className="text-right">{summary.totalOrders}</TableCell>
                                     <TableCell className="text-right">{formatPrice(summary.totalAmount)}</TableCell>
                                     <TableCell className="min-w-[300px]">
-                                        <ul className="text-xs space-y-1">
-                                            {summary.items.map((item, idx) => (
-                                                <li key={idx} className="flex justify-between gap-4 border-b border-muted last:border-0 pb-1">
-                                                    <div className="flex-1">
-                                                      <span className="block font-medium">{item.name}</span>
-                                                      <div className="flex justify-between text-[10px] text-muted-foreground">
-                                                        <span>SKU: {item.sku}</span>
-                                                        <span>{formatPrice(item.price)} x {item.quantity}</span>
-                                                      </div>
-                                                    </div>
-                                                    <span className="font-bold text-primary self-center">{formatPrice(item.price * item.quantity)}</span>
-                                                </li>
+                                        <div className="space-y-3">
+                                            {Object.entries(groupItemsByVendor(summary.items)).map(([vCode, vItems]) => (
+                                                <div key={vCode} className="space-y-1">
+                                                    {groupBy !== 'vendor' && (
+                                                        <div className="text-[10px] font-bold text-primary/70 uppercase tracking-tighter bg-primary/5 px-2 py-0.5 rounded-sm inline-block border border-primary/10">
+                                                            Mitra: {vCode}
+                                                        </div>
+                                                    )}
+                                                    <ul className="text-xs space-y-1 pl-1">
+                                                        {vItems.map((item, idx) => (
+                                                            <li key={idx} className="flex justify-between gap-4 border-b border-muted last:border-0 pb-1">
+                                                                <div className="flex-1">
+                                                                  <span className="block font-medium">{item.name}</span>
+                                                                  <div className="flex justify-between text-[10px] text-muted-foreground">
+                                                                    <span>SKU: {item.sku}</span>
+                                                                    <span>{formatPrice(item.price)} x {item.quantity}</span>
+                                                                  </div>
+                                                                </div>
+                                                                <span className="font-bold text-primary self-center">{formatPrice(item.price * item.quantity)}</span>
+                                                            </li>
+                                                        ))}
+                                                    </ul>
+                                                </div>
                                             ))}
-                                        </ul>
+                                        </div>
                                     </TableCell>
                                     <TableCell className="max-w-[200px]">
                                         <ul className="text-[10px] list-disc pl-4 space-y-1 text-muted-foreground">
