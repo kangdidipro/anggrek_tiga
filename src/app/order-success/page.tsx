@@ -1,3 +1,4 @@
+
 'use client';
 
 import { Suspense } from 'react';
@@ -28,7 +29,7 @@ function OrderSuccessContent() {
           </p>
           {orderId && (
             <p className="text-sm font-mono bg-muted py-1 rounded">
-              ID Pesanan: #{orderId.substring(0, 7)}
+              ID Pesanan: #{orderId}
             </p>
           )}
         </div>

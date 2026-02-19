@@ -107,10 +107,6 @@ export default function AdminOrdersPage() {
         setOrders(ordersWithItems);
       } catch (error: any) {
         console.error("Error fetching orders:", error);
-        errorEmitter.emit('permission-error', new FirestorePermissionError({
-          path: 'collectionGroup(orders)',
-          operation: 'list',
-        }));
       } finally {
         setIsLoading(false);
       }
@@ -177,7 +173,7 @@ export default function AdminOrdersPage() {
 
         toast({
           title: "Status Diperbarui",
-          description: `Pesanan #${order.id.substring(0, 7)} sekarang: ${newStatus}`,
+          description: `Pesanan #${order.id} sekarang: ${newStatus}`,
         });
       })
       .catch(async (error) => {
@@ -258,7 +254,7 @@ export default function AdminOrdersPage() {
     const tableRows = filteredOrders.flatMap(order => 
         order.items.map(item => [
             format(new Date(order.orderDateTime), 'dd/MM HH:mm'),
-            order.id.substring(0, 5),
+            order.id,
             getVendorFromSku(item.sku),
             item.name,
             item.quantity.toString(),
@@ -267,7 +263,7 @@ export default function AdminOrdersPage() {
         ])
     );
 
-    doc.text(`Daftar Pesanan - ${date ? format(date, 'd MMMM yyyy', { locale: id }) : 'Semua'} - Status: ${statusFilter === 'all' ? 'Semua' : statusFilter}`, 14, 15);
+    doc.text(`Daftar Pesanan - ${date ? format(date, 'd MMMM yyyy', { locale: id }) : 'Semua'}`, 14, 15);
     autoTable(doc, {
         head: [tableColumn],
         body: tableRows,
@@ -293,13 +289,12 @@ export default function AdminOrdersPage() {
     const doc = new jsPDF({
       orientation: 'portrait',
       unit: 'mm',
-      format: [80, 250] // Increased height for QRIS
+      format: [80, 250]
     });
 
     const centerPos = 40;
     let y = 10;
 
-    // Add QRIS Image at the top
     try {
       const qrisImg = await loadImage('/qris.jpeg');
       doc.addImage(qrisImg, 'JPEG', 25, y, 30, 45);
@@ -308,7 +303,6 @@ export default function AdminOrdersPage() {
       console.warn("Failed to load QRIS image for receipt", e);
     }
     
-    // Filter items based on vendor if provided
     const itemsToPrint = vendorCode 
       ? order.items.filter(item => getVendorFromSku(item.sku) === vendorCode)
       : order.items;
@@ -333,7 +327,7 @@ export default function AdminOrdersPage() {
     doc.text("-".repeat(40), centerPos, y + 4, { align: 'center' });
     y += 10;
     
-    doc.text(`ID: #${order.id.substring(0, 7)}`, 5, y);
+    doc.text(`ID: #${order.id}`, 5, y);
     doc.text(`Tgl: ${format(new Date(order.orderDateTime), 'dd/MM/yyyy HH:mm')}`, 5, y + 4);
     doc.text(`Bayar: ${order.paymentMethod}`, 5, y + 8);
     doc.text("-".repeat(40), centerPos, y + 12, { align: 'center' });
@@ -369,7 +363,7 @@ export default function AdminOrdersPage() {
     doc.text("Terima Kasih Telah Memesan!", centerPos, y, { align: 'center' });
     doc.text("Semoga Berkah", centerPos, y + 4, { align: 'center' });
     
-    doc.save(`${vendorCode ? 'slip_mitra' : 'struk'}_${order.id.substring(0, 7)}.pdf`);
+    doc.save(`${vendorCode ? 'slip_mitra' : 'struk'}_${order.id}.pdf`);
     
     toast({
       title: vendorCode ? "Slip Mitra Berhasil Dibuat" : "Struk Berhasil Dibuat",
@@ -500,7 +494,7 @@ export default function AdminOrdersPage() {
                                       <div className="flex justify-between items-center w-full">
                                           <div className="text-left">
                                               <CardTitle className="text-base md:text-lg">
-                                                  Order #{order.id.substring(0, 7)}
+                                                  Order #{order.id}
                                               </CardTitle>
                                               <CardDescription className="text-xs md:text-sm">
                                                   {new Date(order.orderDateTime).toLocaleString('id-ID')}
@@ -541,7 +535,6 @@ export default function AdminOrdersPage() {
                                             </Select>
                                           </div>
                                         </div>
-                                        {/* Riwayat Status */}
                                         <div className="bg-muted/30 rounded-lg p-3 space-y-3">
                                           {order.statusHistory && order.statusHistory.length > 0 ? (
                                             order.statusHistory.map((log, i) => (

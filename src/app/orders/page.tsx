@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useUser, useFirestore, useCollection, useMemoFirebase, errorEmitter, FirestorePermissionError } from '@/firebase';
@@ -198,7 +199,7 @@ export default function OrdersPage() {
                                             <div className="flex justify-between items-center w-full">
                                                 <div className="text-left">
                                                     <CardTitle className="text-base md:text-lg">
-                                                        Order #{order.id.substring(0, 7)}
+                                                        Order #{order.id}
                                                     </CardTitle>
                                                     <CardDescription className="text-xs md:text-sm">
                                                         {new Date(order.orderDateTime).toLocaleDateString('id-ID', {

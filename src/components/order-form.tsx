@@ -15,7 +15,7 @@ import { useCart } from '@/hooks/use-cart';
 import { Loader2, QrCode, Wallet } from 'lucide-react';
 import { useState } from 'react';
 import { useUser, useFirestore, errorEmitter, FirestorePermissionError } from '@/firebase';
-import { collection, writeBatch, doc, increment, getDoc } from 'firebase/firestore';
+import { collection, writeBatch, doc, increment, getDoc, query, collectionGroup, where, getDocs } from 'firebase/firestore';
 import { useRouter } from 'next/navigation';
 import jsPDF from 'jspdf';
 import { formatPrice } from '@/lib/utils';
@@ -71,25 +71,22 @@ export default function OrderForm({ cartItems, total, deliveryFee, setSheetOpen 
     if (!firestore) return;
 
     try {
-      // 1. Fetch SMTP Settings from Firestore (the ones configured in Admin)
       const settingsSnap = await getDoc(doc(firestore, 'settings', 'mail'));
       if (!settingsSnap.exists()) {
-        console.warn("SMTP Settings not found in Firestore. Make sure to configure them in Admin Settings.");
+        console.warn("SMTP Settings not found in Firestore.");
         return;
       }
       const smtpConfig = settingsSnap.data() as SmtpConfig;
 
-      // 2. Generate PDF Struk
       const pdf = new jsPDF({
         orientation: 'portrait',
         unit: 'mm',
-        format: [80, 250] // Increased height for QRIS
+        format: [80, 250]
       });
 
       const centerPos = 40;
       let y = 10;
 
-      // Add QRIS Image at the top
       try {
         const qrisImg = await loadImage('/qris.jpeg');
         pdf.addImage(qrisImg, 'JPEG', 25, y, 30, 45);
@@ -107,7 +104,7 @@ export default function OrderForm({ cartItems, total, deliveryFee, setSheetOpen 
       pdf.text("-".repeat(40), centerPos, y, { align: 'center' });
       y += 6;
       
-      pdf.text(`ID: #${orderId.substring(0, 7)}`, 5, y);
+      pdf.text(`ID: #${orderId}`, 5, y);
       y += 4;
       pdf.text(`Tgl: ${format(new Date(), 'dd/MM/yyyy HH:mm')}`, 5, y);
       y += 4;
@@ -137,10 +134,9 @@ export default function OrderForm({ cartItems, total, deliveryFee, setSheetOpen 
       
       const pdfBase64 = pdf.output('datauristring');
 
-      // 3. Send Real Email via Server Action using configured SMTP
       await sendSmtpEmail(smtpConfig, {
         to: email,
-        subject: `Struk Pesanan TakjilKu #${orderId.substring(0, 7)}`,
+        subject: `Struk Pesanan TakjilKu #${orderId}`,
         text: `Halo ${values.name}, rincian pesanan Anda telah kami terima. Total Bayar: ${formatPrice(total)}.`,
         html: `
           <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #eee; padding: 20px; border-radius: 10px;">
@@ -148,7 +144,7 @@ export default function OrderForm({ cartItems, total, deliveryFee, setSheetOpen 
             <p>Halo <strong>${values.name}</strong>,</p>
             <p>Terima kasih telah memesan di TakjilKu! Pesanan Anda telah kami terima dan sedang diproses.</p>
             <div style="background-color: #f9f9f9; padding: 15px; border-radius: 5px;">
-              <p><strong>ID Pesanan:</strong> #${orderId.substring(0, 7)}</p>
+              <p><strong>ID Pesanan:</strong> #${orderId}</p>
               <p><strong>Total Bayar:</strong> ${formatPrice(total)}</p>
               <p><strong>Metode Pembayaran:</strong> ${values.paymentMethod}</p>
               <p><strong>Alamat Pengiriman:</strong> ${values.address}</p>
@@ -159,7 +155,7 @@ export default function OrderForm({ cartItems, total, deliveryFee, setSheetOpen 
         `,
         attachments: [
           {
-            filename: `struk_takjilku_${orderId.substring(0, 7)}.pdf`,
+            filename: `struk_takjilku_${orderId}.pdf`,
             content: pdfBase64
           }
         ]
@@ -180,81 +176,85 @@ export default function OrderForm({ cartItems, total, deliveryFee, setSheetOpen 
     }
     setIsSubmitting(true);
     
-    const batch = writeBatch(firestore);
+    try {
+      // 1. Generate Custom Order ID: YYYYMMDD-TJK-[counting]
+      const now = new Date();
+      const dateStr = format(now, 'yyyyMMdd');
+      
+      // Get count of orders today
+      const startOfToday = new Date();
+      startOfToday.setHours(0, 0, 0, 0);
+      
+      const ordersTodayQuery = query(
+        collectionGroup(firestore, 'orders'),
+        where('orderDateTime', '>=', startOfToday.toISOString())
+      );
+      const snapshot = await getDocs(ordersTodayQuery);
+      const sequence = (snapshot.size + 1).toString().padStart(3, '0');
+      const orderId = `${dateStr}-TJK-${sequence}`;
 
-    const orderRef = doc(collection(firestore, 'customers', user.uid, 'orders'));
-    const now = new Date().toISOString();
-    const newOrder = {
-        customerId: user.uid,
-        orderDateTime: now,
-        totalAmount: total,
-        deliveryFee: deliveryFee,
-        paymentMethod: values.paymentMethod,
-        status: 'Dipesan',
-        statusHistory: [
-          { status: 'Dipesan', timestamp: now }
-        ],
-        deliveryAddress: values.address,
-    };
-    batch.set(orderRef, newOrder);
-    
-    const orderItemsForError: any[] = [];
-
-    cartItems.forEach(item => {
-        const orderItemRef = doc(collection(firestore, 'customers', user.uid, 'orders', orderRef.id, 'orderItems'));
-        const newOrderItem = {
-            orderId: orderRef.id,
-            customerId: user.uid,
-            menuItemId: item.product.id,
-            quantity: item.quantity,
-            priceAtOrder: item.product.price,
-            name: item.product.name,
-            sku: item.product.sku,
-        };
-        batch.set(orderItemRef, newOrderItem);
-        orderItemsForError.push(newOrderItem);
-
-        const menuItemRef = doc(firestore, 'menuItems', item.product.id);
-        batch.update(menuItemRef, {
-            stock: increment(-item.quantity)
-        });
-    });
-
-    batch.commit()
-      .then(async () => {
-        if (values.email) {
-            // Trigger the real email sending using SMTP Config
-            sendEmailReceipt(values.email, values, orderRef.id);
-        }
-
-        toast({
-            title: "Pesanan Berhasil 🎉",
-            description: "Pesanan Anda telah kami terima dan akan segera diproses.",
-        });
-        clearCart();
-        setSheetOpen(false);
-        const searchParams = new URLSearchParams();
-        if (values.email) searchParams.set('email', values.email);
-        searchParams.set('orderId', orderRef.id);
-        router.push(`/order-success?${searchParams.toString()}`);
-      })
-      .catch((serverError) => {
-          const permissionError = new FirestorePermissionError({
-            path: `customers/${user.uid}/orders/${orderRef.id}`,
-            operation: 'write',
-            requestResourceData: { order: newOrder, items: orderItemsForError },
+      const batch = writeBatch(firestore);
+      const orderRef = doc(firestore, 'customers', user.uid, 'orders', orderId);
+      const timestamp = now.toISOString();
+      
+      const newOrder = {
+          customerId: user.uid,
+          orderDateTime: timestamp,
+          totalAmount: total,
+          deliveryFee: deliveryFee,
+          paymentMethod: values.paymentMethod,
+          status: 'Dipesan',
+          statusHistory: [
+            { status: 'Dipesan', timestamp: timestamp }
+          ],
+          deliveryAddress: values.address,
+      };
+      batch.set(orderRef, newOrder);
+      
+      cartItems.forEach(item => {
+          const orderItemRef = doc(collection(firestore, 'customers', user.uid, 'orders', orderId, 'orderItems'));
+          batch.set(orderItemRef, {
+              orderId: orderId,
+              customerId: user.uid,
+              menuItemId: item.product.id,
+              quantity: item.quantity,
+              priceAtOrder: item.product.price,
+              name: item.product.name,
+              sku: item.product.sku,
           });
-          errorEmitter.emit('permission-error', permissionError);
 
-          toast({
-              variant: "destructive",
-              title: "Gagal Mengirim Pesanan",
-              description: "Terjadi kesalahan hak akses atau jaringan.",
+          const menuItemRef = doc(firestore, 'menuItems', item.product.id);
+          batch.update(menuItemRef, {
+              stock: increment(-item.quantity)
           });
-      })
-      .finally(() => {
-        setIsSubmitting(false);
       });
+
+      await batch.commit();
+
+      if (values.email) {
+          sendEmailReceipt(values.email, values, orderId);
+      }
+
+      toast({
+          title: "Pesanan Berhasil 🎉",
+          description: "Pesanan Anda telah kami terima dan akan segera diproses.",
+      });
+      clearCart();
+      setSheetOpen(false);
+      const searchParams = new URLSearchParams();
+      if (values.email) searchParams.set('email', values.email);
+      searchParams.set('orderId', orderId);
+      router.push(`/order-success?${searchParams.toString()}`);
+    } catch (serverError: any) {
+        console.error("Submit order error:", serverError);
+        toast({
+            variant: "destructive",
+            title: "Gagal Mengirim Pesanan",
+            description: "Terjadi kesalahan hak akses atau jaringan.",
+        });
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
   if (isUserLoading) {
