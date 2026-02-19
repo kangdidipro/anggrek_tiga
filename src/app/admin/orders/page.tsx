@@ -14,7 +14,6 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Calendar } from '@/components/ui/calendar';
 import { format } from 'date-fns';
 import { id } from 'date-fns/locale';
-import { id as localeId } from 'date-fns/locale';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import jsPDF from 'jspdf';
@@ -170,7 +169,12 @@ export default function AdminOrdersPage() {
     
     filteredOrders.forEach(order => {
         if (groupBy === 'orderId') {
-            groups[order.id] = [order];
+            // Group by Sub-Order (Order + Vendor)
+            const vendorsInOrder = Array.from(new Set(order.items.map(item => item.vendor)));
+            vendorsInOrder.forEach(v => {
+                const subId = `${order.id}-${v}`;
+                groups[subId] = [order];
+            });
         } else if (groupBy === 'vendor') {
             const vendorsInOrder = new Set(order.items.map(item => item.vendor));
             vendorsInOrder.forEach(vendorCode => {
@@ -538,7 +542,7 @@ export default function AdminOrdersPage() {
             <div key={groupKey} className="mb-8">
                 <h2 className="text-xl font-bold mb-4 bg-primary/10 p-2 rounded px-4 text-primary flex items-center gap-2">
                     {groupBy === 'orderId' ? (
-                      <>Order #{groupKey}</>
+                      <><Store className="h-5 w-5" /> Sub-Order #{groupKey}</>
                     ) : groupBy === 'vendor' ? (
                       <><Store className="h-5 w-5" /> Mitra: {groupKey}</>
                     ) : (
@@ -546,177 +550,187 @@ export default function AdminOrdersPage() {
                     )}
                 </h2>
                 <Accordion type="single" collapsible className="w-full space-y-4">
-                  {groupOrders.map((order) => (
-                      <AccordionItem value={order.id} key={order.id} className="border-b-0">
-                      <Card className="shadow-sm overflow-hidden">
-                          <CardHeader className="p-4">
-                                  <AccordionTrigger className="w-full p-0 hover:no-underline">
-                                      <div className="flex justify-between items-center w-full">
-                                          <div className="text-left">
-                                              <CardTitle className="text-base md:text-lg">
-                                                  Order #{order.id}
-                                              </CardTitle>
-                                              <CardDescription className="text-xs md:text-sm">
-                                                  {new Date(order.orderDateTime).toLocaleString('id-ID')} | {order.paymentMethod}
-                                              </CardDescription>
-                                          </div>
-                                          <div className="text-right flex flex-col items-end gap-1">
-                                              <p className="font-semibold text-base md:text-lg text-primary">
-                                                {formatPrice(
-                                                  groupBy === 'vendor' ? 
-                                                    order.items.filter(item => item.vendor === groupKey).reduce((sum, i) => sum + (i.priceAtOrder * i.quantity), 0) :
-                                                  groupBy === 'sku' ?
-                                                    order.items.filter(item => item.sku === groupKey.split(']')[0].substring(1)).reduce((sum, i) => sum + (i.priceAtOrder * i.quantity), 0) :
-                                                    order.totalAmount
-                                                )}
-                                              </p>
-                                              <span className="text-[10px] text-muted-foreground">Total Order: {formatPrice(order.totalAmount)}</span>
-                                          </div>
-                                      </div>
-                                  </AccordionTrigger>
-                          </CardHeader>
-                          <AccordionContent>
-                                  <CardContent className="p-4 pt-0 space-y-6">
-                                      <div className="border-t pt-4">
-                                      <h4 className="font-semibold mb-2 text-sm text-muted-foreground uppercase tracking-wider">Status & Item per Mitra:</h4>
-                                       <div className="space-y-6 pt-2">
-                                          {Object.entries(groupItemsByVendor(
-                                              groupBy === 'vendor' ? 
-                                                order.items.filter(item => item.vendor === groupKey) :
-                                              groupBy === 'sku' ?
-                                                order.items.filter(item => item.sku === groupKey.split(']')[0].substring(1)) :
-                                                order.items
-                                          )).map(([vendorCode, vendorItems]) => {
-                                              const subOrderId = `${order.id}-${vendorCode}`;
-                                              const subtotalMitra = vendorItems.reduce((sum, i) => sum + (i.priceAtOrder * i.quantity), 0);
-                                              const vStatus = order.vendorStatuses?.[vendorCode] || { status: 'Dipesan', statusHistory: [] };
-                                              const flow = STATUS_FLOWS[order.paymentMethod];
+                  {groupOrders.map((order) => {
+                      // Jika groupBy adalah 'orderId' (yang di-map ke sub-order), 
+                      // kita hanya ingin memproses mitra yang ada di groupKey.
+                      const targetVendorInSubOrder = groupBy === 'orderId' ? groupKey.split('-').pop() : null;
 
-                                              return (
-                                                <div key={vendorCode} className="space-y-3 p-3 border rounded-lg bg-muted/10">
-                                                    <div className="flex justify-between items-center bg-primary/10 px-2 py-1 rounded-sm border border-primary/20">
-                                                        <div className="flex flex-col">
-                                                            <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-tight">
-                                                                {vendorLookup[vendorCode] || 'Mitra'} ({vendorCode})
-                                                            </span>
-                                                            <span className="text-xs font-bold text-primary uppercase">
-                                                                ID Sub-Order: {subOrderId}
-                                                            </span>
-                                                        </div>
-                                                        <div className="flex items-center gap-3">
-                                                            <span className="text-xs font-bold text-primary">
-                                                                Sub: {formatPrice(subtotalMitra)}
-                                                            </span>
-                                                            <Badge className={getStatusBadgeColor(vStatus.status)}>
-                                                                {vStatus.status}
-                                                            </Badge>
-                                                        </div>
-                                                    </div>
-
-                                                    <div className="flex flex-col md:flex-row gap-4 items-start">
-                                                        <div className="flex-1 w-full space-y-1.5">
-                                                            {vendorItems.map(item => (
-                                                                <div key={item.id} className="flex justify-between text-sm border-b border-muted/20 pb-1 last:border-0">
-                                                                    <div>
-                                                                        <span className="font-medium">{item.name}</span>
-                                                                        <span className="text-muted-foreground"> x {item.quantity}</span>
-                                                                    </div>
-                                                                    <span className="text-muted-foreground">{formatPrice(item.priceAtOrder * item.quantity)}</span>
-                                                                </div>
-                                                            ))}
-                                                        </div>
-                                                        <div className="w-full md:w-48 space-y-2">
-                                                            <span className="text-[10px] font-bold text-muted-foreground block uppercase">Ubah Status Mitra:</span>
-                                                            <Select 
-                                                                disabled={isUpdatingStatus === `${order.id}-${vendorCode}`} 
-                                                                value={vStatus.status} 
-                                                                onValueChange={(val) => handleUpdateVendorStatus(order, vendorCode, val)}
-                                                            >
-                                                                <SelectTrigger className="h-8 text-xs">
-                                                                    <SelectValue />
-                                                                </SelectTrigger>
-                                                                <SelectContent>
-                                                                    {flow.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
-                                                                </SelectContent>
-                                                            </Select>
-                                                            <Button 
-                                                                variant="outline" 
-                                                                size="sm" 
-                                                                className="w-full h-8 text-[10px]"
-                                                                onClick={() => handlePrintReceipt(order, vendorCode)}
-                                                            >
-                                                                <Printer className="h-3 w-3 mr-1" /> Slip Mitra
-                                                            </Button>
-                                                        </div>
-                                                    </div>
-
-                                                    <div className="mt-2 space-y-1">
-                                                        <span className="text-[10px] font-bold text-muted-foreground uppercase flex items-center gap-1">
-                                                            <Clock className="h-3 w-3" /> Riwayat Status:
-                                                        </span>
-                                                        <div className="bg-muted/30 rounded p-2 text-[10px] space-y-1">
-                                                            {vStatus.statusHistory?.map((log, i) => (
-                                                                <div key={i} className="flex justify-between">
-                                                                    <span className="font-semibold">{log.status}</span>
-                                                                    <span className="text-muted-foreground">{format(new Date(log.timestamp), 'dd MMM, HH:mm', { locale: id })}</span>
-                                                                </div>
-                                                            )) || (
-                                                                <div className="flex justify-between">
-                                                                    <span className="font-semibold">Dipesan</span>
-                                                                    <span className="text-muted-foreground">{format(new Date(order.orderDateTime), 'dd MMM, HH:mm', { locale: id })}</span>
-                                                                </div>
-                                                            )}
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                              );
-                                          })}
-                                          
-                                          {groupBy === 'orderId' && (
-                                            <div className="space-y-1 px-3">
-                                              <div className="flex justify-between text-sm pt-2 border-t border-dashed">
-                                                <span className="text-muted-foreground italic">
-                                                  Ongkir ({Object.keys(groupItemsByVendor(order.items)).length} Mitra)
-                                                </span>
-                                                <span className="text-muted-foreground">
-                                                  {formatPrice(Math.max(order.deliveryFee || 0, Object.keys(groupItemsByVendor(order.items)).length * 2500))}
-                                                </span>
-                                              </div>
-                                              <div className="flex justify-between text-sm font-bold pt-1">
-                                                <span>Total Bayar</span>
-                                                <span className="text-primary">{formatPrice(order.totalAmount)}</span>
-                                              </div>
+                      return (
+                        <AccordionItem value={order.id} key={order.id} className="border-b-0">
+                        <Card className="shadow-sm overflow-hidden">
+                            <CardHeader className="p-4">
+                                    <AccordionTrigger className="w-full p-0 hover:no-underline">
+                                        <div className="flex justify-between items-center w-full">
+                                            <div className="text-left">
+                                                <CardTitle className="text-base md:text-lg">
+                                                    Order #{order.id}
+                                                </CardTitle>
+                                                <CardDescription className="text-xs md:text-sm">
+                                                    {new Date(order.orderDateTime).toLocaleString('id-ID')} | {order.paymentMethod}
+                                                </CardDescription>
                                             </div>
-                                          )}
-                                      </div>
-                                      </div>
-                                      <div className="border-t pt-4">
-                                          <h4 className="font-semibold mb-2 text-sm text-muted-foreground uppercase tracking-wider">Alamat Pengiriman:</h4>
-                                          <p className="text-sm text-muted-foreground">{order.deliveryAddress}</p>
-                                      </div>
-                                      <div className="border-t pt-4 flex justify-between items-center">
-                                          <Button 
-                                            variant="outline" 
-                                            size="sm" 
-                                            onClick={() => handlePrintReceipt(order)}
-                                          >
-                                            <Printer className="h-4 w-4 mr-2" /> Cetak Struk Full
-                                          </Button>
-                                          <Button 
-                                              variant="destructive" 
+                                            <div className="text-right flex flex-col items-end gap-1">
+                                                <p className="font-semibold text-base md:text-lg text-primary">
+                                                  {formatPrice(
+                                                    targetVendorInSubOrder ?
+                                                      order.items.filter(item => item.vendor === targetVendorInSubOrder).reduce((sum, i) => sum + (i.priceAtOrder * i.quantity), 0) :
+                                                    groupBy === 'vendor' ? 
+                                                      order.items.filter(item => item.vendor === groupKey).reduce((sum, i) => sum + (i.priceAtOrder * i.quantity), 0) :
+                                                    groupBy === 'sku' ?
+                                                      order.items.filter(item => item.sku === groupKey.split(']')[0].substring(1)).reduce((sum, i) => sum + (i.priceAtOrder * i.quantity), 0) :
+                                                      order.totalAmount
+                                                  )}
+                                                </p>
+                                                <span className="text-[10px] text-muted-foreground">Total Order: {formatPrice(order.totalAmount)}</span>
+                                            </div>
+                                        </div>
+                                    </AccordionTrigger>
+                            </CardHeader>
+                            <AccordionContent>
+                                    <CardContent className="p-4 pt-0 space-y-6">
+                                        <div className="border-t pt-4">
+                                        <h4 className="font-semibold mb-2 text-sm text-muted-foreground uppercase tracking-wider">Status & Item per Mitra:</h4>
+                                         <div className="space-y-6 pt-2">
+                                            {Object.entries(groupItemsByVendor(
+                                                targetVendorInSubOrder ?
+                                                  order.items.filter(item => item.vendor === targetVendorInSubOrder) :
+                                                groupBy === 'vendor' ? 
+                                                  order.items.filter(item => item.vendor === groupKey) :
+                                                groupBy === 'sku' ?
+                                                  order.items.filter(item => item.sku === groupKey.split(']')[0].substring(1)) :
+                                                  order.items
+                                            )).map(([vendorCode, vendorItems]) => {
+                                                const subOrderId = `${order.id}-${vendorCode}`;
+                                                const subtotalMitra = vendorItems.reduce((sum, i) => sum + (i.priceAtOrder * i.quantity), 0);
+                                                const vStatus = order.vendorStatuses?.[vendorCode] || { status: 'Dipesan', statusHistory: [] };
+                                                const flow = STATUS_FLOWS[order.paymentMethod];
+
+                                                return (
+                                                  <div key={vendorCode} className="space-y-3 p-3 border rounded-lg bg-muted/10">
+                                                      <div className="flex justify-between items-center bg-primary/10 px-2 py-1 rounded-sm border border-primary/20">
+                                                          <div className="flex flex-col">
+                                                              <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-tight">
+                                                                  {vendorLookup[vendorCode] || 'Mitra'} ({vendorCode})
+                                                              </span>
+                                                              <span className="text-xs font-bold text-primary uppercase">
+                                                                  ID Sub-Order: {subOrderId}
+                                                              </span>
+                                                          </div>
+                                                          <div className="flex items-center gap-3">
+                                                              <span className="text-xs font-bold text-primary">
+                                                                  Sub: {formatPrice(subtotalMitra)}
+                                                              </span>
+                                                              <Badge className={getStatusBadgeColor(vStatus.status)}>
+                                                                  {vStatus.status}
+                                                              </Badge>
+                                                          </div>
+                                                      </div>
+
+                                                      <div className="flex flex-col md:flex-row gap-4 items-start">
+                                                          <div className="flex-1 w-full space-y-1.5">
+                                                              {vendorItems.map(item => (
+                                                                  <div key={item.id} className="flex justify-between text-sm border-b border-muted/20 pb-1 last:border-0">
+                                                                      <div>
+                                                                          <span className="font-medium">{item.name}</span>
+                                                                          <span className="text-muted-foreground"> x {item.quantity}</span>
+                                                                      </div>
+                                                                      <span className="text-muted-foreground">{formatPrice(item.priceAtOrder * item.quantity)}</span>
+                                                                  </div>
+                                                              ))}
+                                                          </div>
+                                                          <div className="w-full md:w-48 space-y-2">
+                                                              <span className="text-[10px] font-bold text-muted-foreground block uppercase">Ubah Status Mitra:</span>
+                                                              <Select 
+                                                                  disabled={isUpdatingStatus === `${order.id}-${vendorCode}`} 
+                                                                  value={vStatus.status} 
+                                                                  onValueChange={(val) => handleUpdateVendorStatus(order, vendorCode, val)}
+                                                              >
+                                                                  <SelectTrigger className="h-8 text-xs">
+                                                                      <SelectValue />
+                                                                  </SelectTrigger>
+                                                                  <SelectContent>
+                                                                      {flow.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                                                                  </SelectContent>
+                                                              </Select>
+                                                              <Button 
+                                                                  variant="outline" 
+                                                                  size="sm" 
+                                                                  className="w-full h-8 text-[10px]"
+                                                                  onClick={() => handlePrintReceipt(order, vendorCode)}
+                                                              >
+                                                                  <Printer className="h-3 w-3 mr-1" /> Slip Mitra
+                                                              </Button>
+                                                          </div>
+                                                      </div>
+
+                                                      <div className="mt-2 space-y-1">
+                                                          <span className="text-[10px] font-bold text-muted-foreground uppercase flex items-center gap-1">
+                                                              <Clock className="h-3 w-3" /> Riwayat Status:
+                                                          </span>
+                                                          <div className="bg-muted/30 rounded p-2 text-[10px] space-y-1">
+                                                              {vStatus.statusHistory?.map((log, i) => (
+                                                                  <div key={i} className="flex justify-between">
+                                                                      <span className="font-semibold">{log.status}</span>
+                                                                      <span className="text-muted-foreground">{format(new Date(log.timestamp), 'dd MMM, HH:mm', { locale: id })}</span>
+                                                                  </div>
+                                                              )) || (
+                                                                  <div className="flex justify-between">
+                                                                      <span className="font-semibold">Dipesan</span>
+                                                                      <span className="text-muted-foreground">{format(new Date(order.orderDateTime), 'dd MMM, HH:mm', { locale: id })}</span>
+                                                                  </div>
+                                                              )}
+                                                          </div>
+                                                      </div>
+                                                  </div>
+                                                );
+                                            })}
+                                            
+                                            {groupBy === 'orderId' && (
+                                              <div className="space-y-1 px-3">
+                                                <div className="flex justify-between text-sm pt-2 border-t border-dashed">
+                                                  <span className="text-muted-foreground italic">
+                                                    Ongkir ({Object.keys(groupItemsByVendor(order.items)).length} Mitra)
+                                                  </span>
+                                                  <span className="text-muted-foreground">
+                                                    {formatPrice(Math.max(order.deliveryFee || 0, Object.keys(groupItemsByVendor(order.items)).length * 2500))}
+                                                  </span>
+                                                </div>
+                                                <div className="flex justify-between text-sm font-bold pt-1">
+                                                  <span>Total Bayar</span>
+                                                  <span className="text-primary">{formatPrice(order.totalAmount)}</span>
+                                                </div>
+                                              </div>
+                                            )}
+                                        </div>
+                                        </div>
+                                        <div className="border-t pt-4">
+                                            <h4 className="font-semibold mb-2 text-sm text-muted-foreground uppercase tracking-wider">Alamat Pengiriman:</h4>
+                                            <p className="text-sm text-muted-foreground">{order.deliveryAddress}</p>
+                                        </div>
+                                        <div className="border-t pt-4 flex justify-between items-center">
+                                            <Button 
+                                              variant="outline" 
                                               size="sm" 
-                                              onClick={() => setOrderToDelete(order)}
-                                              disabled={isDeleting}
-                                          >
-                                              <Trash2 className="h-4 w-4 mr-2" />
-                                              Hapus Pesanan
-                                          </Button>
-                                      </div>
-                                  </CardContent>
-                          </AccordionContent>
-                      </Card>
-                      </AccordionItem>
-                  ))}
+                                              onClick={() => handlePrintReceipt(order)}
+                                            >
+                                              <Printer className="h-4 w-4 mr-2" /> Cetak Struk Full
+                                            </Button>
+                                            <Button 
+                                                variant="destructive" 
+                                                size="sm" 
+                                                onClick={() => setOrderToDelete(order)}
+                                                disabled={isDeleting}
+                                            >
+                                                <Trash2 className="h-4 w-4 mr-2" />
+                                                Hapus Pesanan
+                                            </Button>
+                                        </div>
+                                    </CardContent>
+                            </AccordionContent>
+                        </Card>
+                        </AccordionItem>
+                      );
+                  })}
               </Accordion>
             </div>
         ))
