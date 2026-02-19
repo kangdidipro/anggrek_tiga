@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from '@/components/ui/form';
 import { useToast } from '@/hooks/use-toast';
 import type { CartItem } from '@/lib/types';
 import { useCart } from '@/hooks/use-cart';
@@ -117,15 +117,14 @@ export default function OrderForm({ cartItems, total, deliveryFee, setSheetOpen 
       Tim TakjilKu UMKM RW06
     `;
 
-    // Di lingkungan prototipe, kita melakukan log ke konsol dan menampilkan toast sukses
-    console.log(`[EMAIL SERVICE] Mengirim ke: ${email}`);
-    console.log(`[EMAIL SERVICE] Subjek: Struk Pesanan TakjilKu #${orderId.substring(0, 7)}`);
-    console.log(`[EMAIL SERVICE] Body Email:`, emailBody);
-    console.log(`[EMAIL SERVICE] PDF Attachment: Berhasil digenerate (base64 size: ${pdf.output('datauristring').length})`);
+    // Log ke konsol karena ini adalah lingkungan prototipe (bukan pengiriman SMTP nyata)
+    console.log(`[SIMULASI EMAIL] Mengirim ke: ${email}`);
+    console.log(`[SIMULASI EMAIL] Subjek: Struk Pesanan TakjilKu #${orderId.substring(0, 7)}`);
+    console.log(`[SIMULASI EMAIL] PDF Attachment: Berhasil digenerate (base64 size: ${pdf.output('datauristring').length})`);
 
     toast({
-      title: "Email Terkirim 📧",
-      description: `Struk rincian dan lampiran PDF telah dikirim ke ${email}.`,
+      title: "Simulasi Email Berhasil 📧",
+      description: `Rincian pesanan untuk ${email} telah dicatat di sistem (Fitur pengiriman SMTP nyata memerlukan integrasi layanan email).`,
     });
   };
 
@@ -174,7 +173,6 @@ export default function OrderForm({ cartItems, total, deliveryFee, setSheetOpen 
         batch.set(orderItemRef, newOrderItem);
         orderItemsForError.push(newOrderItem);
 
-        // Update stock for each menu item
         const menuItemRef = doc(firestore, 'menuItems', item.product.id);
         batch.update(menuItemRef, {
             stock: increment(-item.quantity)
@@ -183,7 +181,6 @@ export default function OrderForm({ cartItems, total, deliveryFee, setSheetOpen 
 
     batch.commit()
       .then(() => {
-        // Jika email diisi, kirim struk
         if (values.email) {
             sendEmailReceipt(values.email, values, orderRef.id);
         }
@@ -194,7 +191,6 @@ export default function OrderForm({ cartItems, total, deliveryFee, setSheetOpen 
         });
         clearCart();
         setSheetOpen(false);
-        // Redirect with params to show info on success page
         const searchParams = new URLSearchParams();
         if (values.email) searchParams.set('email', values.email);
         searchParams.set('orderId', orderRef.id);
@@ -248,10 +244,13 @@ export default function OrderForm({ cartItems, total, deliveryFee, setSheetOpen 
           name="email"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Email (Untuk kirim struk PDF)</FormLabel>
+              <FormLabel>Email (Opsional)</FormLabel>
               <FormControl>
                 <Input placeholder="anda@email.com" {...field} disabled={isSubmitting} />
               </FormControl>
+              <FormDescription className="text-[10px]">
+                Struk PDF akan disimulasikan pengirimannya jika email diisi.
+              </FormDescription>
               <FormMessage />
             </FormItem>
           )}
