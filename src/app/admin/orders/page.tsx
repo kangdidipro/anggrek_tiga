@@ -62,11 +62,12 @@ interface Order {
 
 const getVendorFromSku = (sku: string) => {
   if (!sku) return 'UNKNOWN';
+  if (sku.includes('-')) return sku.split('-')[0];
   const match = sku.match(/^[a-zA-Z]+/);
   return match ? match[0] : sku;
 };
 
-const ORDER_STATUSES = ["Dipesan", "Diproses", "Dikirim", "Dibayar"];
+const ORDER_STATUSES = ["Dipesan", "Diproses", "Dikirim", "Dibayar", "Dibatalkan"];
 
 export default function AdminOrdersPage() {
   const firestore = useFirestore();
@@ -448,6 +449,7 @@ export default function AdminOrdersPage() {
       case 'Diproses': return 'bg-blue-500 hover:bg-blue-600';
       case 'Dikirim': return 'bg-purple-500 hover:bg-purple-600';
       case 'Dibayar': return 'bg-green-600 hover:bg-green-700';
+      case 'Dibatalkan': return 'bg-destructive hover:bg-destructive/90';
       default: return 'bg-gray-500 hover:bg-gray-600';
     }
   };

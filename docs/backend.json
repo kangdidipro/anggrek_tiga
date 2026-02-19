@@ -1,4 +1,3 @@
-
 {
   "entities": {
     "Customer": {
@@ -159,7 +158,7 @@
         "status": {
           "type": "string",
           "description": "The current processing status of the order.",
-          "enum": ["Dipesan", "Diproses", "Dikirim", "Dibayar"]
+          "enum": ["Dipesan", "Diproses", "Dikirim", "Dibayar", "Dibatalkan"]
         },
         "statusHistory": {
           "type": "array",
