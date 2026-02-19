@@ -8,8 +8,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Loader2, Mail, Database, Trash2, Save, AlertTriangle, Send } from 'lucide-react';
+import { Loader2, Mail, Database, Trash2, Save, AlertTriangle, Send, Info } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -35,7 +36,7 @@ export default function AdminSettingsPage() {
     port: '587',
     user: '',
     pass: '',
-    from: 'takjilku@example.com',
+    from: 'TakjilKu <no-reply@takjilku.com>',
   });
 
   const handleSaveEmailSettings = async (e: React.FormEvent) => {
@@ -124,6 +125,19 @@ export default function AdminSettingsPage() {
         </TabsList>
 
         <TabsContent value="mail" className="space-y-4 pt-4">
+          <Alert className="bg-primary/5 border-primary/20">
+            <Info className="h-4 w-4 text-primary" />
+            <AlertTitle className="font-bold">Panduan Gmail SMTP</AlertTitle>
+            <AlertDescription className="text-sm">
+              <p className="mb-2">Jika Anda menggunakan Gmail, pastikan untuk:</p>
+              <ol className="list-decimal pl-5 space-y-1">
+                <li>Aktifkan <strong>Verifikasi 2 Langkah</strong> di Akun Google Anda.</li>
+                <li>Gunakan <strong>App Password</strong> (16 digit) sebagai ganti kata sandi utama Anda.</li>
+                <li>Host: <code>smtp.gmail.com</code>, Port: <code>587</code> (STARTTLS) atau <code>465</code> (SSL).</li>
+              </ol>
+            </AlertDescription>
+          </Alert>
+
           <Card>
             <CardHeader>
               <CardTitle>Konfigurasi SMTP</CardTitle>
