@@ -42,7 +42,6 @@ interface Order {
 
 const getVendorFromSku = (sku: string) => {
   if (!sku) return 'UNKNOWN';
-  if (sku.includes('-')) return sku.split('-')[0];
   const match = sku.match(/^[a-zA-Z]+/);
   return match ? match[0] : sku;
 };
@@ -137,7 +136,6 @@ export default function AdminSummaryPage() {
         order.items.forEach(item => {
             const vendor = item.vendor || getVendorFromSku(item.sku);
             
-            // Respect vendor filter during aggregation to keep totals consistent
             if (vendorFilter !== 'all' && vendor !== vendorFilter) return;
 
             let key = '';
@@ -195,8 +193,6 @@ export default function AdminSummaryPage() {
   const filteredSummary = useMemo(() => {
     let result = summaryData;
     
-    // Summary is already filtered by vendor inside summaryData aggregation logic
-    // We just need to handle the Search Term here
     if (searchTerm.trim() !== '') {
         const lowerSearch = searchTerm.toLowerCase();
         result = result.filter(s => {
@@ -352,7 +348,7 @@ export default function AdminSummaryPage() {
                     </div>
                     <Popover>
                         <PopoverTrigger asChild>
-                            <Button variant={"outline"} className="w-[240px] justify-start text-left font-normal">
+                            <Button variant={"outline"} className="w-[240px] justify-start text-left font-normal border-primary/20">
                                 <CalendarIcon className="mr-2 h-4 w-4" />
                                 {date ? format(date, "PPP", { locale: id }) : <span>Pilih tanggal</span>}
                             </Button>
@@ -443,29 +439,37 @@ export default function AdminSummaryPage() {
                                     <TableCell className="text-right">{formatPrice(summary.totalAmount)}</TableCell>
                                     <TableCell className="min-w-[300px]">
                                         <div className="space-y-3">
-                                            {Object.entries(groupItemsByVendor(summary.items)).map(([vCode, vItems]) => (
-                                                <div key={vCode} className="space-y-1">
-                                                    {groupBy !== 'vendor' && (
-                                                        <div className="text-[10px] font-bold text-primary/70 uppercase tracking-tighter bg-primary/5 px-2 py-0.5 rounded-sm inline-block border border-primary/10">
-                                                            Mitra: {vCode}
-                                                        </div>
-                                                    )}
-                                                    <ul className="text-xs space-y-1 pl-1">
-                                                        {vItems.map((item, idx) => (
-                                                            <li key={idx} className="flex justify-between gap-4 border-b border-muted last:border-0 pb-1">
-                                                                <div className="flex-1">
-                                                                  <span className="block font-medium">{item.name}</span>
-                                                                  <div className="flex justify-between text-[10px] text-muted-foreground">
-                                                                    <span>SKU: {item.sku}</span>
-                                                                    <span>{formatPrice(item.price)} x {item.quantity}</span>
-                                                                  </div>
-                                                                </div>
-                                                                <span className="font-bold text-primary self-center">{formatPrice(item.price * item.quantity)}</span>
-                                                            </li>
-                                                        ))}
-                                                    </ul>
-                                                </div>
-                                            ))}
+                                            {Object.entries(groupItemsByVendor(summary.items)).map(([vCode, vItems]) => {
+                                                const subtotalMitra = vItems.reduce((sum, i) => sum + (i.price * i.quantity), 0);
+                                                return (
+                                                    <div key={vCode} className="space-y-1">
+                                                        {groupBy !== 'vendor' && (
+                                                            <div className="flex justify-between items-center bg-primary/5 px-2 py-0.5 rounded-sm border border-primary/10">
+                                                                <span className="text-[10px] font-bold text-primary/70 uppercase tracking-tighter">
+                                                                    Mitra: {vCode}
+                                                                </span>
+                                                                <span className="text-[10px] font-bold text-primary">
+                                                                    Sub: {formatPrice(subtotalMitra)}
+                                                                </span>
+                                                            </div>
+                                                        )}
+                                                        <ul className="text-xs space-y-1 pl-1">
+                                                            {vItems.map((item, idx) => (
+                                                                <li key={idx} className="flex justify-between gap-4 border-b border-muted last:border-0 pb-1">
+                                                                    <div className="flex-1">
+                                                                      <span className="block font-medium">{item.name}</span>
+                                                                      <div className="flex justify-between text-[10px] text-muted-foreground">
+                                                                        <span>SKU: {item.sku}</span>
+                                                                        <span>{formatPrice(item.price)} x {item.quantity}</span>
+                                                                      </div>
+                                                                    </div>
+                                                                    <span className="font-bold text-primary self-center">{formatPrice(item.price * item.quantity)}</span>
+                                                                </li>
+                                                            ))}
+                                                        </ul>
+                                                    </div>
+                                                );
+                                            })}
                                         </div>
                                     </TableCell>
                                     <TableCell className="max-w-[200px]">

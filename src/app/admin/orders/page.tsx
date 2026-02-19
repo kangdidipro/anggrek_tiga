@@ -62,7 +62,6 @@ interface Order {
 
 const getVendorFromSku = (sku: string) => {
   if (!sku) return 'UNKNOWN';
-  if (sku.includes('-')) return sku.split('-')[0];
   const match = sku.match(/^[a-zA-Z]+/);
   return match ? match[0] : sku;
 };
@@ -477,7 +476,7 @@ export default function AdminOrdersPage() {
                 </div>
                 <Popover>
                     <PopoverTrigger asChild>
-                        <Button variant={"outline"} className="w-[200px] justify-start text-left font-normal">
+                        <Button variant={"outline"} className="w-[200px] justify-start text-left font-normal border-primary/20">
                             <CalendarIcon className="mr-2 h-4 w-4" />
                             {date ? format(date, "PPP", { locale: id }) : <span>Pilih tanggal</span>}
                         </Button>
@@ -651,24 +650,32 @@ export default function AdminOrdersPage() {
                                               groupBy === 'sku' ?
                                                 order.items.filter(item => item.sku === groupKey.split(']')[0].substring(1)) :
                                                 order.items
-                                          )).map(([vendorCode, vendorItems]) => (
-                                              <div key={vendorCode} className="space-y-1">
-                                                  <div className="text-[10px] font-bold text-primary/70 uppercase tracking-tighter bg-primary/5 px-2 py-0.5 rounded-sm inline-block border border-primary/10">
-                                                    Mitra: {vendorCode}
-                                                  </div>
-                                                  <div className="space-y-1.5 pl-2">
-                                                    {vendorItems.map(item => (
-                                                      <div key={item.id} className="flex justify-between text-sm border-b border-muted/20 pb-1 last:border-0">
-                                                          <div>
-                                                              <span className="font-medium">{item.name}</span>
-                                                              <span className="text-muted-foreground"> x {item.quantity}</span>
-                                                          </div>
-                                                          <span className="text-muted-foreground">{formatPrice(item.priceAtOrder * item.quantity)}</span>
-                                                      </div>
-                                                    ))}
-                                                  </div>
-                                              </div>
-                                          ))}
+                                          )).map(([vendorCode, vendorItems]) => {
+                                              const subtotalMitra = vendorItems.reduce((sum, i) => sum + (i.priceAtOrder * i.quantity), 0);
+                                              return (
+                                                <div key={vendorCode} className="space-y-1">
+                                                    <div className="flex justify-between items-center bg-primary/5 px-2 py-0.5 rounded-sm border border-primary/10">
+                                                        <span className="text-[10px] font-bold text-primary/70 uppercase tracking-tighter">
+                                                            Mitra: {vendorCode}
+                                                        </span>
+                                                        <span className="text-[10px] font-bold text-primary">
+                                                            Subtotal: {formatPrice(subtotalMitra)}
+                                                        </span>
+                                                    </div>
+                                                    <div className="space-y-1.5 pl-2">
+                                                      {vendorItems.map(item => (
+                                                        <div key={item.id} className="flex justify-between text-sm border-b border-muted/20 pb-1 last:border-0">
+                                                            <div>
+                                                                <span className="font-medium">{item.name}</span>
+                                                                <span className="text-muted-foreground"> x {item.quantity}</span>
+                                                            </div>
+                                                            <span className="text-muted-foreground">{formatPrice(item.priceAtOrder * item.quantity)}</span>
+                                                        </div>
+                                                      ))}
+                                                    </div>
+                                                </div>
+                                              );
+                                          })}
                                           
                                           {groupBy === 'orderId' && (
                                             <>
