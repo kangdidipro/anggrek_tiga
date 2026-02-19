@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useMemo, useRef } from 'react';
@@ -7,7 +6,7 @@ import { collection, doc, deleteDoc, setDoc } from 'firebase/firestore';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Loader2, Plus, Pencil, Trash2, RefreshCcw, Search, X, FileUp } from 'lucide-react';
+import { Loader2, Plus, Pencil, Trash2, RefreshCcw, Search, X, FileUp, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 import { formatPrice } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
@@ -17,6 +16,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { products as initialProducts } from '@/lib/products';
 import type { Product, Vendor } from '@/lib/types';
 import * as XLSX from 'xlsx';
+
+type SortConfig = {
+  key: keyof Product | null;
+  direction: 'asc' | 'desc';
+};
 
 export default function AdminMenuPage() {
   const firestore = useFirestore();
@@ -32,6 +36,9 @@ export default function AdminMenuPage() {
   const [nameFilter, setNameFilter] = useState('all');
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [vendorFilter, setVendorFilter] = useState('all');
+
+  // Sorting State
+  const [sortConfig, setSortConfig] = useState<SortConfig>({ key: 'category', direction: 'asc' });
 
   // Fetch Menu Items
   const menuItemsQuery = useMemoFirebase(() => {
@@ -63,26 +70,54 @@ export default function AdminMenuPage() {
     return vendors.map(v => v.code).sort();
   }, [vendors]);
 
-  // Filtered Menu Items Logic
+  // Handle Sort Toggle
+  const handleSort = (key: keyof Product) => {
+    let direction: 'asc' | 'desc' = 'asc';
+    if (sortConfig.key === key && sortConfig.direction === 'asc') {
+      direction = 'desc';
+    }
+    setSortConfig({ key, direction });
+  };
+
+  const getSortIcon = (key: keyof Product) => {
+    if (sortConfig.key !== key) return <ArrowUpDown className="ml-2 h-4 w-4 opacity-50" />;
+    return sortConfig.direction === 'asc' ? <ArrowUp className="ml-2 h-4 w-4" /> : <ArrowDown className="ml-2 h-4 w-4" />;
+  };
+
+  // Filtered and Sorted Menu Items Logic
   const filteredMenuItems = useMemo(() => {
     if (!menuItems) return [];
-    return menuItems
-      .filter((item) => {
-        const search = searchTerm.toLowerCase();
-        const matchesSearch = 
-          item.name.toLowerCase().includes(search) ||
-          item.category.toLowerCase().includes(search) ||
-          item.sku.toLowerCase().includes(search) ||
-          item.vendor.toLowerCase().includes(search);
-        
-        const matchesName = nameFilter === 'all' || item.name === nameFilter;
-        const matchesCategory = categoryFilter === 'all' || item.category === categoryFilter;
-        const matchesVendor = vendorFilter === 'all' || item.vendor === vendorFilter;
+    
+    // First, filter
+    const filtered = menuItems.filter((item) => {
+      const search = searchTerm.toLowerCase();
+      const matchesSearch = 
+        item.name.toLowerCase().includes(search) ||
+        item.category.toLowerCase().includes(search) ||
+        item.sku.toLowerCase().includes(search) ||
+        item.vendor.toLowerCase().includes(search);
+      
+      const matchesName = nameFilter === 'all' || item.name === nameFilter;
+      const matchesCategory = categoryFilter === 'all' || item.category === categoryFilter;
+      const matchesVendor = vendorFilter === 'all' || item.vendor === vendorFilter;
 
-        return matchesSearch && matchesName && matchesCategory && matchesVendor;
-      })
-      .sort((a, b) => a.category.localeCompare(b.category));
-  }, [menuItems, searchTerm, nameFilter, categoryFilter, vendorFilter]);
+      return matchesSearch && matchesName && matchesCategory && matchesVendor;
+    });
+
+    // Then, sort
+    if (sortConfig.key) {
+      filtered.sort((a, b) => {
+        const valA = a[sortConfig.key!];
+        const valB = b[sortConfig.key!];
+
+        if (valA < valB) return sortConfig.direction === 'asc' ? -1 : 1;
+        if (valA > valB) return sortConfig.direction === 'asc' ? 1 : -1;
+        return 0;
+      });
+    }
+
+    return filtered;
+  }, [menuItems, searchTerm, nameFilter, categoryFilter, vendorFilter, sortConfig]);
 
   const handleDelete = async (id: string) => {
     if (!firestore) return;
@@ -197,6 +232,7 @@ export default function AdminMenuPage() {
     setNameFilter('all');
     setCategoryFilter('all');
     setVendorFilter('all');
+    setSortConfig({ key: 'category', direction: 'asc' });
   };
 
   if (isLoading || isVendorsLoading) {
@@ -376,12 +412,36 @@ export default function AdminMenuPage() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Nama</TableHead>
-                <TableHead>Kategori</TableHead>
-                <TableHead>Mitra</TableHead>
-                <TableHead>SKU</TableHead>
-                <TableHead className="text-right">Stok</TableHead>
-                <TableHead className="text-right">Harga</TableHead>
+                <TableHead className="cursor-pointer hover:bg-muted/50" onClick={() => handleSort('name')}>
+                  <div className="flex items-center">
+                    Nama {getSortIcon('name')}
+                  </div>
+                </TableHead>
+                <TableHead className="cursor-pointer hover:bg-muted/50" onClick={() => handleSort('category')}>
+                  <div className="flex items-center">
+                    Kategori {getSortIcon('category')}
+                  </div>
+                </TableHead>
+                <TableHead className="cursor-pointer hover:bg-muted/50" onClick={() => handleSort('vendor')}>
+                  <div className="flex items-center">
+                    Mitra {getSortIcon('vendor')}
+                  </div>
+                </TableHead>
+                <TableHead className="cursor-pointer hover:bg-muted/50" onClick={() => handleSort('sku')}>
+                  <div className="flex items-center">
+                    SKU {getSortIcon('sku')}
+                  </div>
+                </TableHead>
+                <TableHead className="text-right cursor-pointer hover:bg-muted/50" onClick={() => handleSort('stock')}>
+                  <div className="flex items-center justify-end">
+                    Stok {getSortIcon('stock')}
+                  </div>
+                </TableHead>
+                <TableHead className="text-right cursor-pointer hover:bg-muted/50" onClick={() => handleSort('price')}>
+                  <div className="flex items-center justify-end">
+                    Harga {getSortIcon('price')}
+                  </div>
+                </TableHead>
                 <TableHead className="text-right">Aksi</TableHead>
               </TableRow>
             </TableHeader>
