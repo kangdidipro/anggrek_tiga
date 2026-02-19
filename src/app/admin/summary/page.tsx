@@ -43,7 +43,6 @@ interface Order {
 
 const getVendorFromSku = (sku: string) => {
   if (!sku) return 'UNKNOWN';
-  if (sku.includes('-')) return sku.split('-')[0];
   const match = sku.match(/^[a-zA-Z]+/);
   return match ? match[0] : sku;
 };
@@ -186,7 +185,6 @@ export default function AdminSummaryPage() {
             const itemTotal = item.quantity * item.priceAtOrder;
             summaryMap[key].totalAmount += itemTotal;
             
-            // Only add delivery fee if grouped by orderId to avoid double counting per group
             if (groupBy === 'orderId') {
                 summaryMap[key].totalDeliveryFee = order.deliveryFee || 2500;
             }
@@ -229,7 +227,6 @@ export default function AdminSummaryPage() {
     return result;
   }, [summaryData, searchTerm]);
 
-  // Calculate grand total Ongkir correctly by looking at unique orders involved
   const trueGrandTotalOngkir = useMemo(() => {
     if (!date) return 0;
     const targetDateOrders = orders.filter(order => new Date(order.orderDateTime).toDateString() === date.toDateString());
@@ -462,7 +459,7 @@ export default function AdminSummaryPage() {
                                 <TableHead className="text-right">Admin (5%)</TableHead>
                                 <TableHead className="text-right">Bayar ke Mitra</TableHead>
                                 <TableHead className="text-right">Ongkir</TableHead>
-                                <TableHead>Rincian Item</TableHead>
+                                <TableHead>Rincian Item & Pembayaran per Mitra</TableHead>
                                 <TableHead>Alamat</TableHead>
                             </TableRow>
                         </TableHeader>
@@ -486,16 +483,20 @@ export default function AdminSummaryPage() {
                                         <TableCell className="text-right">
                                             {summary.totalDeliveryFee > 0 ? formatPrice(summary.totalDeliveryFee) : '-'}
                                         </TableCell>
-                                        <TableCell className="min-w-[250px]">
-                                            <div className="space-y-2">
+                                        <TableCell className="min-w-[300px]">
+                                            <div className="space-y-3">
                                                 {Object.entries(groupItemsByVendor(summary.items)).map(([vCode, vItems]) => {
                                                     const subtotalMitra = vItems.reduce((sum, i) => sum + (i.price * i.quantity), 0);
+                                                    const netMitra = subtotalMitra * 0.95;
                                                     return (
-                                                        <div key={vCode} className="space-y-1">
+                                                        <div key={vCode} className="space-y-1 bg-muted/20 p-2 rounded-sm border">
                                                             {groupBy !== 'vendor' && (
-                                                                <div className="flex justify-between items-center bg-primary/5 px-2 py-0.5 rounded-sm border border-primary/10">
-                                                                    <span className="text-[10px] font-bold text-primary/70 uppercase">Mitra: {vCode}</span>
-                                                                    <span className="text-[10px] font-bold text-primary">Sub: {formatPrice(subtotalMitra)}</span>
+                                                                <div className="flex justify-between items-center bg-primary/10 px-2 py-1 rounded-sm border border-primary/20 mb-1">
+                                                                    <span className="text-[10px] font-bold text-primary uppercase">Mitra: {vCode}</span>
+                                                                    <div className="flex gap-2 text-[10px]">
+                                                                        <span className="text-muted-foreground">Bruto: {formatPrice(subtotalMitra)}</span>
+                                                                        <span className="font-bold text-green-700">Bayar: {formatPrice(netMitra)}</span>
+                                                                    </div>
                                                                 </div>
                                                             )}
                                                             <ul className="text-xs space-y-1 pl-1">
