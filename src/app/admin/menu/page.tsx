@@ -1,19 +1,19 @@
-
 'use client';
 
-import { useState, useMemo, useRef } from 'react';
+import { useState, useMemo, useRef, useEffect } from 'react';
 import { useFirestore, useCollection, useMemoFirebase, useDoc } from '@/firebase';
 import { collection, doc, deleteDoc, setDoc, writeBatch } from 'firebase/firestore';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Loader2, Plus, Pencil, Trash2, RefreshCcw, Search, X, FileUp, ArrowUpDown, ArrowUp, ArrowDown, RotateCcw } from 'lucide-react';
+import { Loader2, Plus, Pencil, Trash2, RefreshCcw, Search, X, FileUp, ArrowUpDown, ArrowUp, ArrowDown, RotateCcw, ChevronLeft, ChevronRight } from 'lucide-react';
 import { formatPrice } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Checkbox } from '@/components/ui/checkbox';
 import { products as initialProducts } from '@/lib/products';
 import type { Product, Vendor } from '@/lib/types';
 import * as XLSX from 'xlsx';
@@ -42,8 +42,12 @@ export default function AdminMenuPage() {
   const [isSeeding, setIsSeeding] = useState(false);
   const [isResetting, setIsResetting] = useState(false);
   const [isExcelImporting, setIsExcelImporting] = useState(false);
+  const [isBulkDeleting, setIsBulkDeleting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   
+  // Selection State
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
   // Search and Filter States
   const [searchTerm, setSearchTerm] = useState('');
   const [nameFilter, setNameFilter] = useState('all');
@@ -52,6 +56,10 @@ export default function AdminMenuPage() {
 
   // Sorting State
   const [sortConfig, setSortConfig] = useState<SortConfig>({ key: 'category', direction: 'asc' });
+
+  // Pagination State
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
 
   // Fetch Menu Items
   const menuItemsQuery = useMemoFirebase(() => {
@@ -73,6 +81,11 @@ export default function AdminMenuPage() {
     return doc(firestore, 'settings', 'inventory');
   }, [firestore]);
   const { data: inventorySettings } = useDoc<{ defaultStock: number }>(invDocRef);
+
+  // Reset pagination when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, nameFilter, categoryFilter, vendorFilter]);
 
   // Unique values for dropdown filters
   const uniqueNames = useMemo(() => {
@@ -137,13 +150,66 @@ export default function AdminMenuPage() {
     return filtered;
   }, [menuItems, searchTerm, nameFilter, categoryFilter, vendorFilter, sortConfig]);
 
+  // Paginated data
+  const paginatedItems = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return filteredMenuItems.slice(start, start + pageSize);
+  }, [filteredMenuItems, currentPage, pageSize]);
+
+  const totalPages = Math.ceil(filteredMenuItems.length / pageSize);
+
+  // Selection Logic
+  const toggleSelectAll = () => {
+    if (selectedIds.size === paginatedItems.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(paginatedItems.map(item => item.id)));
+    }
+  };
+
+  const toggleSelect = (id: string) => {
+    const newSelected = new Set(selectedIds);
+    if (newSelected.has(id)) {
+      newSelected.delete(id);
+    } else {
+      newSelected.add(id);
+    }
+    setSelectedIds(newSelected);
+  };
+
   const handleDelete = async (id: string) => {
     if (!firestore) return;
     try {
       await deleteDoc(doc(firestore, 'menuItems', id));
       toast({ title: "Berhasil", description: "Menu telah dihapus." });
+      const newSelected = new Set(selectedIds);
+      newSelected.delete(id);
+      setSelectedIds(newSelected);
     } catch (error) {
       toast({ variant: "destructive", title: "Gagal", description: "Tidak dapat menghapus menu." });
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    if (!firestore || selectedIds.size === 0) return;
+    setIsBulkDeleting(true);
+    
+    const batch = writeBatch(firestore);
+    selectedIds.forEach(id => {
+      batch.delete(doc(firestore, 'menuItems', id));
+    });
+
+    try {
+      await batch.commit();
+      toast({
+        title: "Pembersihan Berhasil",
+        description: `${selectedIds.size} menu telah dihapus selamanya.`,
+      });
+      setSelectedIds(new Set());
+    } catch (error) {
+      toast({ variant: 'destructive', title: 'Gagal', description: 'Terjadi kesalahan saat menghapus data.' });
+    } finally {
+      setIsBulkDeleting(false);
     }
   };
 
@@ -155,7 +221,7 @@ export default function AdminMenuPage() {
     const stockValue = Number(formData.get('stock'));
     
     const productData: Product = {
-      id: isEditing?.id || (Math.floor(Math.random() * 1000) + 100).toString(),
+      id: isEditing?.id || (Math.floor(Math.random() * 10000) + 1000).toString(),
       name: formData.get('name') as string,
       price: Number(formData.get('price')),
       sku: formData.get('sku') as string,
@@ -240,7 +306,7 @@ export default function AdminMenuPage() {
 
           if (name && price && sku) {
             const productData: Product = {
-              id: (Math.floor(Math.random() * 10000) + 1000).toString(),
+              id: (Math.floor(Math.random() * 100000) + 10000).toString(),
               name: String(name),
               price: price,
               sku: sku,
@@ -273,6 +339,7 @@ export default function AdminMenuPage() {
     setCategoryFilter('all');
     setVendorFilter('all');
     setSortConfig({ key: 'category', direction: 'asc' });
+    setCurrentPage(1);
   };
 
   if (isLoading || isVendorsLoading) {
@@ -321,6 +388,32 @@ export default function AdminMenuPage() {
               </AlertDialogFooter>
             </AlertDialogContent>
           </AlertDialog>
+
+          {selectedIds.size > 0 && (
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button variant="destructive" size="sm">
+                  <Trash2 className="mr-2 h-4 w-4" />
+                  Hapus Terpilih ({selectedIds.size})
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Hapus {selectedIds.size} Menu?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    Apakah Anda yakin ingin menghapus {selectedIds.size} menu yang dipilih? Tindakan ini permanen.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Batal</AlertDialogCancel>
+                  <AlertDialogAction onClick={handleBulkDelete} className="bg-destructive hover:bg-destructive/90">
+                    {isBulkDeleting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                    Hapus Sekarang
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          )}
 
           {(!menuItems || menuItems.length === 0) && (
             <Button variant="outline" size="sm" onClick={seedDefaultMenu} disabled={isSeeding}>
@@ -471,10 +564,17 @@ export default function AdminMenuPage() {
       </Card>
 
       <Card>
-        <CardContent className="p-0">
+        <CardContent className="p-0 overflow-auto">
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead className="w-[50px]">
+                  <Checkbox 
+                    checked={paginatedItems.length > 0 && selectedIds.size === paginatedItems.length}
+                    onCheckedChange={toggleSelectAll}
+                  />
+                </TableHead>
+                <TableHead className="w-[60px]">No.</TableHead>
                 <TableHead className="cursor-pointer hover:bg-muted/50" onClick={() => handleSort('name')}>
                   <div className="flex items-center">
                     Nama {getSortIcon('name')}
@@ -509,15 +609,24 @@ export default function AdminMenuPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredMenuItems.length === 0 ? (
+              {paginatedItems.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center py-12 text-muted-foreground">
+                  <TableCell colSpan={9} className="text-center py-12 text-muted-foreground">
                     Tidak ada menu yang cocok.
                   </TableCell>
                 </TableRow>
               ) : (
-                filteredMenuItems.map((item) => (
-                  <TableRow key={item.id}>
+                paginatedItems.map((item, index) => (
+                  <TableRow key={item.id} className={selectedIds.has(item.id) ? "bg-muted/50" : ""}>
+                    <TableCell>
+                      <Checkbox 
+                        checked={selectedIds.has(item.id)}
+                        onCheckedChange={() => toggleSelect(item.id)}
+                      />
+                    </TableCell>
+                    <TableCell className="text-xs text-muted-foreground font-mono">
+                      {(currentPage - 1) * pageSize + index + 1}
+                    </TableCell>
                     <TableCell className="font-medium">{item.name}</TableCell>
                     <TableCell>{item.category}</TableCell>
                     <TableCell className="font-mono text-xs font-bold">{item.vendor}</TableCell>
@@ -613,6 +722,54 @@ export default function AdminMenuPage() {
           </Table>
         </CardContent>
       </Card>
+
+      <div className="flex flex-col md:flex-row items-center justify-between gap-4 bg-card p-4 rounded-lg border shadow-sm">
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-muted-foreground">Tampilkan</span>
+            <Select value={pageSize.toString()} onValueChange={(v) => { setPageSize(Number(v)); setCurrentPage(1); }}>
+              <SelectTrigger className="w-[80px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="10">10</SelectItem>
+                <SelectItem value="25">25</SelectItem>
+                <SelectItem value="50">50</SelectItem>
+                <SelectItem value="100">100</SelectItem>
+                <SelectItem value="1000">1000</SelectItem>
+              </SelectContent>
+            </Select>
+            <span className="text-sm text-muted-foreground">data per halaman</span>
+          </div>
+          <div className="text-sm text-muted-foreground border-l pl-4">
+            Total: <span className="font-bold text-foreground">{filteredMenuItems.length}</span> item
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+            disabled={currentPage === 1}
+          >
+            <ChevronLeft className="h-4 w-4 mr-1" /> Prev
+          </Button>
+          <div className="flex items-center gap-1 px-2">
+            <span className="text-sm font-medium">Halaman</span>
+            <span className="bg-primary/10 text-primary px-2 py-0.5 rounded text-sm font-bold">{currentPage}</span>
+            <span className="text-sm font-medium">dari {totalPages || 1}</span>
+          </div>
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+            disabled={currentPage === totalPages || totalPages === 0}
+          >
+            Next <ChevronRight className="h-4 w-4 ml-1" />
+          </Button>
+        </div>
+      </div>
     </div>
   );
 }
