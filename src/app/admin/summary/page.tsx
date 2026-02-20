@@ -5,7 +5,7 @@ import { useFirestore, useUser, useCollection, useMemoFirebase, errorEmitter, Fi
 import { collectionGroup, getDocs, query, collection, writeBatch, doc, updateDoc, arrayUnion } from 'firebase/firestore';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Loader2, FileDown, CalendarIcon, FileText, Mail, Search, LayoutGrid, ArrowUpDown, ArrowUp, ArrowDown, Filter, Trash2, Phone, User, ChevronLeft, ChevronRight, Send, X, BarChart3, PieChart as PieChartIcon, Table as TableIcon, Package } from 'lucide-react';
+import { Loader2, FileDown, CalendarIcon, FileText, Mail, Search, LayoutGrid, ArrowUpDown, ArrowUp, ArrowDown, Filter, Trash2, Phone, User, ChevronLeft, ChevronRight, Send, X, BarChart3, PieChart as PieChartIcon, Table as TableIcon, Package, Truck, Share2 } from 'lucide-react';
 import { formatPrice, getVendorFromSku } from '@/lib/utils';
 import * as XLSX from 'xlsx';
 import { saveAs } from 'file-saver';
@@ -25,6 +25,7 @@ import type { Vendor } from '@/lib/types';
 import { Badge } from '@/components/ui/badge';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import Link from 'next/link';
 import {
   BarChart,
   Bar,
@@ -178,6 +179,24 @@ export default function AdminSummaryPage() {
     });
     return map;
   }, [customersData]);
+
+  const deliveryDashboardLink = useMemo(() => {
+    const params = new URLSearchParams();
+    if (date) params.set('date', date.toISOString());
+    if (vendorFilter !== 'all') params.set('vendor', vendorFilter);
+    if (selectedStatuses.length > 0) params.set('statuses', selectedStatuses.join(','));
+    if (searchTerm) params.set('search', searchTerm);
+    return `/admin/delivery?${params.toString()}`;
+  }, [date, vendorFilter, selectedStatuses, searchTerm]);
+
+  const copyDeliveryLink = () => {
+    const fullUrl = `${window.location.origin}${deliveryDashboardLink}`;
+    navigator.clipboard.writeText(fullUrl);
+    toast({
+      title: "Link Dashboard Kurir Disalin",
+      description: "Tautan kurir dengan filter saat ini siap dibagikan ke WhatsApp.",
+    });
+  };
 
   const getStatusBadgeColor = (status: string) => {
     switch (status) {
@@ -946,6 +965,16 @@ export default function AdminSummaryPage() {
                         </Button>
                         <Button variant="outline" size="sm" onClick={exportToPDF} disabled={filteredSummary.length === 0} className="border-primary/20 hover:bg-primary/5">
                             <FileText className="mr-2 h-4 w-4 text-primary" /> PDF
+                        </Button>
+                        <Button variant="outline" size="sm" asChild className="border-blue-500 text-blue-600 hover:bg-blue-50">
+                            <Link href={deliveryDashboardLink}>
+                                <Truck className="mr-2 h-4 w-4" />
+                                Dashboard Kurir
+                            </Link>
+                        </Button>
+                        <Button variant="ghost" size="sm" onClick={copyDeliveryLink} className="text-muted-foreground hover:text-blue-600">
+                            <Share2 className="mr-2 h-4 w-4" />
+                            Salin Link Kurir
                         </Button>
                     </div>
 
