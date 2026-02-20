@@ -5,7 +5,7 @@ import { useFirestore, useUser, useCollection, useMemoFirebase, errorEmitter, Fi
 import { collectionGroup, getDocs, query, collection, writeBatch, doc, updateDoc, arrayUnion } from 'firebase/firestore';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Loader2, FileDown, CalendarIcon, FileText, Mail, Search, LayoutGrid, ArrowUpDown, ArrowUp, ArrowDown, Filter, Trash2, Phone, User, ChevronLeft, ChevronRight, Send, X, BarChart3, PieChart as PieChartIcon, Table as TableIcon, Package, Truck, Share2 } from 'lucide-react';
+import { Loader2, FileDown, CalendarIcon, FileText, Mail, Search, LayoutGrid, ArrowUpDown, ArrowUp, ArrowDown, Filter, Trash2, Phone, User, ChevronLeft, ChevronRight, Send, X, BarChart3, PieChart as PieChartIcon, Table as TableIcon, Package, Truck, Share2, MapPin, Clock } from 'lucide-react';
 import { formatPrice, getVendorFromSku } from '@/lib/utils';
 import * as XLSX from 'xlsx';
 import { saveAs } from 'file-saver';
@@ -421,27 +421,23 @@ export default function AdminSummaryPage() {
     return spans;
   }, [paginatedSummary, groupBy]);
 
-  const grandTotals = useMemo(() => {
-    return filteredSummary.reduce((acc, curr) => ({
-      orders: acc.orders + curr.totalOrders,
-      amount: acc.amount + curr.totalAmount,
-      admin: acc.admin + curr.adminFee,
-      net: acc.net + curr.netToVendor,
-      ongkir: acc.ongkir + (groupBy === 'orderId' ? (new Set(filteredSummary.map(s => s.parentOrderId)).size * 2500 / filteredSummary.length) : curr.totalDeliveryFee)
-    }), { orders: 0, amount: 0, admin: 0, net: 0, ongkir: 0 });
-  }, [filteredSummary, groupBy]);
-
   const actualGrandTotals = useMemo(() => {
     const uniqueOrders = new Set(filteredSummary.map(s => s.parentOrderId));
+    const amount = filteredSummary.reduce((acc, curr) => acc + curr.totalAmount, 0);
+    const admin = filteredSummary.reduce((acc, curr) => acc + curr.adminFee, 0);
+    const net = filteredSummary.reduce((acc, curr) => acc + curr.netToVendor, 0);
     const totalPcs = filteredSummary.reduce((acc, curr) => 
       acc + curr.items.reduce((sum, i) => sum + i.quantity, 0), 0
     );
     return {
-        ...grandTotals,
+        orders: uniqueOrders.size,
+        amount,
+        admin,
+        net,
         ongkir: uniqueOrders.size * 2500,
         totalPcs
     };
-  }, [filteredSummary, grandTotals]);
+  }, [filteredSummary]);
 
   // Chart Data: Omzet per Mitra
   const chartDataMitra = useMemo(() => {
@@ -1045,14 +1041,14 @@ export default function AdminSummaryPage() {
                                     </div>
                                 </TableHead>
                                 <TableHead className="min-w-[250px]">Rincian Item</TableHead>
-                                <TableHead className="min-w-[250px]">Profil & Alamat</TableHead>
+                                {groupBy !== 'orderId' && <TableHead className="min-w-[250px]">Profil & Alamat</TableHead>}
                                 <TableHead className="text-right">Aksi</TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
                             {paginatedSummary.length === 0 ? (
                                 <TableRow>
-                                    <TableCell colSpan={11} className="text-center text-muted-foreground py-20">
+                                    <TableCell colSpan={groupBy === 'orderId' ? 10 : 11} className="text-center text-muted-foreground py-20">
                                         <div className="flex flex-col items-center gap-2">
                                             <Search className="h-8 w-8 opacity-20" />
                                             <p>Tidak ada transaksi yang ditemukan.</p>
@@ -1061,27 +1057,105 @@ export default function AdminSummaryPage() {
                                 </TableRow>
                             ) : (
                                 paginatedSummary.map((summary, index) => {
-                                    const span = rowSpans[summary.key] || 0;
                                     const isRowSpanned = groupBy === 'orderId';
+                                    const isNewOrder = !isRowSpanned || index === 0 || paginatedSummary[index - 1].parentOrderId !== summary.parentOrderId;
                                     const parentOrder = orders.find(o => o.id === summary.parentOrderId);
+                                    const span = rowSpans[summary.key] || 0;
                                     
-                                    return (
+                                    const rows = [];
+
+                                    // Add Order Header Row if grouped by orderId
+                                    if (isRowSpanned && isNewOrder) {
+                                        rows.push(
+                                            <TableRow key={`group-${summary.parentOrderId}`} className="bg-primary/5 border-t-2 border-primary/20">
+                                                <TableCell>
+                                                    <Checkbox 
+                                                        checked={selectedOrderIds.has(summary.parentOrderId)}
+                                                        onCheckedChange={() => toggleOrderSelection(summary.parentOrderId)}
+                                                    />
+                                                </TableCell>
+                                                <TableCell colSpan={2} className="py-3 font-bold">
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="bg-primary text-white text-[10px] px-1.5 py-0.5 rounded shadow-sm">ORDER</span>
+                                                        <span className="text-sm">#{summary.parentOrderId}</span>
+                                                    </div>
+                                                    <div className="text-[10px] text-muted-foreground mt-1 font-normal flex items-center gap-1">
+                                                        <CalendarIcon className="h-3 w-3" />
+                                                        {parentOrder ? format(new Date(parentOrder.orderDateTime), 'eeee, d MMMM yyyy - HH:mm', { locale: id }) : '-'}
+                                                    </div>
+                                                </TableCell>
+                                                <TableCell colSpan={7} className="py-3">
+                                                    {summary.customerProfile && (
+                                                        <div className="flex flex-col gap-1.5">
+                                                            <div className="flex flex-wrap items-center gap-x-6 gap-y-1 text-xs">
+                                                                <div className="flex items-center gap-1.5">
+                                                                    <User className="h-3.5 w-3.5 text-primary" />
+                                                                    <span className="font-bold uppercase tracking-tight">{summary.customerProfile.name}</span>
+                                                                </div>
+                                                                <div className="flex items-center gap-1.5">
+                                                                    <Phone className="h-3.5 w-3.5 text-green-600" />
+                                                                    <span className="font-mono">{summary.customerProfile.phone}</span>
+                                                                </div>
+                                                                {summary.customerProfile.email && (
+                                                                    <div className="flex items-center gap-1.5">
+                                                                        <Mail className="h-3.5 w-3.5 text-muted-foreground" />
+                                                                        <span className="text-muted-foreground">{summary.customerProfile.email}</span>
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                            <div className="flex items-start gap-1.5 text-[10px] text-muted-foreground italic bg-background/50 px-2 py-1 rounded border border-primary/5">
+                                                                <MapPin className="h-3 w-3 text-primary shrink-0 mt-0.5" />
+                                                                <span className="line-clamp-1">📍 {summary.addresses.join(', ')}</span>
+                                                            </div>
+                                                        </div>
+                                                    )}
+                                                </TableCell>
+                                                <TableCell className="text-right">
+                                                    <Button 
+                                                        variant="ghost" 
+                                                        size="icon" 
+                                                        className="text-destructive hover:bg-destructive/10 h-8 w-8"
+                                                        onClick={() => setOrderToDelete(summary.parentOrderId)}
+                                                    >
+                                                        <Trash2 className="h-4 w-4" />
+                                                    </Button>
+                                                </TableCell>
+                                            </TableRow>
+                                        );
+                                    }
+
+                                    // Sub-Order Detail Row
+                                    rows.push(
                                         <TableRow key={summary.key} className={cn("transition-colors", selectedOrderIds.has(summary.parentOrderId) ? 'bg-primary/5' : 'hover:bg-muted/30')}>
                                             <TableCell>
-                                            {(span > 0 || !isRowSpanned) && (
-                                                <Checkbox 
-                                                checked={selectedOrderIds.has(summary.parentOrderId)}
-                                                onCheckedChange={() => toggleOrderSelection(summary.parentOrderId)}
-                                                />
-                                            )}
+                                                {!isRowSpanned && (
+                                                    <Checkbox 
+                                                        checked={selectedOrderIds.has(summary.parentOrderId)}
+                                                        onCheckedChange={() => toggleOrderSelection(summary.parentOrderId)}
+                                                    />
+                                                )}
                                             </TableCell>
-                                            <TableCell className="text-muted-foreground font-mono text-xs">{(currentPage - 1) * pageSize + index + 1}</TableCell>
+                                            <TableCell className="text-muted-foreground font-mono text-[10px]">
+                                                {!isRowSpanned ? (currentPage - 1) * pageSize + index + 1 : ""}
+                                            </TableCell>
                                             <TableCell className="font-medium">
-                                                <span className="text-sm font-bold block">{summary.label}</span>
-                                                {summary.subLabel && <span className="block text-[10px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded-sm inline-block mt-1">{summary.subLabel}</span>}
+                                                {isRowSpanned ? (
+                                                    <div className="flex flex-col">
+                                                        <span className="text-[9px] text-muted-foreground uppercase font-bold tracking-tighter">Sub-Order Mitra</span>
+                                                        <span className="text-xs font-bold text-primary flex items-center gap-1">
+                                                            <Package className="h-3 w-3" />
+                                                            {summary.key.split('-').pop()} - {vendorLookup[summary.key.split('-').pop() || '']}
+                                                        </span>
+                                                    </div>
+                                                ) : (
+                                                    <>
+                                                        <span className="text-sm font-bold block">{summary.label}</span>
+                                                        {summary.subLabel && <span className="block text-[10px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded-sm inline-block mt-1">{summary.subLabel}</span>}
+                                                    </>
+                                                )}
                                             </TableCell>
                                             <TableCell>
-                                                {groupBy === 'orderId' && summary.status ? (
+                                                {isRowSpanned && summary.status ? (
                                                     <Select 
                                                         disabled={isUpdatingStatus === summary.key} 
                                                         value={summary.status} 
@@ -1097,7 +1171,7 @@ export default function AdminSummaryPage() {
                                                         </SelectContent>
                                                     </Select>
                                                 ) : summary.status ? (
-                                                    <Badge className={cn("text-[10px]", getStatusBadgeColor(status))}>
+                                                    <Badge className={cn("text-[10px]", getStatusBadgeColor(summary.status))}>
                                                         {summary.status}
                                                     </Badge>
                                                 ) : summary.statuses && summary.statuses.length > 0 ? (
@@ -1151,25 +1225,8 @@ export default function AdminSummaryPage() {
                                                 </div>
                                             </TableCell>
 
-                                            {isRowSpanned ? (
-                                                span > 0 ? (
-                                                    <TableCell rowSpan={span} className="bg-primary/5 border-l border-primary/10">
-                                                        <div className="space-y-3">
-                                                            {summary.customerProfile && (
-                                                                <div className="p-2 bg-background/50 rounded-lg border border-primary/10">
-                                                                    <p className="font-bold text-xs text-foreground uppercase flex items-center gap-1.5 mb-1"><User className="h-3 w-3 text-primary" /> {summary.customerProfile.name}</p>
-                                                                    <p className="flex items-center gap-1.5 text-[10px] text-muted-foreground"><Phone className="h-3 w-3" /> {summary.customerProfile.phone}</p>
-                                                                    {summary.customerProfile.email && <p className="flex items-center gap-1.5 text-[10px] text-muted-foreground truncate"><Mail className="h-3 w-3" /> {summary.customerProfile.email}</p>}
-                                                                </div>
-                                                            )}
-                                                            <div className="text-[10px] text-muted-foreground italic px-1 flex gap-1.5">
-                                                                <span className="shrink-0 font-bold">📍</span>
-                                                                <p className="leading-tight">{summary.addresses.join(', ')}</p>
-                                                            </div>
-                                                        </div>
-                                                    </TableCell>
-                                                ) : null
-                                            ) : (
+                                            {/* Profile column only for non-orderId groupings */}
+                                            {!isRowSpanned ? (
                                                 <TableCell>
                                                     <div className="space-y-3">
                                                         {summary.customerProfile && (
@@ -1184,10 +1241,10 @@ export default function AdminSummaryPage() {
                                                         </div>
                                                     </div>
                                                 </TableCell>
-                                            )}
+                                            ) : null}
 
                                             <TableCell className="text-right">
-                                            {(span > 0 || !isRowSpanned) && (
+                                            {!isRowSpanned && (
                                                 <Button 
                                                 variant="ghost" 
                                                 size="icon" 
@@ -1200,6 +1257,8 @@ export default function AdminSummaryPage() {
                                             </TableCell>
                                         </TableRow>
                                     );
+
+                                    return rows;
                                 })
                             )}
                         </TableBody>
@@ -1211,7 +1270,7 @@ export default function AdminSummaryPage() {
                                     <TableCell className="text-right text-destructive text-xs italic">{formatPrice(actualGrandTotals.admin)}</TableCell>
                                     <TableCell className="text-right text-green-700 text-sm">{formatPrice(actualGrandTotals.net)}</TableCell>
                                     <TableCell className="text-right text-primary text-sm">{formatPrice(actualGrandTotals.ongkir)}</TableCell>
-                                    <TableCell colSpan={3}></TableCell>
+                                    <TableCell colSpan={groupBy === 'orderId' ? 2 : 3}></TableCell>
                                 </TableRow>
                             </TableFooter>
                         )}
