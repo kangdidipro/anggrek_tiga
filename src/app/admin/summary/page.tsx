@@ -1,11 +1,12 @@
+
 'use client';
 
 import { useEffect, useState, useMemo } from 'react';
 import { useFirestore, useUser, useCollection, useMemoFirebase } from '@/firebase';
-import { collectionGroup, getDocs, query, collection } from 'firebase/firestore';
+import { collectionGroup, getDocs, query, collection, writeBatch, doc } from 'firebase/firestore';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Loader2, FileDown, CalendarIcon, FileText, Mail, Search, LayoutGrid, ArrowUpDown, ArrowUp, ArrowDown, Filter } from 'lucide-react';
+import { Loader2, FileDown, CalendarIcon, FileText, Mail, Search, LayoutGrid, ArrowUpDown, ArrowUp, ArrowDown, Filter, Trash2 } from 'lucide-react';
 import { formatPrice, getVendorFromSku } from '@/lib/utils';
 import * as XLSX from 'xlsx';
 import { saveAs } from 'file-saver';
@@ -23,6 +24,16 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { cn } from '@/lib/utils';
 import type { Vendor } from '@/lib/types';
 import { Badge } from '@/components/ui/badge';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 
 interface OrderItem {
   id: string;
@@ -83,6 +94,11 @@ export default function AdminSummaryPage() {
   const [groupBy, setGroupBy] = useState<'orderId' | 'vendor' | 'sku'>('orderId');
   const [sortConfig, setSortConfig] = useState<SortConfig>({ key: 'label', direction: 'asc' });
   const { toast } = useToast();
+
+  // Selection States
+  const [selectedOrderIds, setSelectedOrderIds] = useState<Set<string>>(new Set());
+  const [orderToDelete, setOrderToDelete] = useState<string | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const vendorsQuery = useMemoFirebase(() => {
     if (!firestore) return null;
@@ -472,6 +488,65 @@ export default function AdminSummaryPage() {
     return grouped;
   };
 
+  // Selection & Delete Logic
+  const toggleOrderSelection = (orderId: string) => {
+    const newSelected = new Set(selectedOrderIds);
+    if (newSelected.has(orderId)) {
+      newSelected.delete(orderId);
+    } else {
+      newSelected.add(orderId);
+    }
+    setSelectedOrderIds(newSelected);
+  };
+
+  const toggleSelectAllOrders = () => {
+    const visibleOrderIds = new Set(filteredSummary.map(s => s.parentOrderId));
+    if (selectedOrderIds.size === visibleOrderIds.size) {
+      setSelectedOrderIds(new Set());
+    } else {
+      setSelectedOrderIds(visibleOrderIds);
+    }
+  };
+
+  const executeDeleteOrders = async (orderIds: string[]) => {
+    if (!firestore || orderIds.length === 0) return;
+    
+    setIsDeleting(true);
+    const batch = writeBatch(firestore);
+    
+    try {
+      for (const orderId of orderIds) {
+        const orderObj = orders.find(o => o.id === orderId);
+        if (!orderObj) continue;
+        
+        // Delete items
+        orderObj.items.forEach(item => {
+          const itemRef = doc(firestore, 'customers', orderObj.customerId, 'orders', orderId, 'orderItems', item.id);
+          batch.delete(itemRef);
+        });
+        
+        // Delete order
+        const orderRef = doc(firestore, 'customers', orderObj.customerId, 'orders', orderId);
+        batch.delete(orderRef);
+      }
+      
+      await batch.commit();
+      
+      setOrders(prev => prev.filter(o => !orderIds.includes(o.id)));
+      setSelectedOrderIds(new Set());
+      
+      toast({
+        title: "Penghapusan Berhasil",
+        description: `${orderIds.length} pesanan telah dihapus selamanya.`,
+      });
+    } catch (err) {
+      toast({ variant: 'destructive', title: 'Gagal', description: 'Terjadi kesalahan hak akses saat menghapus data.' });
+    } finally {
+      setIsDeleting(false);
+      setOrderToDelete(null);
+    }
+  };
+
   if (isLoading || isUserLoading) {
     return <div className="flex h-full items-center justify-center p-24"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
   }
@@ -582,6 +657,17 @@ export default function AdminSummaryPage() {
                     </Select>
 
                     <div className="flex flex-wrap gap-2 items-center">
+                        {selectedOrderIds.size > 0 && (
+                          <Button 
+                            variant="destructive" 
+                            size="sm" 
+                            onClick={() => executeDeleteOrders(Array.from(selectedOrderIds))}
+                            disabled={isDeleting}
+                          >
+                            <Trash2 className="mr-2 h-4 w-4" />
+                            Hapus Terpilih ({selectedOrderIds.size})
+                          </Button>
+                        )}
                         <Button variant="outline" size="sm" onClick={exportToExcel} disabled={filteredSummary.length === 0}>
                             <FileDown className="mr-2 h-4 w-4" /> Excel
                         </Button>
@@ -607,6 +693,12 @@ export default function AdminSummaryPage() {
                     <Table>
                         <TableHeader>
                             <TableRow>
+                                <TableHead className="w-[40px]">
+                                  <Checkbox 
+                                    checked={selectedOrderIds.size > 0 && selectedOrderIds.size === new Set(filteredSummary.map(s => s.parentOrderId)).size}
+                                    onCheckedChange={toggleSelectAllOrders}
+                                  />
+                                </TableHead>
                                 <TableHead className="w-[50px]">No.</TableHead>
                                 <TableHead className="cursor-pointer hover:bg-muted/50" onClick={() => handleSort('label')}>
                                     <div className="flex items-center">
@@ -637,21 +729,31 @@ export default function AdminSummaryPage() {
                                 </TableHead>
                                 <TableHead className="min-w-[250px]">Rincian Item & Pembayaran per Mitra</TableHead>
                                 <TableHead className="min-w-[200px]">Alamat Pengiriman</TableHead>
+                                <TableHead className="text-right">Aksi</TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
                             {filteredSummary.length === 0 ? (
                                 <TableRow>
-                                    <TableCell colSpan={9} className="text-center text-muted-foreground py-10">
+                                    <TableCell colSpan={11} className="text-center text-muted-foreground py-10">
                                     Tidak ada transaksi ditemukan.
                                     </TableCell>
                                 </TableRow>
                             ) : (
                                 filteredSummary.map((summary, index) => {
                                     const span = rowSpans[summary.key] || 0;
+                                    const isRowSpanned = groupBy === 'orderId';
                                     
                                     return (
-                                        <TableRow key={summary.key}>
+                                        <TableRow key={summary.key} className={selectedOrderIds.has(summary.parentOrderId) ? 'bg-primary/5' : ''}>
+                                            <TableCell>
+                                              {(span > 0 || !isRowSpanned) && (
+                                                <Checkbox 
+                                                  checked={selectedOrderIds.has(summary.parentOrderId)}
+                                                  onCheckedChange={() => toggleOrderSelection(summary.parentOrderId)}
+                                                />
+                                              )}
+                                            </TableCell>
                                             <TableCell className="text-muted-foreground font-mono text-xs">{index + 1}</TableCell>
                                             <TableCell className="font-medium">
                                                 {summary.label}
@@ -676,7 +778,7 @@ export default function AdminSummaryPage() {
                                             <TableCell className="text-right text-destructive font-medium">{formatPrice(summary.adminFee)}</TableCell>
                                             <TableCell className="text-right font-bold text-green-600">{formatPrice(summary.netToVendor)}</TableCell>
                                             
-                                            {groupBy === 'orderId' ? (
+                                            {isRowSpanned ? (
                                                 span > 0 ? (
                                                     <TableCell rowSpan={span} className="text-right bg-primary/5 border-l border-primary/10 font-bold">
                                                         {formatPrice(2500)}
@@ -716,7 +818,7 @@ export default function AdminSummaryPage() {
                                                 </div>
                                             </TableCell>
 
-                                            {groupBy === 'orderId' ? (
+                                            {isRowSpanned ? (
                                                 span > 0 ? (
                                                     <TableCell rowSpan={span} className="bg-primary/5 border-l border-primary/10">
                                                         <ul className="text-[10px] list-disc pl-4 space-y-2 text-muted-foreground">
@@ -735,6 +837,19 @@ export default function AdminSummaryPage() {
                                                     </ul>
                                                 </TableCell>
                                             )}
+
+                                            <TableCell className="text-right">
+                                              {(span > 0 || !isRowSpanned) && (
+                                                <Button 
+                                                  variant="ghost" 
+                                                  size="icon" 
+                                                  className="text-destructive"
+                                                  onClick={() => setOrderToDelete(summary.parentOrderId)}
+                                                >
+                                                  <Trash2 className="h-4 w-4" />
+                                                </Button>
+                                              )}
+                                            </TableCell>
                                         </TableRow>
                                     );
                                 })
@@ -743,12 +858,12 @@ export default function AdminSummaryPage() {
                         {filteredSummary.length > 0 && (
                             <TableFooter>
                                 <TableRow className="bg-primary/5 font-bold">
-                                    <TableCell colSpan={3}></TableCell>
+                                    <TableCell colSpan={4}></TableCell>
                                     <TableCell className="text-right text-primary">{formatPrice(grandTotals.amount)}</TableCell>
                                     <TableCell className="text-right text-destructive">{formatPrice(grandTotals.admin)}</TableCell>
                                     <TableCell className="text-right text-green-700">{formatPrice(grandTotals.net)}</TableCell>
                                     <TableCell className="text-right">{formatPrice(grandTotals.ongkir)}</TableCell>
-                                    <TableCell colSpan={2}></TableCell>
+                                    <TableCell colSpan={3}></TableCell>
                                 </TableRow>
                             </TableFooter>
                         )}
@@ -756,6 +871,27 @@ export default function AdminSummaryPage() {
                 </div>
             </CardContent>
         </Card>
+
+        <AlertDialog open={!!orderToDelete} onOpenChange={(open) => !open && setOrderToDelete(null)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Hapus Pesanan Ini?</AlertDialogTitle>
+              <AlertDialogDescription>
+                Tindakan ini akan menghapus pesanan #{orderToDelete} secara permanen dari database, termasuk seluruh rincian item di dalamnya.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Batal</AlertDialogCancel>
+              <AlertDialogAction 
+                onClick={() => orderToDelete && executeDeleteOrders([orderToDelete])} 
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              >
+                {isDeleting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Ya, Hapus Sekarang
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
     </div>
   );
 }
