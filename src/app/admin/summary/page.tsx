@@ -387,33 +387,66 @@ export default function AdminSummaryPage() {
     const doc = new jsPDF('l', 'mm', 'a4');
     const tableColumn = ["No.", "ID Sub-Order / Group", "Status", "Total Produk", "Admin (5%)", "Bayar ke Mitra", "Ongkir", "Rincian Item", "Alamat"];
     
-    // Grouping tracking for PDF visual merging
-    let currentParentId = '';
+    // Calculate rowspans for PDF
+    const pdfRowSpans: Record<number, number> = {};
+    if (groupBy === 'orderId') {
+      let i = 0;
+      while (i < filteredSummary.length) {
+        const currentOrder = filteredSummary[i].parentOrderId;
+        let count = 1;
+        let j = i + 1;
+        while (j < filteredSummary.length && filteredSummary[j].parentOrderId === currentOrder) {
+          count++;
+          j++;
+        }
+        pdfRowSpans[i] = count;
+        i = j;
+      }
+    }
 
-    const tableRows = filteredSummary.map((summary, index) => {
-        // Decide if we should show the "merged" columns (Ongkir and Alamat)
-        const isFirstInOrderGroup = groupBy === 'orderId' ? summary.parentOrderId !== currentParentId : true;
-        if (groupBy === 'orderId') currentParentId = summary.parentOrderId;
+    const tableRows: any[] = [];
+    filteredSummary.forEach((summary, index) => {
+        const span = pdfRowSpans[index];
+        const isSpannedRow = groupBy === 'orderId';
+        
+        // Decide if we should include Ongkir and Alamat based on visual merger
+        const showOngkirAlamat = !isSpannedRow || (isSpannedRow && span !== undefined);
 
-        return [
+        const row: any[] = [
             (index + 1).toString(),
-            summary.label + (summary.subLabel ? `\n(${summary.subLabel})` : ''),
+            { content: summary.label + (summary.subLabel ? `\n(${summary.subLabel})` : ''), styles: { fontStyle: 'bold' } },
             summary.status || summary.statuses?.join(', ') || '-',
             formatPrice(summary.totalAmount),
             formatPrice(summary.adminFee),
             formatPrice(summary.netToVendor),
-            // Show Ongkir only for the first row of an order group when grouped by orderId
-            isFirstInOrderGroup ? formatPrice(2500) : '-',
-            summary.items.map(i => `${i.name} [${i.sku}]\n${i.quantity} porsi`).join('\n---\n'),
-            // Show Alamat only for the first row of an order group when grouped by orderId
-            isFirstInOrderGroup ? summary.addresses.join('\n\n') : '-'
         ];
+
+        // Add Ongkir with rowspan if applicable
+        if (showOngkirAlamat) {
+          row.push({ 
+            content: formatPrice(isSpannedRow ? 2500 : summary.totalDeliveryFee), 
+            rowSpan: isSpannedRow ? span : 1,
+            styles: { halign: 'right', valign: 'middle', fillColor: [255, 248, 225] } 
+          });
+        }
+
+        // Add Rincian Item
+        row.push(summary.items.map(i => `${i.name} [${i.sku}]\n${i.quantity} porsi`).join('\n---\n'));
+
+        // Add Alamat with rowspan if applicable
+        if (showOngkirAlamat) {
+          row.push({ 
+            content: summary.addresses.join('\n\n'), 
+            rowSpan: isSpannedRow ? span : 1,
+            styles: { fontSize: 6, valign: 'middle', fillColor: [255, 248, 225] } 
+          });
+        }
+
+        tableRows.push(row);
     });
 
     tableRows.push([
-      "",
-      "TOTAL KESELURUHAN",
-      "",
+      { content: "TOTAL KESELURUHAN", colSpan: 3, styles: { halign: 'right', fontStyle: 'bold' } },
       formatPrice(grandTotals.amount),
       formatPrice(grandTotals.admin),
       formatPrice(grandTotals.net),

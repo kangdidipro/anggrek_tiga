@@ -36,7 +36,7 @@ service cloud.firestore {
      */
     match /menuItems/{itemId} {
       allow read: if true;
-      allow write: if isAdmin();
+      allow write: if isAdmin() || isSignedIn(); // Allow prototype writes
     }
 
     /**
@@ -45,7 +45,7 @@ service cloud.firestore {
      */
     match /vendors/{vendorId} {
       allow read: if true;
-      allow write: if isAdmin();
+      allow write: if isAdmin() || isSignedIn(); // Allow prototype writes
     }
 
     /**
@@ -53,9 +53,9 @@ service cloud.firestore {
      * @path /customers/{userId}
      */
     match /customers/{userId} {
-      allow get, list: if isOwner(userId) || isAdmin();
-      allow create: if isOwner(userId);
-      allow update: if isExistingOwner(userId) || isAdmin();
+      allow get, list: if isOwner(userId) || isAdmin() || isSignedIn();
+      allow create: if isOwner(userId) || isSignedIn();
+      allow update: if isExistingOwner(userId) || isAdmin() || isSignedIn();
       allow delete: if isAdmin();
     }
 
@@ -64,9 +64,9 @@ service cloud.firestore {
      * @path /customers/{userId}/orders/{orderId}
      */
     match /customers/{userId}/orders/{orderId} {
-      allow get, list: if isOwner(userId) || isAdmin();
-      allow create: if isOwner(userId) && request.resource.data.customerId == userId;
-      allow update: if isExistingOwner(userId) || isAdmin();
+      allow get, list: if isOwner(userId) || isAdmin() || isSignedIn();
+      allow create: if (isOwner(userId) && request.resource.data.customerId == userId) || isSignedIn();
+      allow update: if isExistingOwner(userId) || isAdmin() || isSignedIn();
       allow delete: if isAdmin();
     }
 
@@ -75,10 +75,10 @@ service cloud.firestore {
      * @path /customers/{userId}/orders/{orderId}/orderItems/{orderItemId}
      */
     match /customers/{userId}/orders/{orderId}/orderItems/{orderItemId} {
-      allow get, list: if isOwner(userId) || isAdmin();
-      allow create: if isOwner(userId) && request.resource.data.orderId == orderId;
-      allow update: if isExistingOwner(userId) || isAdmin();
-      allow delete: if isExistingOwner(userId) || isAdmin();
+      allow get, list: if isOwner(userId) || isAdmin() || isSignedIn();
+      allow create: if (isOwner(userId) && request.resource.data.orderId == orderId) || isSignedIn();
+      allow update: if isExistingOwner(userId) || isAdmin() || isSignedIn();
+      allow delete: if isExistingOwner(userId) || isAdmin() || isSignedIn();
     }
 
     /**
@@ -86,7 +86,8 @@ service cloud.firestore {
      * @path /settings/{settingId}
      */
     match /settings/{settingId} {
-      allow read, write: if isAdmin();
+      allow read: if true;
+      allow write: if isAdmin() || isSignedIn();
     }
 
     /**
@@ -94,9 +95,20 @@ service cloud.firestore {
      * @path /admin_roles/{uid}
      */
     match /admin_roles/{uid} {
-      allow get: if isSignedIn() && (request.auth.uid == uid || isAdmin());
-      allow list: if isAdmin();
+      allow get: if isSignedIn();
+      allow list: if isAdmin() || isSignedIn();
       allow create, update, delete: if false;
+    }
+
+    // --- Collection Group Rules ---
+    // Required for Admin Summary & Orders search across all customers
+
+    match /{path=**}/orders/{orderId} {
+      allow read: if isAdmin() || isSignedIn();
+    }
+
+    match /{path=**}/orderItems/{orderItemId} {
+      allow read: if isAdmin() || isSignedIn();
     }
   }
 }
