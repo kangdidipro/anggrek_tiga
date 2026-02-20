@@ -369,8 +369,8 @@ export default function AdminOrdersPage() {
     
     const subtotal = itemsToPrint.reduce((sum, item) => sum + (item.priceAtOrder * item.quantity), 0);
     
-    const vCount = Object.keys(groupItemsByVendor(order.items)).length;
-    const calculatedDeliveryFee = vCount * 2500;
+    // Kembali ke logika 1 order 1 ongkir Rp 2.500
+    const calculatedDeliveryFee = 2500;
     const totalToPrint = vendorCode ? subtotal : (subtotal + calculatedDeliveryFee);
 
     docPdf.setFontSize(12);
@@ -429,13 +429,13 @@ export default function AdminOrdersPage() {
     y += 6;
     
     if (!vendorCode) {
-      docPdf.text(`Ongkir (${vCount} Mitra):`, 5, y);
+      docPdf.text(`Ongkir (Flat):`, 5, y);
       docPdf.text(`${formatPrice(calculatedDeliveryFee)}`, 75, y, { align: 'right' });
       y += 6;
     }
     
     docPdf.setFontSize(10);
-    docPdf.text(vendorCode ? "SUBTOTAL MITRA:" : "TOTAL:", 5, y);
+    docPdf.text(vendorCode ? "SUBTOTAL MITRA:" : "TOTAL BAYAR:", 5, y);
     docPdf.text(`${formatPrice(totalToPrint)}`, 75, y, { align: 'right' });
     y += 10;
     
@@ -551,8 +551,6 @@ export default function AdminOrdersPage() {
                 </h2>
                 <Accordion type="single" collapsible className="w-full space-y-4">
                   {groupOrders.map((order) => {
-                      // Jika groupBy adalah 'orderId' (yang di-map ke sub-order), 
-                      // kita hanya ingin memproses mitra yang ada di groupKey.
                       const targetVendorInSubOrder = groupBy === 'orderId' ? groupKey.split('-').pop() : null;
 
                       return (
@@ -689,10 +687,10 @@ export default function AdminOrdersPage() {
                                               <div className="space-y-1 px-3">
                                                 <div className="flex justify-between text-sm pt-2 border-t border-dashed">
                                                   <span className="text-muted-foreground italic">
-                                                    Ongkir ({Object.keys(groupItemsByVendor(order.items)).length} Mitra)
+                                                    Ongkos Antar (Flat)
                                                   </span>
                                                   <span className="text-muted-foreground">
-                                                    {formatPrice(Math.max(order.deliveryFee || 0, Object.keys(groupItemsByVendor(order.items)).length * 2500))}
+                                                    {formatPrice(order.deliveryFee || 2500)}
                                                   </span>
                                                 </div>
                                                 <div className="flex justify-between text-sm font-bold pt-1">

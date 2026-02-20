@@ -33,7 +33,6 @@ export default function Cart() {
     setDeliveryDate(addDays(now, daysToAdd));
   }, []);
 
-  const uniqueVendorsCount = new Set(cartItems.map(item => item.product.vendor || getVendorFromSku(item.product.sku))).size;
   const finalTotal = cartTotal + deliveryFeeTotal;
 
   return (
@@ -80,7 +79,7 @@ export default function Cart() {
                     <div className="flex justify-between">
                         <span className="flex flex-col">
                           <span>Ongkos Antar</span>
-                          <span className="text-[10px] text-muted-foreground italic">({uniqueVendorsCount} Mitra x Rp 2.500)</span>
+                          <span className="text-[10px] text-muted-foreground italic">(Flat per pesanan)</span>
                         </span>
                         <span>{formatPrice(deliveryFeeTotal)}</span>
                     </div>

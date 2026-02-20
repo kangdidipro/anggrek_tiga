@@ -230,9 +230,9 @@ export default function OrdersPage() {
             
             docPdf.text("-".repeat(40), centerPos, y, { align: 'center' });
             y += 6;
-            const vCount = Object.keys(grouped).length;
-            const calculatedDeliveryFee = vCount * 2500;
-            docPdf.text(`Ongkir (${vCount} Mitra):`, 5, y);
+            // Kembali ke 1 order 1 biaya ongkir flat
+            const calculatedDeliveryFee = 2500;
+            docPdf.text(`Ongkos Antar (Flat):`, 5, y);
             docPdf.text(`${formatPrice(calculatedDeliveryFee)}`, 75, y, { align: 'right' });
             y += 6;
             
@@ -357,8 +357,7 @@ export default function OrdersPage() {
                 <div className="space-y-6">
                     <Accordion type="single" collapsible className="w-full space-y-4">
                         {orders.map((order) => {
-                            const vCount = Object.keys(order.vendorStatuses || {}).length;
-                            const currentOngkir = Math.max(order.deliveryFee || 0, vCount * 2500);
+                            const currentOngkir = order.deliveryFee || 2500;
                             const subtotalProduk = order.totalAmount - currentOngkir;
 
                             return (
@@ -404,7 +403,7 @@ export default function OrdersPage() {
                                                         </div>
                                                         <div className="flex justify-between text-sm">
                                                             <span className="text-muted-foreground italic">
-                                                              Ongkos Antar ({vCount} Mitra)
+                                                              Ongkos Antar (Flat)
                                                             </span>
                                                             <span>{formatPrice(currentOngkir)}</span>
                                                         </div>

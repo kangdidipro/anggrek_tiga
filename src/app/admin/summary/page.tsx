@@ -161,6 +161,9 @@ export default function AdminSummaryPage() {
       statuses: Set<string>;
     }> = {};
 
+    // Map to ensure flat delivery fee is only counted once per order in summary
+    const parentOrdersIncludedInDelivery = new Set<string>();
+
     targetDateOrders.forEach(order => {
         const uniqueItemsForThisOrder = order.items.filter(item => {
             const vendor = item.vendor || getVendorFromSku(item.sku);
@@ -180,7 +183,8 @@ export default function AdminSummaryPage() {
 
         if (uniqueItemsForThisOrder.length === 0) return;
 
-        const orderVendorsSeenInOrder = new Set<string>();
+        // Tracks which vendors of THIS order we have already processed for THIS summary loop
+        const vendorsSeenInOrderLoop = new Set<string>();
 
         uniqueItemsForThisOrder.forEach(item => {
             const vendor = item.vendor || getVendorFromSku(item.sku);
@@ -226,12 +230,12 @@ export default function AdminSummaryPage() {
             const itemTotal = item.quantity * item.priceAtOrder;
             summaryMap[key].totalAmount += itemTotal;
             
-            const vendorOrderKey = `${order.id}-${vendor}`;
-            if (!orderVendorsSeenInOrder.has(vendorOrderKey)) {
-                orderVendorsSeenInOrder.add(vendorOrderKey);
-                if (groupBy === 'orderId' || groupBy === 'vendor') {
-                    summaryMap[key].totalDeliveryFee += 2500;
-                }
+            // Logic for flat delivery fee: 
+            // In ID Sub-Order grouping, we attribute the fee to the FIRST sub-order encountered for that parent order.
+            // In Vendor grouping, it's more complex, but we'll try to keep grand total accurate by counting parent orders.
+            if (!parentOrdersIncludedInDelivery.has(order.id)) {
+                parentOrdersIncludedInDelivery.add(order.id);
+                summaryMap[key].totalDeliveryFee += 2500;
             }
 
             const itemKey = item.sku;

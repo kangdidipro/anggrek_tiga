@@ -157,8 +157,7 @@ export default function OrderForm({ cartItems, total, deliveryFee, setSheetOpen 
       
       pdf.text("-".repeat(40), centerPos, y, { align: 'center' });
       y += 6;
-      const uniqueVendorsInOrder = Object.keys(grouped).length;
-      pdf.text(`Ongkir (${uniqueVendorsInOrder} Mitra):`, 5, y);
+      pdf.text("Ongkos Antar:", 5, y);
       pdf.text(`${formatPrice(deliveryFee)}`, 75, y, { align: 'right' });
       y += 6;
       

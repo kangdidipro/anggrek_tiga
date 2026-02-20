@@ -77,13 +77,12 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   const cartTotal = cartItems.reduce((total, item) => total + item.product.price * item.quantity, 0);
   
   /**
-   * Hitung total ongkir berdasarkan jumlah mitra unik.
-   * Setiap mitra dalam satu order dikenakan biaya pengantaran tersendiri.
+   * Hitung total ongkir.
+   * Kembali ke logika 1 order 1 biaya ongkir flat.
    */
   const deliveryFeeTotal = useMemo(() => {
     if (cartItems.length === 0) return 0;
-    const uniqueVendors = new Set(cartItems.map(item => item.product.vendor || getVendorFromSku(item.product.sku)));
-    return uniqueVendors.size * deliveryFee;
+    return deliveryFee;
   }, [cartItems]);
 
   const value = {
