@@ -163,7 +163,6 @@ export default function AdminSummaryPage() {
       statuses: Set<string>;
     }> = {};
 
-    // Map to ensure flat delivery fee is only counted once per order in summary
     const parentOrdersIncludedInDelivery = new Set<string>();
 
     targetDateOrders.forEach(order => {
@@ -267,13 +266,12 @@ export default function AdminSummaryPage() {
   const filteredSummary = useMemo(() => {
     let result = [...summaryData];
     
-    // Default sort by parentOrderId if grouping by sub-order to facilitate merging
     if (groupBy === 'orderId' && sortConfig.key === 'label' && sortConfig.direction === 'asc') {
         result.sort((a, b) => a.parentOrderId.localeCompare(b.parentOrderId) || a.key.localeCompare(b.key));
     } else if (sortConfig.key) {
       result.sort((a, b) => {
-        const valA = a[sortConfig.key!] ?? '';
-        const valB = b[sortConfig.key!] ?? '';
+        const valA = (a[sortConfig.key!] || '').toString().toLowerCase();
+        const valB = (b[sortConfig.key!] || '').toString().toLowerCase();
 
         if (valA < valB) return sortConfig.direction === 'asc' ? -1 : 1;
         if (valA > valB) return sortConfig.direction === 'asc' ? 1 : -1;
@@ -283,7 +281,6 @@ export default function AdminSummaryPage() {
     return result;
   }, [summaryData, sortConfig, groupBy]);
 
-  // Logic to calculate rowspan for same parent order rows
   const rowSpans = useMemo(() => {
     const spans: Record<string, number> = {};
     if (groupBy !== 'orderId') return spans;
@@ -309,9 +306,9 @@ export default function AdminSummaryPage() {
       amount: acc.amount + curr.totalAmount,
       admin: acc.admin + curr.adminFee,
       net: acc.net + curr.netToVendor,
-      ongkir: acc.ongkir + curr.totalDeliveryFee
+      ongkir: acc.ongkir + (rowSpans[curr.key] > 0 ? 2500 : (groupBy !== 'orderId' ? curr.totalDeliveryFee : 0))
     }), { orders: 0, amount: 0, admin: 0, net: 0, ongkir: 0 });
-  }, [filteredSummary]);
+  }, [filteredSummary, rowSpans, groupBy]);
 
   const availableVendors = useMemo(() => {
     const vendors = new Set<string>();
@@ -355,7 +352,7 @@ export default function AdminSummaryPage() {
         'Total Produk (Bruto)': summary.totalAmount,
         'Admin (5%)': summary.adminFee,
         'Bayar ke Mitra (Netto)': summary.netToVendor,
-        'Ongkir': summary.totalDeliveryFee,
+        'Ongkir': (groupBy === 'orderId' && rowSpans[summary.key] > 0) ? 2500 : (groupBy !== 'orderId' ? summary.totalDeliveryFee : 0),
         'Rincian Item': summary.items.map(i => `${i.name} [${i.sku}] (${i.quantity} porsi x ${formatPrice(i.price)})`).join('\r\n'),
         'Alamat Pengiriman': summary.addresses.join('\r\n'),
     }));
@@ -385,87 +382,63 @@ export default function AdminSummaryPage() {
 
   const exportToPDF = () => {
     const doc = new jsPDF('l', 'mm', 'a4');
-    const tableColumn = ["No.", "ID Sub-Order / Group", "Status", "Total Produk", "Admin (5%)", "Bayar ke Mitra", "Ongkir", "Rincian Item", "Alamat"];
     
-    // Calculate rowspans for PDF
-    const pdfRowSpans: Record<number, number> = {};
-    if (groupBy === 'orderId') {
-      let i = 0;
-      while (i < filteredSummary.length) {
-        const currentOrder = filteredSummary[i].parentOrderId;
-        let count = 1;
-        let j = i + 1;
-        while (j < filteredSummary.length && filteredSummary[j].parentOrderId === currentOrder) {
-          count++;
-          j++;
-        }
-        pdfRowSpans[i] = count;
-        i = j;
-      }
-    }
-
-    const tableRows: any[] = [];
-    filteredSummary.forEach((summary, index) => {
-        const span = pdfRowSpans[index];
+    const tableRows = filteredSummary.map((summary, index) => {
+        const span = rowSpans[summary.key] || 0;
         const isSpannedRow = groupBy === 'orderId';
-        
-        // Decide if we should include Ongkir and Alamat based on visual merger
-        const showOngkirAlamat = !isSpannedRow || (isSpannedRow && span !== undefined);
+        const showOngkirAlamat = !isSpannedRow || (isSpannedRow && span > 0);
 
-        const row: any[] = [
-            (index + 1).toString(),
-            { content: summary.label + (summary.subLabel ? `\n(${summary.subLabel})` : ''), styles: { fontStyle: 'bold' } },
-            summary.status || summary.statuses?.join(', ') || '-',
-            formatPrice(summary.totalAmount),
-            formatPrice(summary.adminFee),
-            formatPrice(summary.netToVendor),
-        ];
+        const row: any = {
+            no: (index + 1).toString(),
+            group: summary.label + (summary.subLabel ? `\n(${summary.subLabel})` : ''),
+            status: summary.status || summary.statuses?.join(', ') || '-',
+            produk: formatPrice(summary.totalAmount),
+            admin: formatPrice(summary.adminFee),
+            net: formatPrice(summary.netToVendor),
+            items: summary.items.map(i => `${i.name} [${i.sku}]\n${i.quantity} porsi`).join('\n---\n'),
+        };
 
-        // Add Ongkir with rowspan if applicable
         if (showOngkirAlamat) {
-          row.push({ 
-            content: formatPrice(isSpannedRow ? 2500 : summary.totalDeliveryFee), 
-            rowSpan: isSpannedRow ? span : 1,
-            styles: { halign: 'right', valign: 'middle', fillColor: [255, 248, 225] } 
-          });
+            row.ongkir = { content: formatPrice(isSpannedRow ? 2500 : summary.totalDeliveryFee), rowSpan: isSpannedRow ? span : 1, styles: { halign: 'right', valign: 'middle', fillColor: [255, 248, 225] } };
+            row.alamat = { content: summary.addresses.join('\n\n'), rowSpan: isSpannedRow ? span : 1, styles: { fontSize: 6, valign: 'middle', fillColor: [255, 248, 225] } };
         }
 
-        // Add Rincian Item
-        row.push(summary.items.map(i => `${i.name} [${i.sku}]\n${i.quantity} porsi`).join('\n---\n'));
-
-        // Add Alamat with rowspan if applicable
-        if (showOngkirAlamat) {
-          row.push({ 
-            content: summary.addresses.join('\n\n'), 
-            rowSpan: isSpannedRow ? span : 1,
-            styles: { fontSize: 6, valign: 'middle', fillColor: [255, 248, 225] } 
-          });
-        }
-
-        tableRows.push(row);
+        return row;
     });
 
-    tableRows.push([
-      { content: "TOTAL KESELURUHAN", colSpan: 3, styles: { halign: 'right', fontStyle: 'bold' } },
-      formatPrice(grandTotals.amount),
-      formatPrice(grandTotals.admin),
-      formatPrice(grandTotals.net),
-      formatPrice(grandTotals.ongkir),
-      "",
-      ""
-    ]);
+    const grandTotalRow = {
+      no: { content: "TOTAL KESELURUHAN", colSpan: 3, styles: { halign: 'right', fontStyle: 'bold' } },
+      produk: { content: formatPrice(grandTotals.amount), styles: { fontStyle: 'bold' } },
+      admin: { content: formatPrice(grandTotals.admin), styles: { fontStyle: 'bold' } },
+      net: { content: formatPrice(grandTotals.net), styles: { fontStyle: 'bold' } },
+      ongkir: { content: formatPrice(grandTotals.ongkir), styles: { fontStyle: 'bold' } },
+      items: "",
+      alamat: ""
+    };
 
     doc.text(`Rekap Harian Takjil - ${date ? format(date, 'd MMMM yyyy', { locale: id }) : 'Semua'}`, 14, 15);
+    
     autoTable(doc, {
-        head: [tableColumn],
-        body: tableRows,
+        head: [["No.", "ID Sub-Order / Group", "Status", "Total Produk", "Admin (5%)", "Bayar ke Mitra", "Ongkir", "Rincian Item", "Alamat"]],
+        body: [...tableRows, grandTotalRow],
+        columns: [
+            { header: 'No.', dataKey: 'no' },
+            { header: 'ID Sub-Order / Group', dataKey: 'group' },
+            { header: 'Status', dataKey: 'status' },
+            { header: 'Total Produk', dataKey: 'produk' },
+            { header: 'Admin (5%)', dataKey: 'admin' },
+            { header: 'Bayar ke Mitra', dataKey: 'net' },
+            { header: 'Ongkir', dataKey: 'ongkir' },
+            { header: 'Rincian Item', dataKey: 'items' },
+            { header: 'Alamat', dataKey: 'alamat' },
+        ],
         startY: 20,
         theme: 'grid',
         headStyles: { fillColor: [255, 140, 0] },
         styles: { fontSize: 7, overflow: 'linebreak' },
         columnStyles: {
-          7: { cellWidth: 40 }, // Rincian Item
-          8: { cellWidth: 40 }, // Alamat
+          items: { cellWidth: 40 },
+          alamat: { cellWidth: 40 },
         }
     });
     doc.save(`rekap_${groupBy}_${date ? date.toISOString().split('T')[0] : 'semua'}.pdf`);
@@ -481,7 +454,6 @@ export default function AdminSummaryPage() {
         return;
     }
     setIsSending(true);
-    // Simulating sending report with all columns
     await new Promise(resolve => setTimeout(resolve, 2000));
     setIsSending(false);
     toast({
@@ -704,7 +676,6 @@ export default function AdminSummaryPage() {
                                             <TableCell className="text-right text-destructive font-medium">{formatPrice(summary.adminFee)}</TableCell>
                                             <TableCell className="text-right font-bold text-green-600">{formatPrice(summary.netToVendor)}</TableCell>
                                             
-                                            {/* Column Merger for Ongkir */}
                                             {groupBy === 'orderId' ? (
                                                 span > 0 ? (
                                                     <TableCell rowSpan={span} className="text-right bg-primary/5 border-l border-primary/10 font-bold">
@@ -745,7 +716,6 @@ export default function AdminSummaryPage() {
                                                 </div>
                                             </TableCell>
 
-                                            {/* Column Merger for Address */}
                                             {groupBy === 'orderId' ? (
                                                 span > 0 ? (
                                                     <TableCell rowSpan={span} className="bg-primary/5 border-l border-primary/10">

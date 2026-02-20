@@ -36,7 +36,7 @@ service cloud.firestore {
      */
     match /menuItems/{itemId} {
       allow read: if true;
-      allow write: if isAdmin() || isSignedIn(); // Allow prototype writes
+      allow write: if isAdmin() || isSignedIn();
     }
 
     /**
@@ -45,7 +45,7 @@ service cloud.firestore {
      */
     match /vendors/{vendorId} {
       allow read: if true;
-      allow write: if isAdmin() || isSignedIn(); // Allow prototype writes
+      allow write: if isAdmin() || isSignedIn();
     }
 
     /**

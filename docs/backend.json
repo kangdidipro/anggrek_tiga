@@ -86,47 +86,25 @@
     "providers": ["password", "anonymous"]
   },
   "firestore": {
-    "structure": [
-      {
-        "path": "/menuItems/{itemId}",
-        "definition": {
-          "entityName": "Product",
-          "schema": { "$ref": "#/backend/entities/Product" },
-          "description": "Stores takjil menu items."
-        }
-      },
-      {
-        "path": "/vendors/{vendorId}",
-        "definition": {
-          "entityName": "Vendor",
-          "schema": { "$ref": "#/backend/entities/Vendor" },
-          "description": "Stores UMKM partner details."
-        }
-      },
-      {
-        "path": "/customers/{userId}",
-        "definition": {
-          "entityName": "Customer",
-          "schema": { "$ref": "#/backend/entities/Customer" },
-          "description": "Customer profiles."
-        }
-      },
-      {
-        "path": "/customers/{userId}/orders/{orderId}",
-        "definition": {
-          "entityName": "Order",
-          "schema": { "$ref": "#/backend/entities/Order" },
-          "description": "Customer orders."
-        }
-      },
-      {
-        "path": "/customers/{userId}/orders/{orderId}/orderItems/{orderItemId}",
-        "definition": {
-          "entityName": "OrderItem",
-          "schema": { "$ref": "#/backend/entities/OrderItem" },
-          "description": "Items in each order."
-        }
-      }
-    ]
+    "/menuItems/{itemId}": {
+      "schema": { "$ref": "#/backend/entities/Product" },
+      "description": "Stores takjil menu items."
+    },
+    "/vendors/{vendorId}": {
+      "schema": { "$ref": "#/backend/entities/Vendor" },
+      "description": "Stores UMKM partner details."
+    },
+    "/customers/{userId}": {
+      "schema": { "$ref": "#/backend/entities/Customer" },
+      "description": "Customer profiles."
+    },
+    "/customers/{userId}/orders/{orderId}": {
+      "schema": { "$ref": "#/backend/entities/Order" },
+      "description": "Customer orders."
+    },
+    "/customers/{userId}/orders/{orderId}/orderItems/{orderItemId}": {
+      "schema": { "$ref": "#/backend/entities/OrderItem" },
+      "description": "Items in each order."
+    }
   }
 }

@@ -4,6 +4,7 @@ import { useAdmin } from '@/hooks/use-admin';
 import { useRouter, usePathname } from 'next/navigation';
 import { useEffect, type ReactNode } from 'react';
 import AdminSidebar from '@/components/admin/sidebar';
+import AdminMobileNav from '@/components/admin/mobile-nav';
 import { Loader2 } from 'lucide-react';
 
 export default function AdminLayout({ children }: { children: ReactNode }) {
@@ -34,9 +35,10 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
   }
 
   return (
-    <div className="flex min-h-screen">
+    <div className="flex flex-col md:flex-row min-h-screen bg-muted/40">
       <AdminSidebar />
-      <main className="flex-1 p-4 md:p-8 bg-muted/40 overflow-auto">
+      <AdminMobileNav />
+      <main className="flex-1 p-4 md:p-8 overflow-auto">
         {children}
       </main>
     </div>
