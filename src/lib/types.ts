@@ -15,6 +15,7 @@ export type Vendor = {
   code: string;
   email?: string;
   phoneNumber?: string;
+  isActive?: boolean;
 };
 
 export type CartItem = {

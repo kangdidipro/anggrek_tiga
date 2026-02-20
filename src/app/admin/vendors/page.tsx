@@ -1,8 +1,9 @@
+
 'use client';
 
 import { useState, useRef, useMemo } from 'react';
 import { useFirestore, useCollection, useMemoFirebase } from '@/firebase';
-import { collection, doc, deleteDoc, setDoc, writeBatch } from 'firebase/firestore';
+import { collection, doc, deleteDoc, setDoc, writeBatch, updateDoc } from 'firebase/firestore';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -12,6 +13,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Switch } from '@/components/ui/switch';
 import type { Vendor, Product } from '@/lib/types';
 import * as XLSX from 'xlsx';
 import { saveAs } from 'file-saver';
@@ -165,15 +167,29 @@ export default function AdminVendorsPage() {
       code: formData.get('code') as string,
       email: (formData.get('email') as string) || '',
       phoneNumber: (formData.get('phoneNumber') as string) || '',
+      isActive: isEditing ? isEditing.isActive : true,
     };
 
     try {
-      await setDoc(doc(firestore, 'vendors', vendorData.id), vendorData);
+      await setDoc(doc(firestore, 'vendors', vendorData.id), vendorData, { merge: true });
       toast({ title: "Berhasil", description: "Data mitra telah disimpan." });
       setIsEditing(null);
       setIsAdding(false);
     } catch (error) {
       toast({ variant: "destructive", title: "Gagal", description: "Tidak dapat menyimpan data mitra." });
+    }
+  };
+
+  const handleToggleStatus = async (id: string, isActive: boolean) => {
+    if (!firestore) return;
+    try {
+      await updateDoc(doc(firestore, 'vendors', id), { isActive });
+      toast({
+        title: "Status Diperbarui",
+        description: `Mitra kini dalam status ${isActive ? 'Aktif' : 'Non-Aktif'}.`,
+      });
+    } catch (error) {
+      toast({ variant: "destructive", title: "Gagal", description: "Gagal memperbarui status mitra." });
     }
   };
 
@@ -199,6 +215,7 @@ export default function AdminVendorsPage() {
             id: (Math.floor(Math.random() * 1000) + 500).toString(),
             name: code,
             code: code,
+            isActive: true,
           };
           await setDoc(doc(firestore, 'vendors', vendorData.id), vendorData);
           importedCount++;
@@ -248,6 +265,7 @@ export default function AdminVendorsPage() {
               code: String(code),
               email: String(email),
               phoneNumber: String(phone),
+              isActive: true,
             };
             await setDoc(doc(firestore, 'vendors', vendorData.id), vendorData);
             importedCount++;
@@ -283,6 +301,7 @@ export default function AdminVendorsPage() {
       'Kode': vendor.code,
       'Email': vendor.email || '-',
       'No HP': vendor.phoneNumber || '-',
+      'Status': vendor.isActive !== false ? 'Aktif' : 'Non-Aktif',
       'Link Pesanan': `${window.location.origin}/mitra/${vendor.code}`
     }));
 
@@ -296,6 +315,7 @@ export default function AdminVendorsPage() {
         {wch: 15}, // Kode
         {wch: 30}, // Email
         {wch: 20}, // No HP
+        {wch: 15}, // Status
         {wch: 60}  // Link Pesanan
     ];
     worksheet['!cols'] = wscols;
@@ -456,6 +476,7 @@ export default function AdminVendorsPage() {
                     No HP {getSortIcon('phoneNumber')}
                   </div>
                 </TableHead>
+                <TableHead>Status Aktif</TableHead>
                 <TableHead>Link Pesanan</TableHead>
                 <TableHead className="text-right">Aksi</TableHead>
               </TableRow>
@@ -463,7 +484,7 @@ export default function AdminVendorsPage() {
             <TableBody>
               {filteredVendors.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={8} className="text-center py-12 text-muted-foreground">
+                  <TableCell colSpan={9} className="text-center py-12 text-muted-foreground">
                     {searchTerm ? 'Tidak ada mitra yang cocok dengan pencarian.' : 'Belum ada mitra yang terdaftar.'}
                   </TableCell>
                 </TableRow>
@@ -482,6 +503,17 @@ export default function AdminVendorsPage() {
                     <TableCell className="font-mono font-bold">{vendor.code}</TableCell>
                     <TableCell>{vendor.email || '-'}</TableCell>
                     <TableCell>{vendor.phoneNumber || '-'}</TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                        <Switch 
+                          checked={vendor.isActive !== false} 
+                          onCheckedChange={(checked) => handleToggleStatus(vendor.id, checked)}
+                        />
+                        <span className={`text-[10px] font-bold uppercase ${vendor.isActive !== false ? 'text-green-600' : 'text-destructive'}`}>
+                          {vendor.isActive !== false ? 'Aktif' : 'Non-Aktif'}
+                        </span>
+                      </div>
+                    </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-2">
                         <Button variant="outline" size="sm" asChild>

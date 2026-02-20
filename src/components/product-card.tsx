@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -6,15 +7,17 @@ import { Card, CardContent, CardFooter, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { formatPrice } from '@/lib/utils';
 import { useCart } from '@/hooks/use-cart';
-import { Plus, Minus, PackageX, Store } from 'lucide-react';
+import { Plus, Minus, PackageX, Store, AlertCircle } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import { cn } from '@/lib/utils';
 
 type ProductCardProps = {
   product: Product;
   vendorName?: string;
+  isVendorActive?: boolean;
 };
 
-export default function ProductCard({ product, vendorName }: ProductCardProps) {
+export default function ProductCard({ product, vendorName, isVendorActive = true }: ProductCardProps) {
   const { addToCart, updateItemQuantity, getItemQuantity } = useCart();
   const quantity = getItemQuantity(product.id);
   const [mounted, setMounted] = useState(false);
@@ -38,9 +41,13 @@ export default function ProductCard({ product, vendorName }: ProductCardProps) {
   };
 
   const isOutOfStock = currentStock <= 0;
+  const isDisabled = !isVendorActive || isOutOfStock;
 
   return (
-    <Card className={`flex flex-col h-full overflow-hidden transition-all duration-300 hover:shadow-xl hover:-translate-y-1 ${isOutOfStock ? 'opacity-75 grayscale-[0.5]' : ''}`}>
+    <Card className={cn(
+      "flex flex-col h-full overflow-hidden transition-all duration-300 hover:shadow-xl hover:-translate-y-1",
+      isDisabled ? 'opacity-75 grayscale-[0.5]' : ''
+    )}>
       <CardContent className="p-4 flex-1 flex flex-col">
         <div className="flex justify-between text-[10px] text-muted-foreground mb-2 uppercase font-mono tracking-tighter">
           <span>ID: {product.id}</span>
@@ -57,6 +64,13 @@ export default function ProductCard({ product, vendorName }: ProductCardProps) {
           <span className="bg-muted px-1 rounded font-mono">({product.vendor})</span>
         </div>
 
+        {!isVendorActive && (
+          <div className="bg-destructive/10 text-destructive text-[10px] font-bold py-1.5 px-2 rounded-md mb-4 text-center border border-destructive/20 flex items-center justify-center gap-1">
+            <AlertCircle className="h-3 w-3" />
+            Untuk sementara mitra tidak aktif
+          </div>
+        )}
+
         <div className="mt-auto">
           <div className="flex items-center justify-between">
             <p className="text-lg font-bold text-primary">{formatPrice(product.price)}</p>
@@ -67,7 +81,11 @@ export default function ProductCard({ product, vendorName }: ProductCardProps) {
         </div>
       </CardContent>
       <CardFooter className="p-4 pt-0">
-        {!mounted || quantity === 0 ? (
+        {!isVendorActive ? (
+          <Button className="w-full font-bold" variant="outline" disabled>
+            Mitra Non-Aktif
+          </Button>
+        ) : !mounted || quantity === 0 ? (
           <Button 
             className="w-full font-bold" 
             onClick={() => addToCart(product)} 

@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
@@ -27,9 +28,12 @@ export default function ProductList({ products, vendors }: ProductListProps) {
   const [searchTerm, setSearchTerm] = useState('');
   
   const vendorLookup = useMemo(() => {
-    const lookup: Record<string, string> = {};
+    const lookup: Record<string, { name: string, isActive: boolean }> = {};
     vendors.forEach(v => {
-      lookup[v.code] = v.name;
+      lookup[v.code] = { 
+        name: v.name, 
+        isActive: v.isActive !== false 
+      };
     });
     return lookup;
   }, [vendors]);
@@ -92,7 +96,8 @@ export default function ProductList({ products, vendors }: ProductListProps) {
                 <ProductCard 
                   key={product.id} 
                   product={product} 
-                  vendorName={vendorLookup[product.vendor] || product.vendor} 
+                  vendorName={vendorLookup[product.vendor]?.name || product.vendor} 
+                  isVendorActive={vendorLookup[product.vendor]?.isActive ?? true}
                 />
               ))}
             </div>
@@ -106,7 +111,8 @@ export default function ProductList({ products, vendors }: ProductListProps) {
                   <ProductCard 
                     key={product.id} 
                     product={product} 
-                    vendorName={vendorLookup[product.vendor] || product.vendor}
+                    vendorName={vendorLookup[product.vendor]?.name || product.vendor}
+                    isVendorActive={vendorLookup[product.vendor]?.isActive ?? true}
                   />
                 ))}
               </div>
