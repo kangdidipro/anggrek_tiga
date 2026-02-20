@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useEffect, useState, useMemo } from 'react';
@@ -6,7 +5,7 @@ import { useFirestore, useUser, useCollection, useMemoFirebase, errorEmitter, Fi
 import { collectionGroup, getDocs, query, collection, writeBatch, doc, updateDoc, arrayUnion } from 'firebase/firestore';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Loader2, FileDown, CalendarIcon, FileText, Mail, Search, LayoutGrid, ArrowUpDown, ArrowUp, ArrowDown, Filter, Trash2, Phone, User, ChevronLeft, ChevronRight, Send, X } from 'lucide-react';
+import { Loader2, FileDown, CalendarIcon, FileText, Mail, Search, LayoutGrid, ArrowUpDown, ArrowUp, ArrowDown, Filter, Trash2, Phone, User, ChevronLeft, ChevronRight, Send, X, BarChart3, PieChart as PieChartIcon, Table as TableIcon } from 'lucide-react';
 import { formatPrice, getVendorFromSku } from '@/lib/utils';
 import * as XLSX from 'xlsx';
 import { saveAs } from 'file-saver';
@@ -25,6 +24,21 @@ import { cn } from '@/lib/utils';
 import type { Vendor } from '@/lib/types';
 import { Badge } from '@/components/ui/badge';
 import { Label } from '@/components/ui/label';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip as RechartsTooltip,
+  Legend,
+  PieChart,
+  Pie,
+  Cell,
+  ResponsiveContainer,
+} from 'recharts';
+import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from '@/components/ui/chart';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -98,6 +112,19 @@ const STATUS_FLOWS = {
   COD: ["Dipesan", "Diproses", "Dikumpulkan", "Dikirim dan Bayar", "Dibatalkan"]
 };
 
+const CHART_COLORS = [
+  'hsl(var(--chart-1))',
+  'hsl(var(--chart-2))',
+  'hsl(var(--chart-3))',
+  'hsl(var(--chart-4))',
+  'hsl(var(--chart-5))',
+  '#FF8C00',
+  '#4CAF50',
+  '#2196F3',
+  '#9C27B0',
+  '#E91E63'
+];
+
 export default function AdminSummaryPage() {
   const firestore = useFirestore();
   const { user, isUserLoading } = useUser();
@@ -111,6 +138,7 @@ export default function AdminSummaryPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [groupBy, setGroupBy] = useState<'orderId' | 'vendor' | 'sku'>('orderId');
   const [sortConfig, setSortConfig] = useState<SortConfig>({ key: 'label', direction: 'asc' });
+  const [viewMode, setViewMode] = useState<'table' | 'chart'>('table');
   const { toast } = useToast();
 
   // Selection States
@@ -375,7 +403,6 @@ export default function AdminSummaryPage() {
   }, [paginatedSummary, groupBy]);
 
   const grandTotals = useMemo(() => {
-    // Grand totals based on entire filtered set
     return filteredSummary.reduce((acc, curr) => ({
       orders: acc.orders + curr.totalOrders,
       amount: acc.amount + curr.totalAmount,
@@ -385,7 +412,6 @@ export default function AdminSummaryPage() {
     }), { orders: 0, amount: 0, admin: 0, net: 0, ongkir: 0 });
   }, [filteredSummary, groupBy]);
 
-  // Fix grand totals ongkir logic
   const actualGrandTotals = useMemo(() => {
     const uniqueOrders = new Set(filteredSummary.map(s => s.parentOrderId));
     return {
@@ -393,6 +419,61 @@ export default function AdminSummaryPage() {
         ongkir: uniqueOrders.size * 2500
     };
   }, [filteredSummary, grandTotals]);
+
+  // Chart Data: Omzet per Mitra
+  const chartDataMitra = useMemo(() => {
+    const map: Record<string, number> = {};
+    filteredSummary.forEach(s => {
+      const vendorCode = groupBy === 'vendor' ? s.key : (groupBy === 'orderId' ? s.key.split('-').pop() : '');
+      if (vendorCode) {
+        map[vendorCode] = (map[vendorCode] || 0) + s.netToVendor;
+      }
+    });
+    
+    // If not grouped by vendor, we need a manual scan if group is SKU
+    if (groupBy === 'sku') {
+      filteredSummary.forEach(s => {
+        s.items.forEach(item => {
+          const v = item.vendor;
+          const val = item.quantity * item.price * 0.95;
+          map[v] = (map[v] || 0) + val;
+        });
+      });
+    }
+
+    return Object.entries(map)
+      .map(([name, value]) => ({ name: vendorLookup[name] || name, value }))
+      .sort((a, b) => b.value - a.value);
+  }, [filteredSummary, groupBy, vendorLookup]);
+
+  // Chart Data: Status Distribution
+  const chartDataStatus = useMemo(() => {
+    const map: Record<string, number> = {};
+    filteredSummary.forEach(s => {
+      if (s.status) {
+        map[s.status] = (map[s.status] || 0) + 1;
+      } else if (s.statuses) {
+        s.statuses.forEach(st => {
+          map[st] = (map[st] || 0) + 1;
+        });
+      }
+    });
+    return Object.entries(map).map(([name, value]) => ({ name, value }));
+  }, [filteredSummary]);
+
+  // Chart Data: Top Products
+  const chartDataProducts = useMemo(() => {
+    const map: Record<string, number> = {};
+    filteredSummary.forEach(s => {
+      s.items.forEach(item => {
+        map[item.name] = (map[item.name] || 0) + item.quantity;
+      });
+    });
+    return Object.entries(map)
+      .map(([name, value]) => ({ name, value }))
+      .sort((a, b) => b.value - a.value)
+      .slice(0, 8);
+  }, [filteredSummary]);
 
   const availableVendors = useMemo(() => {
     const vendors = new Set<string>();
@@ -429,7 +510,6 @@ export default function AdminSummaryPage() {
   const handleUpdateVendorStatus = async (summary: SummaryItem, newStatus: string) => {
     if (!firestore || isUpdatingStatus) return;
     
-    // Extract vendor from key (key is orderId-vendor)
     const [orderId, vendorCode] = summary.key.split('-');
     if (!orderId || !vendorCode) return;
 
@@ -527,8 +607,6 @@ export default function AdminSummaryPage() {
     const doc = new jsPDF('l', 'mm', 'a4');
     
     const tableRows = filteredSummary.map((summary, index) => {
-        // Logika rowspan di PDF (berbeda dengan paginated view karena PDF mencetak seluruh filteredSummary)
-        // Kita butuh spans khusus untuk filter full
         const allSpans: Record<string, number> = {};
         if (groupBy === 'orderId') {
             let k = 0;
@@ -638,7 +716,6 @@ export default function AdminSummaryPage() {
     return grouped;
   };
 
-  // Selection & Delete Logic
   const toggleOrderSelection = (orderId: string) => {
     const newSelected = new Set(selectedOrderIds);
     if (newSelected.has(orderId)) {
@@ -669,13 +746,11 @@ export default function AdminSummaryPage() {
         const orderObj = orders.find(o => o.id === orderId);
         if (!orderObj) continue;
         
-        // Delete items
         orderObj.items.forEach(item => {
           const itemRef = doc(firestore, 'customers', orderObj.customerId, 'orders', orderId, 'orderItems', item.id);
           batch.delete(itemRef);
         });
         
-        // Delete order
         const orderRef = doc(firestore, 'customers', orderObj.customerId, 'orders', orderId);
         batch.delete(orderRef);
       }
@@ -703,16 +778,29 @@ export default function AdminSummaryPage() {
   
   return (
     <div className="space-y-6">
-        <div>
-            <h1 className="text-3xl font-bold tracking-tight font-headline">Rekap Harian</h1>
-            <p className="text-muted-foreground">
-              Rekapitulasi transaksi lengkap per {groupBy === 'orderId' ? 'ID Sub-Order' : groupBy === 'vendor' ? 'Mitra' : 'SKU'} untuk tanggal {date ? format(date, 'eeee, d MMMM yyyy', { locale: id }) : 'semua waktu'}.
-            </p>
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
+            <div>
+                <h1 className="text-3xl font-bold tracking-tight font-headline">Rekap Harian</h1>
+                <p className="text-muted-foreground">
+                  {viewMode === 'table' ? 'Tabel data detail' : 'Analisis grafik visual'} harian untuk tanggal {date ? format(date, 'eeee, d MMMM yyyy', { locale: id }) : 'semua waktu'}.
+                </p>
+            </div>
+            <Tabs value={viewMode} onValueChange={(v: any) => setViewMode(v)} className="w-full md:w-auto">
+                <TabsList className="grid grid-cols-2 w-full md:w-[280px] bg-primary/10 border border-primary/20">
+                    <TabsTrigger value="table" className="flex items-center gap-2">
+                        <TableIcon className="h-4 w-4" />
+                        Tabel Rekap
+                    </TabsTrigger>
+                    <TabsTrigger value="chart" className="flex items-center gap-2">
+                        <PieChartIcon className="h-4 w-4" />
+                        Grafik Visual
+                    </TabsTrigger>
+                </TabsList>
+            </Tabs>
         </div>
 
         <Card className="border-primary/10 shadow-sm">
             <CardContent className="p-6 space-y-6">
-                {/* Section 1: Search */}
                 <div className="space-y-2">
                     <Label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Pencarian Cepat</Label>
                     <div className="relative">
@@ -736,7 +824,6 @@ export default function AdminSummaryPage() {
                     </div>
                 </div>
 
-                {/* Section 2: Filters */}
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4 p-4 bg-muted/30 rounded-xl border border-primary/5">
                     <div className="space-y-2">
                         <Label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Pilih Tanggal</Label>
@@ -836,7 +923,6 @@ export default function AdminSummaryPage() {
                     </div>
                 </div>
 
-                {/* Section 3: Actions */}
                 <div className="flex flex-wrap items-center justify-between gap-4 pt-4 border-t">
                     <div className="flex flex-wrap gap-2">
                         {selectedOrderIds.size > 0 && (
@@ -885,267 +971,352 @@ export default function AdminSummaryPage() {
             </CardContent>
         </Card>
 
-        <div className="rounded-xl border shadow-sm overflow-hidden bg-card">
-            <Table>
-                <TableHeader className="bg-muted/50">
-                    <TableRow>
-                        <TableHead className="w-[40px]">
-                          <Checkbox 
-                            checked={selectedOrderIds.size > 0 && selectedOrderIds.size === new Set(paginatedSummary.map(s => s.parentOrderId)).size}
-                            onCheckedChange={toggleSelectAllOrders}
-                          />
-                        </TableHead>
-                        <TableHead className="w-[50px]">No.</TableHead>
-                        <TableHead className="cursor-pointer hover:bg-muted/50 transition-colors" onClick={() => handleSort('label')}>
-                            <div className="flex items-center gap-1">
-                              {groupBy === 'orderId' ? 'ID Sub-Order' : groupBy === 'vendor' ? 'Mitra' : 'SKU / Produk'}
-                              {getSortIcon('label')}
-                            </div>
-                        </TableHead>
-                        <TableHead className="w-[150px]">Status</TableHead>
-                        <TableHead className="text-right cursor-pointer hover:bg-muted/50 transition-colors" onClick={() => handleSort('totalAmount')}>
-                            <div className="flex items-center justify-end gap-1">
-                              Produk {getSortIcon('totalAmount')}
-                            </div>
-                        </TableHead>
-                        <TableHead className="text-right cursor-pointer hover:bg-muted/50 transition-colors" onClick={() => handleSort('adminFee')}>
-                            <div className="flex items-center justify-end gap-1">
-                              Admin {getSortIcon('adminFee')}
-                            </div>
-                        </TableHead>
-                        <TableHead className="text-right cursor-pointer hover:bg-muted/50 transition-colors" onClick={() => handleSort('netToVendor')}>
-                            <div className="flex items-center justify-end gap-1">
-                              Netto {getSortIcon('netToVendor')}
-                            </div>
-                        </TableHead>
-                        <TableHead className="text-right cursor-pointer hover:bg-muted/50 transition-colors" onClick={() => handleSort('totalDeliveryFee')}>
-                            <div className="flex items-center justify-end gap-1">
-                              Ongkir {getSortIcon('totalDeliveryFee')}
-                            </div>
-                        </TableHead>
-                        <TableHead className="min-w-[250px]">Rincian Item</TableHead>
-                        <TableHead className="min-w-[250px]">Profil & Alamat</TableHead>
-                        <TableHead className="text-right">Aksi</TableHead>
-                    </TableRow>
-                </TableHeader>
-                <TableBody>
-                    {paginatedSummary.length === 0 ? (
-                        <TableRow>
-                            <TableCell colSpan={11} className="text-center text-muted-foreground py-20">
-                                <div className="flex flex-col items-center gap-2">
-                                    <Search className="h-8 w-8 opacity-20" />
-                                    <p>Tidak ada transaksi yang ditemukan.</p>
-                                </div>
-                            </TableCell>
-                        </TableRow>
-                    ) : (
-                        paginatedSummary.map((summary, index) => {
-                            const span = rowSpans[summary.key] || 0;
-                            const isRowSpanned = groupBy === 'orderId';
-                            const parentOrder = orders.find(o => o.id === summary.parentOrderId);
-                            
-                            return (
-                                <TableRow key={summary.key} className={cn("transition-colors", selectedOrderIds.has(summary.parentOrderId) ? 'bg-primary/5' : 'hover:bg-muted/30')}>
-                                    <TableCell>
-                                      {(span > 0 || !isRowSpanned) && (
-                                        <Checkbox 
-                                          checked={selectedOrderIds.has(summary.parentOrderId)}
-                                          onCheckedChange={() => toggleOrderSelection(summary.parentOrderId)}
-                                        />
-                                      )}
-                                    </TableCell>
-                                    <TableCell className="text-muted-foreground font-mono text-xs">{(currentPage - 1) * pageSize + index + 1}</TableCell>
-                                    <TableCell className="font-medium">
-                                        <span className="text-sm font-bold block">{summary.label}</span>
-                                        {summary.subLabel && <span className="block text-[10px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded-sm inline-block mt-1">{summary.subLabel}</span>}
-                                    </TableCell>
-                                    <TableCell>
-                                        {groupBy === 'orderId' && summary.status ? (
-                                            <Select 
-                                                disabled={isUpdatingStatus === summary.key} 
-                                                value={summary.status} 
-                                                onValueChange={(val) => handleUpdateVendorStatus(summary, val)}
-                                            >
-                                                <SelectTrigger className={cn("h-8 text-[10px] font-bold text-white border-0 shadow-sm", getStatusBadgeColor(summary.status))}>
-                                                    <SelectValue />
-                                                </SelectTrigger>
-                                                <SelectContent>
-                                                    {(parentOrder?.paymentMethod === 'QRIS' ? STATUS_FLOWS.QRIS : STATUS_FLOWS.COD).map(s => (
-                                                        <SelectItem key={s} value={s} className="text-xs">{s}</SelectItem>
-                                                    ))}
-                                                </SelectContent>
-                                            </Select>
-                                        ) : summary.status ? (
-                                            <Badge className={cn("text-[10px]", getStatusBadgeColor(summary.status))}>
-                                                {summary.status}
-                                            </Badge>
-                                        ) : summary.statuses && summary.statuses.length > 0 ? (
-                                            <div className="flex flex-wrap gap-1">
-                                                {summary.statuses.map(s => (
-                                                    <Badge key={s} className={cn("text-[10px]", getStatusBadgeColor(s))}>
-                                                        {s}
-                                                    </Badge>
-                                                ))}
-                                            </div>
-                                        ) : null}
-                                    </TableCell>
-                                    <TableCell className="text-right text-sm">{formatPrice(summary.totalAmount)}</TableCell>
-                                    <TableCell className="text-right text-xs text-destructive/80 italic">{formatPrice(summary.adminFee)}</TableCell>
-                                    <TableCell className="text-right font-bold text-green-600 text-sm">{formatPrice(summary.netToVendor)}</TableCell>
-                                    
-                                    {isRowSpanned ? (
-                                        span > 0 ? (
-                                            <TableCell rowSpan={span} className="text-right bg-primary/5 border-l border-primary/10 font-bold text-primary text-sm">
-                                                {formatPrice(2500)}
-                                            </TableCell>
-                                        ) : null
-                                    ) : (
-                                        <TableCell className="text-right text-sm">
-                                            {summary.totalDeliveryFee > 0 ? formatPrice(summary.totalDeliveryFee) : '-'}
-                                        </TableCell>
-                                    )}
-
-                                    <TableCell>
-                                        <div className="space-y-2">
-                                            {Object.entries(groupItemsByVendor(summary.items)).map(([vCode, vItems]) => {
-                                                const subtotalMitra = vItems.reduce((sum, i) => sum + (i.price * i.quantity), 0);
-                                                const netMitra = subtotalMitra * 0.95;
-                                                return (
-                                                    <div key={vCode} className="space-y-1.5 bg-muted/20 p-2 rounded-lg border border-primary/5">
-                                                        <div className="flex justify-between items-center bg-primary/10 px-2 py-1 rounded-md mb-1">
-                                                            <span className="text-[10px] font-bold text-primary uppercase">Mitra: {vCode}</span>
-                                                            <span className="text-[10px] font-bold text-green-700">Netto: {formatPrice(netMitra)}</span>
-                                                        </div>
-                                                        <ul className="text-xs space-y-1">
-                                                            {vItems.map((item, idx) => (
-                                                                <li key={idx} className="flex justify-between gap-4 border-b border-muted/50 last:border-0 pb-1">
-                                                                    <span className="text-muted-foreground">{item.name} <span className="text-[9px] bg-muted px-1 rounded">[{item.sku}]</span></span>
-                                                                    <span className="font-bold shrink-0">{item.quantity} porsi</span>
-                                                                </li>
-                                                            ))}
-                                                        </ul>
-                                                    </div>
-                                                );
-                                            })}
+        {viewMode === 'table' ? (
+            <>
+                <div className="rounded-xl border shadow-sm overflow-hidden bg-card">
+                    <Table>
+                        <TableHeader className="bg-muted/50">
+                            <TableRow>
+                                <TableHead className="w-[40px]">
+                                <Checkbox 
+                                    checked={selectedOrderIds.size > 0 && selectedOrderIds.size === new Set(paginatedSummary.map(s => s.parentOrderId)).size}
+                                    onCheckedChange={toggleSelectAllOrders}
+                                />
+                                </TableHead>
+                                <TableHead className="w-[50px]">No.</TableHead>
+                                <TableHead className="cursor-pointer hover:bg-muted/50 transition-colors" onClick={() => handleSort('label')}>
+                                    <div className="flex items-center gap-1">
+                                    {groupBy === 'orderId' ? 'ID Sub-Order' : groupBy === 'vendor' ? 'Mitra' : 'SKU / Produk'}
+                                    {getSortIcon('label')}
+                                    </div>
+                                </TableHead>
+                                <TableHead className="w-[150px]">Status</TableHead>
+                                <TableHead className="text-right cursor-pointer hover:bg-muted/50 transition-colors" onClick={() => handleSort('totalAmount')}>
+                                    <div className="flex items-center justify-end gap-1">
+                                    Produk {getSortIcon('totalAmount')}
+                                    </div>
+                                </TableHead>
+                                <TableHead className="text-right cursor-pointer hover:bg-muted/50 transition-colors" onClick={() => handleSort('adminFee')}>
+                                    <div className="flex items-center justify-end gap-1">
+                                    Admin {getSortIcon('adminFee')}
+                                    </div>
+                                </TableHead>
+                                <TableHead className="text-right cursor-pointer hover:bg-muted/50 transition-colors" onClick={() => handleSort('netToVendor')}>
+                                    <div className="flex items-center justify-end gap-1">
+                                    Netto {getSortIcon('netToVendor')}
+                                    </div>
+                                </TableHead>
+                                <TableHead className="text-right cursor-pointer hover:bg-muted/50 transition-colors" onClick={() => handleSort('totalDeliveryFee')}>
+                                    <div className="flex items-center justify-end gap-1">
+                                    Ongkir {getSortIcon('totalDeliveryFee')}
+                                    </div>
+                                </TableHead>
+                                <TableHead className="min-w-[250px]">Rincian Item</TableHead>
+                                <TableHead className="min-w-[250px]">Profil & Alamat</TableHead>
+                                <TableHead className="text-right">Aksi</TableHead>
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                            {paginatedSummary.length === 0 ? (
+                                <TableRow>
+                                    <TableCell colSpan={11} className="text-center text-muted-foreground py-20">
+                                        <div className="flex flex-col items-center gap-2">
+                                            <Search className="h-8 w-8 opacity-20" />
+                                            <p>Tidak ada transaksi yang ditemukan.</p>
                                         </div>
                                     </TableCell>
-
-                                    {isRowSpanned ? (
-                                        span > 0 ? (
-                                            <TableCell rowSpan={span} className="bg-primary/5 border-l border-primary/10">
-                                                <div className="space-y-3">
-                                                    {summary.customerProfile && (
-                                                        <div className="p-2 bg-background/50 rounded-lg border border-primary/10">
-                                                            <p className="font-bold text-xs text-foreground uppercase flex items-center gap-1.5 mb-1"><User className="h-3 w-3 text-primary" /> {summary.customerProfile.name}</p>
-                                                            <p className="flex items-center gap-1.5 text-[10px] text-muted-foreground"><Phone className="h-3 w-3" /> {summary.customerProfile.phone}</p>
-                                                            {summary.customerProfile.email && <p className="flex items-center gap-1.5 text-[10px] text-muted-foreground truncate"><Mail className="h-3 w-3" /> {summary.customerProfile.email}</p>}
-                                                        </div>
-                                                    )}
-                                                    <div className="text-[10px] text-muted-foreground italic px-1 flex gap-1.5">
-                                                        <span className="shrink-0 font-bold">📍</span>
-                                                        <p className="leading-tight">{summary.addresses.join(', ')}</p>
+                                </TableRow>
+                            ) : (
+                                paginatedSummary.map((summary, index) => {
+                                    const span = rowSpans[summary.key] || 0;
+                                    const isRowSpanned = groupBy === 'orderId';
+                                    const parentOrder = orders.find(o => o.id === summary.parentOrderId);
+                                    
+                                    return (
+                                        <TableRow key={summary.key} className={cn("transition-colors", selectedOrderIds.has(summary.parentOrderId) ? 'bg-primary/5' : 'hover:bg-muted/30')}>
+                                            <TableCell>
+                                            {(span > 0 || !isRowSpanned) && (
+                                                <Checkbox 
+                                                checked={selectedOrderIds.has(summary.parentOrderId)}
+                                                onCheckedChange={() => toggleOrderSelection(summary.parentOrderId)}
+                                                />
+                                            )}
+                                            </TableCell>
+                                            <TableCell className="text-muted-foreground font-mono text-xs">{(currentPage - 1) * pageSize + index + 1}</TableCell>
+                                            <TableCell className="font-medium">
+                                                <span className="text-sm font-bold block">{summary.label}</span>
+                                                {summary.subLabel && <span className="block text-[10px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded-sm inline-block mt-1">{summary.subLabel}</span>}
+                                            </TableCell>
+                                            <TableCell>
+                                                {groupBy === 'orderId' && summary.status ? (
+                                                    <Select 
+                                                        disabled={isUpdatingStatus === summary.key} 
+                                                        value={summary.status} 
+                                                        onValueChange={(val) => handleUpdateVendorStatus(summary, val)}
+                                                    >
+                                                        <SelectTrigger className={cn("h-8 text-[10px] font-bold text-white border-0 shadow-sm", getStatusBadgeColor(summary.status))}>
+                                                            <SelectValue />
+                                                        </SelectTrigger>
+                                                        <SelectContent>
+                                                            {(parentOrder?.paymentMethod === 'QRIS' ? STATUS_FLOWS.QRIS : STATUS_FLOWS.COD).map(s => (
+                                                                <SelectItem key={s} value={s} className="text-xs">{s}</SelectItem>
+                                                            ))}
+                                                        </SelectContent>
+                                                    </Select>
+                                                ) : summary.status ? (
+                                                    <Badge className={cn("text-[10px]", getStatusBadgeColor(summary.status))}>
+                                                        {summary.status}
+                                                    </Badge>
+                                                ) : summary.statuses && summary.statuses.length > 0 ? (
+                                                    <div className="flex flex-wrap gap-1">
+                                                        {summary.statuses.map(s => (
+                                                            <Badge key={s} className={cn("text-[10px]", getStatusBadgeColor(s))}>
+                                                                {s}
+                                                            </Badge>
+                                                        ))}
                                                     </div>
+                                                ) : null}
+                                            </TableCell>
+                                            <TableCell className="text-right text-sm">{formatPrice(summary.totalAmount)}</TableCell>
+                                            <TableCell className="text-right text-xs text-destructive/80 italic">{formatPrice(summary.adminFee)}</TableCell>
+                                            <TableCell className="text-right font-bold text-green-600 text-sm">{formatPrice(summary.netToVendor)}</TableCell>
+                                            
+                                            {isRowSpanned ? (
+                                                span > 0 ? (
+                                                    <TableCell rowSpan={span} className="text-right bg-primary/5 border-l border-primary/10 font-bold text-primary text-sm">
+                                                        {formatPrice(2500)}
+                                                    </TableCell>
+                                                ) : null
+                                            ) : (
+                                                <TableCell className="text-right text-sm">
+                                                    {summary.totalDeliveryFee > 0 ? formatPrice(summary.totalDeliveryFee) : '-'}
+                                                </TableCell>
+                                            )}
+
+                                            <TableCell>
+                                                <div className="space-y-2">
+                                                    {Object.entries(groupItemsByVendor(summary.items)).map(([vCode, vItems]) => {
+                                                        const subtotalMitra = vItems.reduce((sum, i) => sum + (i.price * i.quantity), 0);
+                                                        const netMitra = subtotalMitra * 0.95;
+                                                        return (
+                                                            <div key={vCode} className="space-y-1.5 bg-muted/20 p-2 rounded-lg border border-primary/5">
+                                                                <div className="flex justify-between items-center bg-primary/10 px-2 py-1 rounded-md mb-1">
+                                                                    <span className="text-[10px] font-bold text-primary uppercase">Mitra: {vCode}</span>
+                                                                    <span className="text-[10px] font-bold text-green-700">Netto: {formatPrice(netMitra)}</span>
+                                                                </div>
+                                                                <ul className="text-xs space-y-1">
+                                                                    {vItems.map((item, idx) => (
+                                                                        <li key={idx} className="flex justify-between gap-4 border-b border-muted/50 last:border-0 pb-1">
+                                                                            <span className="text-muted-foreground">{item.name} <span className="text-[9px] bg-muted px-1 rounded">[{item.sku}]</span></span>
+                                                                            <span className="font-bold shrink-0">{item.quantity} porsi</span>
+                                                                        </li>
+                                                                    ))}
+                                                                </ul>
+                                                            </div>
+                                                        );
+                                                    })}
                                                 </div>
                                             </TableCell>
-                                        ) : null
-                                    ) : (
-                                        <TableCell>
-                                            <div className="space-y-3">
-                                                {summary.customerProfile && (
-                                                    <div className="p-2 bg-muted/20 rounded-lg border">
-                                                        <p className="font-bold text-xs text-foreground uppercase flex items-center gap-1.5 mb-1"><User className="h-3 w-3 text-primary" /> {summary.customerProfile.name}</p>
-                                                        <p className="flex items-center gap-1.5 text-[10px] text-muted-foreground"><Phone className="h-3 w-3" /> {summary.customerProfile.phone}</p>
+
+                                            {isRowSpanned ? (
+                                                span > 0 ? (
+                                                    <TableCell rowSpan={span} className="bg-primary/5 border-l border-primary/10">
+                                                        <div className="space-y-3">
+                                                            {summary.customerProfile && (
+                                                                <div className="p-2 bg-background/50 rounded-lg border border-primary/10">
+                                                                    <p className="font-bold text-xs text-foreground uppercase flex items-center gap-1.5 mb-1"><User className="h-3 w-3 text-primary" /> {summary.customerProfile.name}</p>
+                                                                    <p className="flex items-center gap-1.5 text-[10px] text-muted-foreground"><Phone className="h-3 w-3" /> {summary.customerProfile.phone}</p>
+                                                                    {summary.customerProfile.email && <p className="flex items-center gap-1.5 text-[10px] text-muted-foreground truncate"><Mail className="h-3 w-3" /> {summary.customerProfile.email}</p>}
+                                                                </div>
+                                                            )}
+                                                            <div className="text-[10px] text-muted-foreground italic px-1 flex gap-1.5">
+                                                                <span className="shrink-0 font-bold">📍</span>
+                                                                <p className="leading-tight">{summary.addresses.join(', ')}</p>
+                                                            </div>
+                                                        </div>
+                                                    </TableCell>
+                                                ) : null
+                                            ) : (
+                                                <TableCell>
+                                                    <div className="space-y-3">
+                                                        {summary.customerProfile && (
+                                                            <div className="p-2 bg-muted/20 rounded-lg border">
+                                                                <p className="font-bold text-xs text-foreground uppercase flex items-center gap-1.5 mb-1"><User className="h-3 w-3 text-primary" /> {summary.customerProfile.name}</p>
+                                                                <p className="flex items-center gap-1.5 text-[10px] text-muted-foreground"><Phone className="h-3 w-3" /> {summary.customerProfile.phone}</p>
+                                                            </div>
+                                                        )}
+                                                        <div className="text-[10px] text-muted-foreground italic px-1 flex gap-1.5">
+                                                            <span className="shrink-0">📍</span>
+                                                            <p className="leading-tight">{summary.addresses.join(', ')}</p>
+                                                        </div>
                                                     </div>
-                                                )}
-                                                <div className="text-[10px] text-muted-foreground italic px-1 flex gap-1.5">
-                                                    <span className="shrink-0">📍</span>
-                                                    <p className="leading-tight">{summary.addresses.join(', ')}</p>
-                                                </div>
-                                            </div>
-                                        </TableCell>
-                                    )}
+                                                </TableCell>
+                                            )}
 
-                                    <TableCell className="text-right">
-                                      {(span > 0 || !isRowSpanned) && (
-                                        <Button 
-                                          variant="ghost" 
-                                          size="icon" 
-                                          className="text-destructive hover:bg-destructive/10 h-8 w-8"
-                                          onClick={() => setOrderToDelete(summary.parentOrderId)}
-                                        >
-                                          <Trash2 className="h-4 w-4" />
-                                        </Button>
-                                      )}
-                                    </TableCell>
+                                            <TableCell className="text-right">
+                                            {(span > 0 || !isRowSpanned) && (
+                                                <Button 
+                                                variant="ghost" 
+                                                size="icon" 
+                                                className="text-destructive hover:bg-destructive/10 h-8 w-8"
+                                                onClick={() => setOrderToDelete(summary.parentOrderId)}
+                                                >
+                                                <Trash2 className="h-4 w-4" />
+                                                </Button>
+                                            )}
+                                            </TableCell>
+                                        </TableRow>
+                                    );
+                                })
+                            )}
+                        </TableBody>
+                        {filteredSummary.length > 0 && (
+                            <TableFooter className="bg-primary/5">
+                                <TableRow className="font-bold border-t-2 border-primary/20">
+                                    <TableCell colSpan={4} className="text-right text-xs uppercase tracking-widest text-muted-foreground">Total Keseluruhan</TableCell>
+                                    <TableCell className="text-right text-primary text-sm">{formatPrice(actualGrandTotals.amount)}</TableCell>
+                                    <TableCell className="text-right text-destructive text-xs italic">{formatPrice(actualGrandTotals.admin)}</TableCell>
+                                    <TableCell className="text-right text-green-700 text-sm">{formatPrice(actualGrandTotals.net)}</TableCell>
+                                    <TableCell className="text-right text-primary text-sm">{formatPrice(actualGrandTotals.ongkir)}</TableCell>
+                                    <TableCell colSpan={3}></TableCell>
                                 </TableRow>
-                            );
-                        })
-                    )}
-                </TableBody>
-                {filteredSummary.length > 0 && (
-                    <TableFooter className="bg-primary/5">
-                        <TableRow className="font-bold border-t-2 border-primary/20">
-                            <TableCell colSpan={4} className="text-right text-xs uppercase tracking-widest text-muted-foreground">Total Keseluruhan</TableCell>
-                            <TableCell className="text-right text-primary text-sm">{formatPrice(actualGrandTotals.amount)}</TableCell>
-                            <TableCell className="text-right text-destructive text-xs italic">{formatPrice(actualGrandTotals.admin)}</TableCell>
-                            <TableCell className="text-right text-green-700 text-sm">{formatPrice(actualGrandTotals.net)}</TableCell>
-                            <TableCell className="text-right text-primary text-sm">{formatPrice(actualGrandTotals.ongkir)}</TableCell>
-                            <TableCell colSpan={3}></TableCell>
-                        </TableRow>
-                    </TableFooter>
-                )}
-            </Table>
-        </div>
+                            </TableFooter>
+                        )}
+                    </Table>
+                </div>
 
-        <div className="flex flex-col md:flex-row items-center justify-between gap-4 bg-muted/30 p-4 rounded-xl border">
-            <div className="flex items-center gap-4">
-                <div className="flex items-center gap-2">
-                    <span className="text-xs font-bold text-muted-foreground uppercase">Baris per halaman:</span>
-                    <Select value={pageSize.toString()} onValueChange={(v) => { setPageSize(Number(v)); setCurrentPage(1); }}>
-                        <SelectTrigger className="w-[80px] h-8 bg-background border-primary/10">
-                            <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="5">5</SelectItem>
-                            <SelectItem value="10">10</SelectItem>
-                            <SelectItem value="30">30</SelectItem>
-                            <SelectItem value="50">50</SelectItem>
-                            <SelectItem value="100">100</SelectItem>
-                            <SelectItem value="200">200</SelectItem>
-                        </SelectContent>
-                    </Select>
-                </div>
-                <div className="text-[10px] text-muted-foreground border-l pl-4 font-bold uppercase tracking-wider">
-                    Total: <span className="text-foreground">{filteredSummary.length}</span> baris
-                </div>
-            </div>
+                <div className="flex flex-col md:flex-row items-center justify-between gap-4 bg-muted/30 p-4 rounded-xl border">
+                    <div className="flex items-center gap-4">
+                        <div className="flex items-center gap-2">
+                            <span className="text-xs font-bold text-muted-foreground uppercase">Baris per halaman:</span>
+                            <Select value={pageSize.toString()} onValueChange={(v) => { setPageSize(Number(v)); setCurrentPage(1); }}>
+                                <SelectTrigger className="w-[80px] h-8 bg-background border-primary/10">
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="5">5</SelectItem>
+                                    <SelectItem value="10">10</SelectItem>
+                                    <SelectItem value="30">30</SelectItem>
+                                    <SelectItem value="50">50</SelectItem>
+                                    <SelectItem value="100">100</SelectItem>
+                                    <SelectItem value="200">200</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        <div className="text-[10px] text-muted-foreground border-l pl-4 font-bold uppercase tracking-wider">
+                            Total: <span className="text-foreground">{filteredSummary.length}</span> baris
+                        </div>
+                    </div>
 
-            <div className="flex items-center gap-3">
-                <Button 
-                    variant="outline" 
-                    size="sm" 
-                    onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-                    disabled={currentPage === 1}
-                    className="h-8 px-3"
-                >
-                    <ChevronLeft className="h-4 w-4 mr-1" /> Prev
-                </Button>
-                <div className="flex items-center gap-1.5">
-                    <span className="text-xs font-bold text-muted-foreground">Hal.</span>
-                    <span className="bg-primary text-primary-foreground px-2.5 py-0.5 rounded-md text-xs font-bold shadow-sm">{currentPage}</span>
-                    <span className="text-xs font-bold text-muted-foreground">dari {totalPages || 1}</span>
+                    <div className="flex items-center gap-3">
+                        <Button 
+                            variant="outline" 
+                            size="sm" 
+                            onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                            disabled={currentPage === 1}
+                            className="h-8 px-3"
+                        >
+                            <ChevronLeft className="h-4 w-4 mr-1" /> Prev
+                        </Button>
+                        <div className="flex items-center gap-1.5">
+                            <span className="text-xs font-bold text-muted-foreground">Hal.</span>
+                            <span className="bg-primary text-primary-foreground px-2.5 py-0.5 rounded-md text-xs font-bold shadow-sm">{currentPage}</span>
+                            <span className="text-xs font-bold text-muted-foreground">dari {totalPages || 1}</span>
+                        </div>
+                        <Button 
+                            variant="outline" 
+                            size="sm" 
+                            onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                            disabled={currentPage === totalPages || totalPages === 0}
+                            className="h-8 px-3"
+                        >
+                            Next <ChevronRight className="h-4 w-4 ml-1" />
+                        </Button>
+                    </div>
                 </div>
-                <Button 
-                    variant="outline" 
-                    size="sm" 
-                    onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
-                    disabled={currentPage === totalPages || totalPages === 0}
-                    className="h-8 px-3"
-                >
-                    Next <ChevronRight className="h-4 w-4 ml-1" />
-                </Button>
+            </>
+        ) : (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <Card className="col-span-1 lg:col-span-2">
+                    <CardHeader>
+                        <CardTitle className="text-lg flex items-center gap-2">
+                            <BarChart3 className="h-5 w-5 text-primary" />
+                            Omzet Bersih per Mitra (Netto)
+                        </CardTitle>
+                        <CardDescription>Pendapatan yang diterima mitra setelah dipotong admin 5%.</CardDescription>
+                    </CardHeader>
+                    <CardContent className="h-[400px]">
+                        <ResponsiveContainer width="100%" height="100%">
+                            <BarChart data={chartDataMitra}>
+                                <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                                <XAxis dataKey="name" fontSize={10} tickLine={false} axisLine={false} />
+                                <YAxis fontSize={10} tickLine={false} axisLine={false} tickFormatter={(value) => `Rp ${value/1000}k`} />
+                                <RechartsTooltip 
+                                    formatter={(value: any) => [formatPrice(value), 'Omzet Netto']}
+                                    contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
+                                />
+                                <Bar dataKey="value" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
+                            </BarChart>
+                        </ResponsiveContainer>
+                    </CardContent>
+                </Card>
+
+                <Card>
+                    <CardHeader>
+                        <CardTitle className="text-lg flex items-center gap-2">
+                            <PieChartIcon className="h-5 w-5 text-primary" />
+                            Distribusi Status Pesanan
+                        </CardTitle>
+                        <CardDescription>Berdasarkan jumlah sub-order pengerjaan.</CardDescription>
+                    </CardHeader>
+                    <CardContent className="h-[300px]">
+                        <ResponsiveContainer width="100%" height="100%">
+                            <PieChart>
+                                <Pie
+                                    data={chartDataStatus}
+                                    cx="50%"
+                                    cy="50%"
+                                    innerRadius={60}
+                                    outerRadius={80}
+                                    paddingAngle={5}
+                                    dataKey="value"
+                                    label={({ name, percent }) => `${name} (${(percent * 100).toFixed(0)}%)`}
+                                >
+                                    {chartDataStatus.map((entry, index) => (
+                                        <Cell key={`cell-${index}`} fill={CHART_COLORS[index % CHART_COLORS.length]} />
+                                    ))}
+                                </Pie>
+                                <RechartsTooltip />
+                            </PieChart>
+                        </ResponsiveContainer>
+                    </CardContent>
+                </Card>
+
+                <Card>
+                    <CardHeader>
+                        <CardTitle className="text-lg flex items-center gap-2">
+                            <LayoutGrid className="h-5 w-5 text-primary" />
+                            Produk Terlaris
+                        </CardTitle>
+                        <CardDescription>8 item dengan jumlah pesanan terbanyak.</CardDescription>
+                    </CardHeader>
+                    <CardContent className="h-[300px]">
+                        <ResponsiveContainer width="100%" height="100%">
+                            <BarChart data={chartDataProducts} layout="vertical">
+                                <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+                                <XAxis type="number" hide />
+                                <YAxis dataKey="name" type="category" fontSize={10} width={100} tickLine={false} axisLine={false} />
+                                <RechartsTooltip 
+                                    formatter={(value: any) => [value, 'Porsi']}
+                                    contentStyle={{ borderRadius: '8px' }}
+                                />
+                                <Bar dataKey="value" fill="hsl(var(--chart-2))" radius={[0, 4, 4, 0]} />
+                            </BarChart>
+                        </ResponsiveContainer>
+                    </CardContent>
+                </Card>
             </div>
-        </div>
+        )}
 
         <AlertDialog open={!!orderToDelete} onOpenChange={(open) => !open && setOrderToDelete(null)}>
           <AlertDialogContent>
