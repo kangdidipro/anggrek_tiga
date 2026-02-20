@@ -14,7 +14,7 @@ import { useCart } from '@/hooks/use-cart';
 import { Loader2, QrCode, Wallet, Truck } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { useUser, useFirestore, errorEmitter, FirestorePermissionError } from '@/firebase';
-import { collection, writeBatch, doc, increment, getDoc, query, collectionGroup, getDocs, where } from 'firebase/firestore';
+import { collection, writeBatch, doc, increment, getDoc } from 'firebase/firestore';
 import { useRouter } from 'next/navigation';
 import jsPDF from 'jspdf';
 import { formatPrice, getVendorFromSku } from '@/lib/utils';
@@ -221,25 +221,22 @@ export default function OrderForm({ cartItems, total, deliveryFee, setSheetOpen 
     
     try {
       const now = new Date();
+      const dateStr = format(now, 'yyyyMMdd');
+      const timeStr = format(now, 'HHmm');
+      const randomSuffix = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
+      
+      // Simplified order ID generation to avoid expensive collectionGroup queries and missing indices
+      const orderId = `${dateStr}-TJK-${timeStr}-${randomSuffix}`;
+
+      const batch = writeBatch(firestore);
+      const timestamp = now.toISOString();
+      
       const jakartaHour = parseInt(new Intl.DateTimeFormat('en-GB', {
         hour: 'numeric',
         hour12: false,
         timeZone: 'Asia/Jakarta'
       }).format(now));
-      
       const isAfterCutoff = jakartaHour >= 16;
-      const effectiveOrderDate = isAfterCutoff ? addDays(now, 1) : now;
-      const dateStr = format(effectiveOrderDate, 'yyyyMMdd');
-      
-      const ordersQuery = collectionGroup(firestore, 'orders');
-      const sameDayQuery = query(ordersQuery, where('id', '>=', dateStr), where('id', '<=', dateStr + '\uf8ff'));
-      const allOrdersSnapshot = await getDocs(sameDayQuery);
-      
-      const sequence = (allOrdersSnapshot.size + 1).toString().padStart(3, '0');
-      const orderId = `${dateStr}-TJK-${sequence}`;
-
-      const batch = writeBatch(firestore);
-      const timestamp = now.toISOString();
       const finalDeliveryDate = addDays(now, isAfterCutoff ? 2 : 1).toISOString();
 
       const uniqueVendors = Array.from(new Set(cartItems.map(item => item.product.vendor || getVendorFromSku(item.product.sku))));
