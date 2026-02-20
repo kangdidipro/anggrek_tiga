@@ -19,10 +19,10 @@ export const metadata: Metadata = {
     siteName: 'TakjilKu',
     images: [
       {
-        url: 'https://picsum.photos/seed/takjilku-og/1200/630',
+        url: '/logo.jpeg',
         width: 1200,
         height: 630,
-        alt: 'Pratinjau TakjilKu Ramadhan',
+        alt: 'Logo TakjilKu Ramadhan',
       },
     ],
     locale: 'id_ID',
@@ -32,7 +32,7 @@ export const metadata: Metadata = {
     card: 'summary_large_image',
     title: 'TakjilKu - Pesan Takjil Ramadhan UMKM RW06',
     description: 'Pesan takjil favoritmu secara online. Antar langsung ke rumah.',
-    images: ['https://picsum.photos/seed/takjilku-og/1200/630'],
+    images: ['/logo.jpeg'],
   },
 };
 
