@@ -2,8 +2,8 @@
 'use client';
 
 import { useEffect, useState, useMemo } from 'react';
-import { useFirestore, useUser, useCollection, useMemoFirebase } from '@/firebase';
-import { collectionGroup, getDocs, query, collection, writeBatch, doc } from 'firebase/firestore';
+import { useFirestore, useUser, useCollection, useMemoFirebase, errorEmitter, FirestorePermissionError } from '@/firebase';
+import { collectionGroup, getDocs, query, collection, writeBatch, doc, updateDoc, arrayUnion } from 'firebase/firestore';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Loader2, FileDown, CalendarIcon, FileText, Mail, Search, LayoutGrid, ArrowUpDown, ArrowUp, ArrowDown, Filter, Trash2, Phone, User } from 'lucide-react';
@@ -92,6 +92,11 @@ type SortConfig = {
 
 const ALL_STATUSES = ["Dipesan", "Dibayar", "Diproses", "Dikumpulkan", "Dikirim", "Dikirim dan Bayar", "Dibatalkan"];
 
+const STATUS_FLOWS = {
+  QRIS: ["Dipesan", "Dibayar", "Diproses", "Dikumpulkan", "Dikirim", "Dibatalkan"],
+  COD: ["Dipesan", "Diproses", "Dikumpulkan", "Dikirim dan Bayar", "Dibatalkan"]
+};
+
 export default function AdminSummaryPage() {
   const firestore = useFirestore();
   const { user, isUserLoading } = useUser();
@@ -111,6 +116,7 @@ export default function AdminSummaryPage() {
   const [selectedOrderIds, setSelectedOrderIds] = useState<Set<string>>(new Set());
   const [orderToDelete, setOrderToDelete] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isUpdatingStatus, setIsUpdatingStatus] = useState<string | null>(null);
 
   const vendorsQuery = useMemoFirebase(() => {
     if (!firestore) return null;
@@ -390,6 +396,61 @@ export default function AdminSummaryPage() {
         ? prev.filter(s => s !== status) 
         : [...prev, status]
     );
+  };
+
+  const handleUpdateVendorStatus = async (summary: SummaryItem, newStatus: string) => {
+    if (!firestore || isUpdatingStatus) return;
+    
+    // Extract vendor from key (key is orderId-vendor)
+    const [orderId, vendorCode] = summary.key.split('-');
+    if (!orderId || !vendorCode) return;
+
+    setIsUpdatingStatus(summary.key);
+
+    const now = new Date().toISOString();
+    const orderObj = orders.find(o => o.id === orderId);
+    if (!orderObj) {
+        setIsUpdatingStatus(null);
+        return;
+    }
+
+    const orderRef = doc(firestore, 'customers', orderObj.customerId, 'orders', orderId);
+    
+    const updateData = {
+      [`vendorStatuses.${vendorCode}.status`]: newStatus,
+      [`vendorStatuses.${vendorCode}.statusHistory`]: arrayUnion({ status: newStatus, timestamp: now })
+    };
+
+    updateDoc(orderRef, updateData)
+      .then(() => {
+        setOrders(prev => prev.map(o => {
+          if (o.id === orderId) {
+            const updatedVendorStatuses = { ...o.vendorStatuses };
+            updatedVendorStatuses[vendorCode] = {
+              status: newStatus,
+              statusHistory: [...(updatedVendorStatuses[vendorCode]?.statusHistory || []), { status: newStatus, timestamp: now }]
+            };
+            return { ...o, vendorStatuses: updatedVendorStatuses };
+          }
+          return o;
+        }));
+
+        toast({
+          title: "Status Diperbarui",
+          description: `Status Mitra ${vendorCode} sekarang: ${newStatus}`,
+        });
+      })
+      .catch(async (error) => {
+        const permissionError = new FirestorePermissionError({
+          path: orderRef.path,
+          operation: 'update',
+          requestResourceData: updateData,
+        });
+        errorEmitter.emit('permission-error', permissionError);
+      })
+      .finally(() => {
+        setIsUpdatingStatus(null);
+      });
   };
 
   const exportToExcel = () => {
@@ -749,7 +810,7 @@ export default function AdminSummaryPage() {
                                       {getSortIcon('label')}
                                     </div>
                                 </TableHead>
-                                <TableHead className="w-[120px]">Status</TableHead>
+                                <TableHead className="w-[150px]">Status</TableHead>
                                 <TableHead className="text-right cursor-pointer hover:bg-muted/50" onClick={() => handleSort('totalAmount')}>
                                     <div className="flex items-center justify-end">
                                       Total Produk {getSortIcon('totalAmount')}
@@ -786,6 +847,7 @@ export default function AdminSummaryPage() {
                                 filteredSummary.map((summary, index) => {
                                     const span = rowSpans[summary.key] || 0;
                                     const isRowSpanned = groupBy === 'orderId';
+                                    const parentOrder = orders.find(o => o.id === summary.parentOrderId);
                                     
                                     return (
                                         <TableRow key={summary.key} className={selectedOrderIds.has(summary.parentOrderId) ? 'bg-primary/5' : ''}>
@@ -803,7 +865,22 @@ export default function AdminSummaryPage() {
                                                 {summary.subLabel && <span className="block text-[10px] text-muted-foreground">{summary.subLabel}</span>}
                                             </TableCell>
                                             <TableCell>
-                                                {summary.status ? (
+                                                {groupBy === 'orderId' && summary.status ? (
+                                                    <Select 
+                                                        disabled={isUpdatingStatus === summary.key} 
+                                                        value={summary.status} 
+                                                        onValueChange={(val) => handleUpdateVendorStatus(summary, val)}
+                                                    >
+                                                        <SelectTrigger className={cn("h-8 text-[10px] font-bold text-white border-0", getStatusBadgeColor(summary.status))}>
+                                                            <SelectValue />
+                                                        </SelectTrigger>
+                                                        <SelectContent>
+                                                            {(parentOrder?.paymentMethod === 'QRIS' ? STATUS_FLOWS.QRIS : STATUS_FLOWS.COD).map(s => (
+                                                                <SelectItem key={s} value={s} className="text-xs">{s}</SelectItem>
+                                                            ))}
+                                                        </SelectContent>
+                                                    </Select>
+                                                ) : summary.status ? (
                                                     <Badge className={cn("text-[10px]", getStatusBadgeColor(summary.status))}>
                                                         {summary.status}
                                                     </Badge>
