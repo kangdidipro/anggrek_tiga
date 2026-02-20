@@ -310,8 +310,8 @@ export default function AdminSettingsPage() {
       const batch = writeBatch(firestore);
       
       if (actionTarget.id === 'ALL') {
-        // Clear all tables
-        const allPaths = TABLES.map(t => t.id);
+        // Clear all tables EXCEPT settings
+        const allPaths = TABLES.filter(t => t.id !== 'settings').map(t => t.id);
         for (const path of allPaths) {
           let q;
           if (['orders', 'orderItems'].includes(path)) {
@@ -526,14 +526,16 @@ export default function AdminSettingsPage() {
                       <h4 className="text-sm font-bold">{table.label}</h4>
                       <p className="text-xs text-muted-foreground">{table.description}</p>
                     </div>
-                    <Button 
-                      variant="outline" 
-                      size="sm" 
-                      className="text-destructive border-destructive/20 hover:bg-destructive/10"
-                      onClick={() => setActionTarget(table)}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
+                    {table.id !== 'settings' && (
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        className="text-destructive border-destructive/20 hover:bg-destructive/10"
+                        onClick={() => setActionTarget(table)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    )}
                   </div>
                 ))}
               </div>
@@ -542,13 +544,13 @@ export default function AdminSettingsPage() {
                 <Button 
                   variant="destructive" 
                   className="w-full flex items-center gap-2 h-12 text-lg font-bold"
-                  onClick={() => setActionTarget({ id: 'ALL', label: 'SEMUA TABEL DATABASE' })}
+                  onClick={() => setActionTarget({ id: 'ALL', label: 'SEMUA TABEL DATA (Kecuali Pengaturan)' })}
                 >
                   <Skull className="h-5 w-5" />
                   HAPUS SELURUH ISI DATABASE
                 </Button>
                 <p className="text-center text-[10px] text-muted-foreground mt-2 italic">
-                  *Tindakan ini akan mengosongkan Menu, Mitra, Pelanggan, Pesanan, dan Pengaturan sekaligus.
+                  *Tindakan ini akan mengosongkan Menu, Mitra, Pelanggan, dan Pesanan. Tabel Pengaturan Sistem diproteksi.
                 </p>
               </div>
             </CardContent>
