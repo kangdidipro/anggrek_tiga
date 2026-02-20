@@ -586,6 +586,7 @@ export default function AdminSummaryPage() {
         'ID Order': summary.parentOrderId,
         'Pemesan': summary.customerProfile?.name || '-',
         'No HP': summary.customerProfile?.phone || '-',
+        'Email': summary.customerProfile?.email || '-',
         'Group (ID Sub-Order/Mitra/SKU)': summary.label,
         'Info': summary.subLabel || '',
         'Status': summary.status || summary.statuses?.join(', '),
@@ -602,6 +603,7 @@ export default function AdminSummaryPage() {
       'ID Order': '',
       'Pemesan': '',
       'No HP': '',
+      'Email': '',
       'Group (ID Sub-Order/Mitra/SKU)': 'TOTAL KESELURUHAN',
       'Info': '',
       'Status': '',
@@ -611,7 +613,7 @@ export default function AdminSummaryPage() {
       'Ongkir': actualGrandTotals.ongkir,
       'Rincian Item': '',
       'Alamat Pengiriman': ''
-    });
+    } as any);
 
     const worksheet = XLSX.utils.json_to_sheet(dataForExport);
     const workbook = XLSX.utils.book_new();
@@ -624,84 +626,123 @@ export default function AdminSummaryPage() {
 
   const exportToPDF = () => {
     const doc = new jsPDF('l', 'mm', 'a4');
+    const tableRows: any[] = [];
     
-    const tableRows = filteredSummary.map((summary, index) => {
-        const allSpans: Record<string, number> = {};
-        if (groupBy === 'orderId') {
-            let k = 0;
-            while (k < filteredSummary.length) {
-                const currentOrder = filteredSummary[k].parentOrderId;
-                let count = 1;
-                let l = k + 1;
-                while (l < filteredSummary.length && filteredSummary[l].parentOrderId === currentOrder) {
-                    count++;
-                    l++;
-                }
-                allSpans[filteredSummary[k].key] = count;
-                k = l;
+    // Calculate spans for orderId grouping across ALL filtered data
+    const allSpans: Record<string, number> = {};
+    if (groupBy === 'orderId') {
+        let k = 0;
+        while (k < filteredSummary.length) {
+            const currentOrder = filteredSummary[k].parentOrderId;
+            let count = 1;
+            let l = k + 1;
+            while (l < filteredSummary.length && filteredSummary[l].parentOrderId === currentOrder) {
+                count++;
+                l++;
             }
+            allSpans[filteredSummary[k].key] = count;
+            k = l;
+        }
+    }
+
+    filteredSummary.forEach((summary, index) => {
+        const isRowSpanned = groupBy === 'orderId';
+        const isNewOrder = !isRowSpanned || index === 0 || filteredSummary[index - 1].parentOrderId !== summary.parentOrderId;
+        const parentOrder = orders.find(o => o.id === summary.parentOrderId);
+        
+        if (isRowSpanned && isNewOrder) {
+            const cp = summary.customerProfile;
+            const profileText = cp 
+              ? `${cp.name.toUpperCase()} | HP: ${cp.phone}${cp.email ? ' | ' + cp.email : ''}`
+              : '';
+            const dateText = parentOrder ? format(new Date(parentOrder.orderDateTime), 'eeee, d MMM yyyy - HH:mm', { locale: id }) : '';
+
+            // Group Header Row in PDF
+            tableRows.push([
+                { 
+                    content: `ORDER #${summary.parentOrderId} (${dateText})`, 
+                    colSpan: 3, 
+                    styles: { fillColor: [240, 240, 240], fontStyle: 'bold', fontSize: 8 } 
+                },
+                { 
+                    content: `PROFIL & ALAMAT: ${profileText}\n📍 ${summary.addresses.join(', ')}`, 
+                    colSpan: 5, 
+                    styles: { fillColor: [240, 240, 240], fontSize: 7 } 
+                }
+            ]);
         }
 
         const span = allSpans[summary.key] || 0;
-        const isSpannedRow = groupBy === 'orderId';
-        const showOngkirAlamat = !isSpannedRow || (isSpannedRow && span > 0);
 
-        const row: any = {
-            no: (index + 1).toString(),
-            group: summary.label + (summary.subLabel ? `\n(${summary.subLabel})` : ''),
-            status: summary.status || summary.statuses?.join(', ') || '-',
-            produk: formatPrice(summary.totalAmount),
-            admin: formatPrice(summary.adminFee),
-            net: formatPrice(summary.netToVendor),
-            items: summary.items.map(i => `${i.name} [${i.sku}]\n${i.quantity} porsi`).join('\n---\n'),
-        };
+        // Data Row
+        const row: any[] = [
+            (index + 1).toString(),
+            isRowSpanned ? summary.key.split('-').pop() : summary.label,
+            summary.status || summary.statuses?.join(', ') || '-',
+            formatPrice(summary.totalAmount),
+            formatPrice(summary.adminFee),
+            formatPrice(summary.netToVendor),
+        ];
 
-        if (showOngkirAlamat) {
-            const cp = summary.customerProfile;
-            const profileText = cp 
-              ? `${cp.name.toUpperCase()}\nHP: ${cp.phone}${cp.email ? '\nEmail: ' + cp.email : ''}\n\n`
-              : '';
-
-            row.ongkir = { content: formatPrice(isSpannedRow ? 2500 : summary.totalDeliveryFee), rowSpan: isSpannedRow ? span : 1, styles: { halign: 'right', valign: 'middle', fillColor: [255, 248, 225] } };
-            row.alamat = { content: profileText + summary.addresses.join('\n\n'), rowSpan: isSpannedRow ? span : 1, styles: { fontSize: 6, valign: 'middle', fillColor: [255, 248, 225] } };
+        // Ongkir Logic
+        if (isRowSpanned) {
+            if (span > 0) {
+                row.push({ 
+                    content: formatPrice(2500), 
+                    rowSpan: span, 
+                    styles: { halign: 'right', valign: 'middle', fillColor: [255, 248, 225] } 
+                });
+            }
+        } else {
+            row.push(formatPrice(summary.totalDeliveryFee));
         }
 
-        return row;
+        // Items
+        row.push(summary.items.map(i => `${i.name} [${i.sku}] (${i.quantity} porsi)`).join('\n'));
+
+        // Profile & Alamat column (only if not orderId grouping since it's in header)
+        if (!isRowSpanned) {
+            const cp = summary.customerProfile;
+            const profileText = cp ? `${cp.name}\n${cp.phone}` : '';
+            row.push(`${profileText}\n${summary.addresses.join(', ')}`);
+        }
+
+        tableRows.push(row);
     });
 
-    const grandTotalRow = {
-      no: { content: "TOTAL KESELURUHAN", colSpan: 3, styles: { halign: 'right', fontStyle: 'bold' } },
-      produk: { content: formatPrice(actualGrandTotals.amount), styles: { fontStyle: 'bold' } },
-      admin: { content: formatPrice(actualGrandTotals.admin), styles: { fontStyle: 'bold' } },
-      net: { content: formatPrice(actualGrandTotals.net), styles: { fontStyle: 'bold' } },
-      ongkir: { content: formatPrice(actualGrandTotals.ongkir), styles: { fontStyle: 'bold' } },
-      items: "",
-      alamat: ""
-    };
+    const grandTotalRow = [
+      { content: "TOTAL KESELURUHAN", colSpan: 3, styles: { halign: 'right', fontStyle: 'bold' } },
+      { content: formatPrice(actualGrandTotals.amount), styles: { fontStyle: 'bold' } },
+      { content: formatPrice(actualGrandTotals.admin), styles: { fontStyle: 'bold' } },
+      { content: formatPrice(actualGrandTotals.net), styles: { fontStyle: 'bold' } },
+      { content: formatPrice(actualGrandTotals.ongkir), styles: { fontStyle: 'bold' } },
+      { content: "", colSpan: groupBy === 'orderId' ? 1 : 2 }
+    ];
+
+    tableRows.push(grandTotalRow);
 
     doc.text(`Rekap Harian Takjil - ${date ? format(date, 'd MMMM yyyy', { locale: id }) : 'Semua'}`, 14, 15);
     
     autoTable(doc, {
-        head: [["No.", "ID Sub-Order / Group", "Status", "Total Produk", "Admin (5%)", "Bayar ke Mitra", "Ongkir", "Rincian Item", "Profil & Alamat"]],
-        body: [...tableRows, grandTotalRow],
-        columns: [
-            { header: 'No.', dataKey: 'no' },
-            { header: 'ID Sub-Order / Group', dataKey: 'group' },
-            { header: 'Status', dataKey: 'status' },
-            { header: 'Total Produk', dataKey: 'produk' },
-            { header: 'Admin (5%)', dataKey: 'admin' },
-            { header: 'Bayar ke Mitra', dataKey: 'net' },
-            { header: 'Ongkir', dataKey: 'ongkir' },
-            { header: 'Rincian Item', dataKey: 'items' },
-            { header: 'Profil & Alamat', dataKey: 'alamat' },
-        ],
+        head: [[
+            "No.", 
+            groupBy === 'orderId' ? "Mitra" : "Group", 
+            "Status", 
+            "Produk", 
+            "Admin (5%)", 
+            "Bayar ke Mitra", 
+            "Ongkir", 
+            "Rincian Item",
+            ...(groupBy === 'orderId' ? [] : ["Profil & Alamat"])
+        ]],
+        body: tableRows,
         startY: 20,
         theme: 'grid',
         headStyles: { fillColor: [255, 140, 0] },
         styles: { fontSize: 7, overflow: 'linebreak' },
         columnStyles: {
-          items: { cellWidth: 40 },
-          alamat: { cellWidth: 45 },
+          7: { cellWidth: 40 }, // Items
+          8: { cellWidth: 45 }, // Alamat
         }
     });
     doc.save(`rekap_${groupBy}_${date ? date.toISOString().split('T')[0] : 'semua'}.pdf`);
