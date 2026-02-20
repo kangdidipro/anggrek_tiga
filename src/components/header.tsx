@@ -9,7 +9,8 @@ import { usePathname } from 'next/navigation';
 export default function Header() {
   const pathname = usePathname();
 
-  if (pathname.startsWith('/admin')) {
+  // Sembunyikan header untuk halaman admin dan dashboard kurir khusus
+  if (pathname.startsWith('/admin') || pathname.startsWith('/kurir')) {
     return null;
   }
 

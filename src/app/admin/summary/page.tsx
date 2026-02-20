@@ -186,7 +186,7 @@ export default function AdminSummaryPage() {
     if (vendorFilter !== 'all') params.set('vendor', vendorFilter);
     if (selectedStatuses.length > 0) params.set('statuses', selectedStatuses.join(','));
     if (searchTerm) params.set('search', searchTerm);
-    return `/admin/delivery?${params.toString()}`;
+    return `/kurir?${params.toString()}`;
   }, [date, vendorFilter, selectedStatuses, searchTerm]);
 
   const copyDeliveryLink = () => {
@@ -967,7 +967,7 @@ export default function AdminSummaryPage() {
                             <FileText className="mr-2 h-4 w-4 text-primary" /> PDF
                         </Button>
                         <Button variant="outline" size="sm" asChild className="border-blue-500 text-blue-600 hover:bg-blue-50">
-                            <Link href={deliveryDashboardLink}>
+                            <Link href={deliveryDashboardLink} target="_blank">
                                 <Truck className="mr-2 h-4 w-4" />
                                 Dashboard Kurir
                             </Link>
@@ -1097,7 +1097,7 @@ export default function AdminSummaryPage() {
                                                         </SelectContent>
                                                     </Select>
                                                 ) : summary.status ? (
-                                                    <Badge className={cn("text-[10px]", getStatusBadgeColor(summary.status))}>
+                                                    <Badge className={cn("text-[10px]", getStatusBadgeColor(status))}>
                                                         {summary.status}
                                                     </Badge>
                                                 ) : summary.statuses && summary.statuses.length > 0 ? (
