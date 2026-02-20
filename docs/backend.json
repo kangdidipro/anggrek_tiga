@@ -1,3 +1,4 @@
+
 {
   "entities": {
     "Product": {
@@ -12,7 +13,8 @@
         "category": { "type": "string" },
         "sku": { "type": "string" },
         "vendor": { "type": "string" },
-        "stock": { "type": "number" }
+        "stock": { "type": "number" },
+        "isActive": { "type": "boolean" }
       },
       "required": ["id", "name", "price", "sku", "vendor"]
     },
@@ -26,7 +28,8 @@
         "name": { "type": "string" },
         "code": { "type": "string" },
         "email": { "type": "string", "format": "email" },
-        "phoneNumber": { "type": "string" }
+        "phoneNumber": { "type": "string" },
+        "isActive": { "type": "boolean" }
       },
       "required": ["id", "name", "code"]
     },

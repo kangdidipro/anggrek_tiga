@@ -7,6 +7,7 @@ export type Product = {
   sku: string;
   vendor: string;
   stock: number;
+  isActive?: boolean;
 };
 
 export type Vendor = {

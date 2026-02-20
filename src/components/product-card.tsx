@@ -25,6 +25,7 @@ export default function ProductCard({ product, vendorName, isVendorActive = true
   // Pastikan stok memiliki nilai default 20 jika undefined, dan tidak negatif untuk tampilan
   const dbStock = product.stock ?? 20;
   const currentStock = Math.max(0, dbStock);
+  const isProductActive = product.isActive !== false;
 
   useEffect(() => {
     setMounted(true);
@@ -41,7 +42,7 @@ export default function ProductCard({ product, vendorName, isVendorActive = true
   };
 
   const isOutOfStock = currentStock <= 0;
-  const isDisabled = !isVendorActive || isOutOfStock;
+  const isDisabled = !isVendorActive || !isProductActive || isOutOfStock;
 
   return (
     <Card className={cn(
@@ -64,12 +65,17 @@ export default function ProductCard({ product, vendorName, isVendorActive = true
           <span className="bg-muted px-1 rounded font-mono">({product.vendor})</span>
         </div>
 
-        {!isVendorActive && (
+        {!isVendorActive ? (
           <div className="bg-destructive/10 text-destructive text-[10px] font-bold py-1.5 px-2 rounded-md mb-4 text-center border border-destructive/20 flex items-center justify-center gap-1">
             <AlertCircle className="h-3 w-3" />
             Untuk sementara mitra tidak aktif
           </div>
-        )}
+        ) : !isProductActive ? (
+          <div className="bg-destructive/10 text-destructive text-[10px] font-bold py-1.5 px-2 rounded-md mb-4 text-center border border-destructive/20 flex items-center justify-center gap-1">
+            <AlertCircle className="h-3 w-3" />
+            Untuk sementara produk tidak tersedia
+          </div>
+        ) : null}
 
         <div className="mt-auto">
           <div className="flex items-center justify-between">
@@ -81,9 +87,9 @@ export default function ProductCard({ product, vendorName, isVendorActive = true
         </div>
       </CardContent>
       <CardFooter className="p-4 pt-0">
-        {!isVendorActive ? (
+        {!isVendorActive || !isProductActive ? (
           <Button className="w-full font-bold" variant="outline" disabled>
-            Mitra Non-Aktif
+            Tidak Tersedia
           </Button>
         ) : !mounted || quantity === 0 ? (
           <Button 

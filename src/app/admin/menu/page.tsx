@@ -1,8 +1,9 @@
+
 'use client';
 
 import { useState, useMemo, useRef, useEffect } from 'react';
 import { useFirestore, useCollection, useMemoFirebase, useDoc } from '@/firebase';
-import { collection, doc, deleteDoc, setDoc, writeBatch } from 'firebase/firestore';
+import { collection, doc, deleteDoc, setDoc, writeBatch, updateDoc } from 'firebase/firestore';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -14,6 +15,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Switch } from '@/components/ui/switch';
 import { products as initialProducts } from '@/lib/products';
 import type { Product, Vendor } from '@/lib/types';
 import * as XLSX from 'xlsx';
@@ -228,6 +230,7 @@ export default function AdminMenuPage() {
       category: formData.get('category') as string,
       vendor: formData.get('vendor') as string,
       stock: Math.max(0, stockValue),
+      isActive: isEditing ? isEditing.isActive : true,
     };
 
     try {
@@ -237,6 +240,19 @@ export default function AdminMenuPage() {
       setIsAdding(false);
     } catch (error) {
       toast({ variant: "destructive", title: "Gagal", description: "Tidak dapat menyimpan menu." });
+    }
+  };
+
+  const handleToggleStatus = async (id: string, isActive: boolean) => {
+    if (!firestore) return;
+    try {
+      await updateDoc(doc(firestore, 'menuItems', id), { isActive });
+      toast({
+        title: "Status Diperbarui",
+        description: `Menu kini dalam status ${isActive ? 'Tersedia' : 'Tidak Tersedia'}.`,
+      });
+    } catch (error) {
+      toast({ variant: "destructive", title: "Gagal", description: "Gagal memperbarui status menu." });
     }
   };
 
@@ -270,7 +286,7 @@ export default function AdminMenuPage() {
     setIsSeeding(true);
     try {
       for (const product of initialProducts) {
-        await setDoc(doc(firestore, 'menuItems', product.id), product);
+        await setDoc(doc(firestore, 'menuItems', product.id), { ...product, isActive: true });
       }
       toast({ title: "Berhasil", description: "Menu default telah diunggah." });
     } catch (error) {
@@ -313,6 +329,7 @@ export default function AdminMenuPage() {
               category: String(category),
               vendor: String(vendor),
               stock: Math.max(0, stock),
+              isActive: true,
             };
             await setDoc(doc(firestore, 'menuItems', productData.id), productData);
             importedCount++;
@@ -614,13 +631,14 @@ export default function AdminMenuPage() {
                     Harga {getSortIcon('price')}
                   </div>
                 </TableHead>
+                <TableHead>Status</TableHead>
                 <TableHead className="text-right">Aksi</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {paginatedItems.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={9} className="text-center py-12 text-muted-foreground">
+                  <TableCell colSpan={10} className="text-center py-12 text-muted-foreground">
                     Tidak ada menu yang cocok.
                   </TableCell>
                 </TableRow>
@@ -644,6 +662,17 @@ export default function AdminMenuPage() {
                       {Math.max(0, item.stock ?? 0)}
                     </TableCell>
                     <TableCell className="text-right">{formatPrice(item.price)}</TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                        <Switch 
+                          checked={item.isActive !== false} 
+                          onCheckedChange={(checked) => handleToggleStatus(item.id, checked)}
+                        />
+                        <span className={`text-[10px] font-bold uppercase ${item.isActive !== false ? 'text-green-600' : 'text-destructive'}`}>
+                          {item.isActive !== false ? 'Aktif' : 'Non-Aktif'}
+                        </span>
+                      </div>
+                    </TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-2">
                         <Dialog open={isEditing?.id === item.id} onOpenChange={(open) => !open && setIsEditing(null)}>
