@@ -1,4 +1,3 @@
-
 import type { Metadata } from 'next';
 import './globals.css';
 import { cn } from '@/lib/utils';
@@ -9,20 +8,20 @@ import { FirebaseClientProvider } from '@/firebase/client-provider';
 import { AdminProvider } from '@/context/admin-provider';
 
 export const metadata: Metadata = {
-  title: 'TakjilKu - Pesan Takjil Ramadhan UMKM RW06',
-  description: 'Aplikasi pemesanan takjil Ramadhan online H-1 dengan fasilitas pesan antar ke rumah. Dukung UMKM warga Anggrek 3!',
-  metadataBase: new URL('https://takjilku.com'), // Ganti dengan domain asli saat sudah dipublikasi
+  title: 'TakjilKu - Form Pemesanan Takjil Ramadhan, UMKM Anggrek 3',
+  description: 'Pesan takjil favoritmu secara online H-1 dengan fasilitas pesan antar langsung ke rumah oleh Karang Taruna Anggrek 3.',
+  metadataBase: new URL('https://takjilku.netlify.app'),
   openGraph: {
-    title: 'TakjilKu - Pesan Takjil Ramadhan UMKM RW06',
-    description: 'Pesan takjil favoritmu secara online. Antar langsung ke rumah oleh Karang Taruna Anggrek 3.',
+    title: 'TakjilKu - Form Pemesanan Takjil Ramadhan, UMKM Anggrek 3',
+    description: 'Dukung UMKM warga Anggrek 3! Pesan takjil favoritmu secara online dengan fasilitas pesan antar ke rumah.',
     url: '/',
     siteName: 'TakjilKu',
     images: [
       {
         url: '/logo.jpeg',
-        width: 1200,
-        height: 630,
-        alt: 'Logo TakjilKu Ramadhan',
+        width: 800,
+        height: 800,
+        alt: 'Logo TakjilKu Ramadhan Anggrek 3',
       },
     ],
     locale: 'id_ID',
@@ -30,7 +29,7 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'TakjilKu - Pesan Takjil Ramadhan UMKM RW06',
+    title: 'TakjilKu - Form Pemesanan Takjil Ramadhan, UMKM Anggrek 3',
     description: 'Pesan takjil favoritmu secara online. Antar langsung ke rumah.',
     images: ['/logo.jpeg'],
   },
