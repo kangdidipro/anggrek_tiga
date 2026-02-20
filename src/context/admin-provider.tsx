@@ -37,7 +37,8 @@ export function AdminProvider({ children }: { children: ReactNode }) {
     if (password === ADMIN_PASSWORD) {
       sessionStorage.setItem(SESSION_STORAGE_KEY, 'true');
       setIsAdminAuthenticated(true);
-      router.push('/admin/orders');
+      // Redirect to Summary (Rekap Harian) as default landing page
+      router.push('/admin/summary');
       return true;
     }
     return false;
