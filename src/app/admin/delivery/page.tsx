@@ -10,7 +10,7 @@ import { Loader2, Truck, Phone, MapPin, User, CheckCircle2, ArrowLeft, Clock, Sh
 import { format } from 'date-fns';
 import { id } from 'date-fns/locale';
 import { useToast } from '@/hooks/use-toast';
-import { getVendorFromSku } from '@/lib/utils';
+import { cn, getVendorFromSku } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 
 interface OrderItem {
