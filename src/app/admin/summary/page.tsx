@@ -12,7 +12,7 @@ import { saveAs } from 'file-saver';
 import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
-import { format } from 'date-fns';
+import { format, parseISO } from 'date-fns';
 import { id } from 'date-fns/locale';
 import { useToast } from '@/hooks/use-toast';
 import jsPDF from 'jspdf';
@@ -48,6 +48,7 @@ interface Order {
 
 type SummaryItem = {
     key: string;
+    parentOrderId: string; // Used for merging logic
     label: string;
     subLabel?: string;
     totalOrders: number;
@@ -151,6 +152,7 @@ export default function AdminSummaryPage() {
     const targetDateOrders = orders.filter(order => new Date(order.orderDateTime).toDateString() === date.toDateString());
     
     const summaryMap: Record<string, { 
+      parentOrderId: string;
       label: string;
       subLabel?: string;
       orderIds: Set<string>; 
@@ -183,9 +185,6 @@ export default function AdminSummaryPage() {
 
         if (uniqueItemsForThisOrder.length === 0) return;
 
-        // Tracks which vendors of THIS order we have already processed for THIS summary loop
-        const vendorsSeenInOrderLoop = new Set<string>();
-
         uniqueItemsForThisOrder.forEach(item => {
             const vendor = item.vendor || getVendorFromSku(item.sku);
             const currentStatus = order.vendorStatuses?.[vendor]?.status || 'Dipesan';
@@ -198,7 +197,7 @@ export default function AdminSummaryPage() {
                 key = `${order.id}-${vendor}`;
                 const vName = vendorLookup[vendor];
                 label = key;
-                subLabel = `${vName || vendor} | ${format(new Date(order.orderDateTime), 'HH:mm')}`;
+                subLabel = `${vName || vendor} | ${format(parseISO(order.orderDateTime), 'HH:mm')}`;
             } else if (groupBy === 'vendor') {
                 key = vendor;
                 const vName = vendorLookup[vendor];
@@ -210,6 +209,7 @@ export default function AdminSummaryPage() {
 
             if (!summaryMap[key]) {
                 summaryMap[key] = { 
+                    parentOrderId: order.id,
                     label, 
                     subLabel, 
                     orderIds: new Set(), 
@@ -230,9 +230,6 @@ export default function AdminSummaryPage() {
             const itemTotal = item.quantity * item.priceAtOrder;
             summaryMap[key].totalAmount += itemTotal;
             
-            // Logic for flat delivery fee: 
-            // In ID Sub-Order grouping, we attribute the fee to the FIRST sub-order encountered for that parent order.
-            // In Vendor grouping, it's more complex, but we'll try to keep grand total accurate by counting parent orders.
             if (!parentOrdersIncludedInDelivery.has(order.id)) {
                 parentOrdersIncludedInDelivery.add(order.id);
                 summaryMap[key].totalDeliveryFee += 2500;
@@ -251,6 +248,7 @@ export default function AdminSummaryPage() {
         const statusesArr = Array.from(data.statuses);
         return {
             key,
+            parentOrderId: data.parentOrderId,
             label: data.label,
             subLabel: data.subLabel,
             totalOrders: data.orderIds.size,
@@ -268,7 +266,11 @@ export default function AdminSummaryPage() {
 
   const filteredSummary = useMemo(() => {
     let result = [...summaryData];
-    if (sortConfig.key) {
+    
+    // Default sort by parentOrderId if grouping by sub-order to facilitate merging
+    if (groupBy === 'orderId' && sortConfig.key === 'label' && sortConfig.direction === 'asc') {
+        result.sort((a, b) => a.parentOrderId.localeCompare(b.parentOrderId) || a.key.localeCompare(b.key));
+    } else if (sortConfig.key) {
       result.sort((a, b) => {
         const valA = a[sortConfig.key!] ?? '';
         const valB = b[sortConfig.key!] ?? '';
@@ -279,7 +281,27 @@ export default function AdminSummaryPage() {
       });
     }
     return result;
-  }, [summaryData, sortConfig]);
+  }, [summaryData, sortConfig, groupBy]);
+
+  // Logic to calculate rowspan for same parent order rows
+  const rowSpans = useMemo(() => {
+    const spans: Record<string, number> = {};
+    if (groupBy !== 'orderId') return spans;
+
+    let i = 0;
+    while (i < filteredSummary.length) {
+        const currentOrder = filteredSummary[i].parentOrderId;
+        let count = 1;
+        let j = i + 1;
+        while (j < filteredSummary.length && filteredSummary[j].parentOrderId === currentOrder) {
+            count++;
+            j++;
+        }
+        spans[filteredSummary[i].key] = count;
+        i = j;
+    }
+    return spans;
+  }, [filteredSummary, groupBy]);
 
   const grandTotals = useMemo(() => {
     return filteredSummary.reduce((acc, curr) => ({
@@ -326,6 +348,7 @@ export default function AdminSummaryPage() {
   const exportToExcel = () => {
     const dataForExport = filteredSummary.map((summary, index) => ({
         'No.': index + 1,
+        'ID Order': summary.parentOrderId,
         'Group (ID Sub-Order/Mitra/SKU)': summary.label,
         'Info': summary.subLabel || '',
         'Status': summary.status || summary.statuses?.join(', '),
@@ -339,6 +362,7 @@ export default function AdminSummaryPage() {
 
     dataForExport.push({
       'No.': '',
+      'ID Order': '',
       'Group (ID Sub-Order/Mitra/SKU)': 'TOTAL KESELURUHAN',
       'Info': '',
       'Status': '',
@@ -606,70 +630,99 @@ export default function AdminSummaryPage() {
                                     </TableCell>
                                 </TableRow>
                             ) : (
-                                filteredSummary.map((summary, index) => (
-                                    <TableRow key={summary.key}>
-                                        <TableCell className="text-muted-foreground font-mono text-xs">{index + 1}</TableCell>
-                                        <TableCell className="font-medium">
-                                            {summary.label}
-                                            {summary.subLabel && <span className="block text-[10px] text-muted-foreground">{summary.subLabel}</span>}
-                                        </TableCell>
-                                        <TableCell>
-                                            {summary.status ? (
-                                                <Badge className={cn("text-[10px]", getStatusBadgeColor(summary.status))}>
-                                                    {summary.status}
-                                                </Badge>
-                                            ) : summary.statuses && summary.statuses.length > 0 ? (
-                                                <div className="flex flex-wrap gap-1">
-                                                    {summary.statuses.map(s => (
-                                                        <Badge key={s} className={cn("text-[10px]", getStatusBadgeColor(s))}>
-                                                            {s}
-                                                        </Badge>
-                                                    ))}
-                                                </div>
-                                            ) : null}
-                                        </TableCell>
-                                        <TableCell className="text-right">{formatPrice(summary.totalAmount)}</TableCell>
-                                        <TableCell className="text-right text-destructive font-medium">{formatPrice(summary.adminFee)}</TableCell>
-                                        <TableCell className="text-right font-bold text-green-600">{formatPrice(summary.netToVendor)}</TableCell>
-                                        <TableCell className="text-right">
-                                            {summary.totalDeliveryFee > 0 ? formatPrice(summary.totalDeliveryFee) : '-'}
-                                        </TableCell>
-                                        <TableCell>
-                                            <div className="space-y-3">
-                                                {Object.entries(groupItemsByVendor(summary.items)).map(([vCode, vItems]) => {
-                                                    const subtotalMitra = vItems.reduce((sum, i) => sum + (i.price * i.quantity), 0);
-                                                    const netMitra = subtotalMitra * 0.95;
-                                                    return (
-                                                        <div key={vCode} className="space-y-1 bg-muted/20 p-2 rounded-sm border">
-                                                            <div className="flex justify-between items-center bg-primary/10 px-2 py-1 rounded-sm border border-primary/20 mb-1">
-                                                                <span className="text-[10px] font-bold text-primary uppercase">Mitra: {vCode}</span>
-                                                                <div className="flex gap-2 text-[10px]">
-                                                                    <span className="text-muted-foreground">Bruto: {formatPrice(subtotalMitra)}</span>
-                                                                    <span className="font-bold text-green-700">Bayar: {formatPrice(netMitra)}</span>
+                                filteredSummary.map((summary, index) => {
+                                    const span = rowSpans[summary.key] || 0;
+                                    
+                                    return (
+                                        <TableRow key={summary.key}>
+                                            <TableCell className="text-muted-foreground font-mono text-xs">{index + 1}</TableCell>
+                                            <TableCell className="font-medium">
+                                                {summary.label}
+                                                {summary.subLabel && <span className="block text-[10px] text-muted-foreground">{summary.subLabel}</span>}
+                                            </TableCell>
+                                            <TableCell>
+                                                {summary.status ? (
+                                                    <Badge className={cn("text-[10px]", getStatusBadgeColor(summary.status))}>
+                                                        {summary.status}
+                                                    </Badge>
+                                                ) : summary.statuses && summary.statuses.length > 0 ? (
+                                                    <div className="flex flex-wrap gap-1">
+                                                        {summary.statuses.map(s => (
+                                                            <Badge key={s} className={cn("text-[10px]", getStatusBadgeColor(s))}>
+                                                                {s}
+                                                            </Badge>
+                                                        ))}
+                                                    </div>
+                                                ) : null}
+                                            </TableCell>
+                                            <TableCell className="text-right">{formatPrice(summary.totalAmount)}</TableCell>
+                                            <TableCell className="text-right text-destructive font-medium">{formatPrice(summary.adminFee)}</TableCell>
+                                            <TableCell className="text-right font-bold text-green-600">{formatPrice(summary.netToVendor)}</TableCell>
+                                            
+                                            {/* Column Merger for Ongkir */}
+                                            {groupBy === 'orderId' ? (
+                                                span > 0 ? (
+                                                    <TableCell rowSpan={span} className="text-right bg-primary/5 border-l border-primary/10 font-bold">
+                                                        {formatPrice(2500)}
+                                                    </TableCell>
+                                                ) : null
+                                            ) : (
+                                                <TableCell className="text-right">
+                                                    {summary.totalDeliveryFee > 0 ? formatPrice(summary.totalDeliveryFee) : '-'}
+                                                </TableCell>
+                                            )}
+
+                                            <TableCell>
+                                                <div className="space-y-3">
+                                                    {Object.entries(groupItemsByVendor(summary.items)).map(([vCode, vItems]) => {
+                                                        const subtotalMitra = vItems.reduce((sum, i) => sum + (i.price * i.quantity), 0);
+                                                        const netMitra = subtotalMitra * 0.95;
+                                                        return (
+                                                            <div key={vCode} className="space-y-1 bg-muted/20 p-2 rounded-sm border">
+                                                                <div className="flex justify-between items-center bg-primary/10 px-2 py-1 rounded-sm border border-primary/20 mb-1">
+                                                                    <span className="text-[10px] font-bold text-primary uppercase">Mitra: {vCode}</span>
+                                                                    <div className="flex gap-2 text-[10px]">
+                                                                        <span className="text-muted-foreground">Bruto: {formatPrice(subtotalMitra)}</span>
+                                                                        <span className="font-bold text-green-700">Bayar: {formatPrice(netMitra)}</span>
+                                                                    </div>
                                                                 </div>
+                                                                <ul className="text-xs space-y-1 pl-1">
+                                                                    {vItems.map((item, idx) => (
+                                                                        <li key={idx} className="flex justify-between gap-4 border-b border-muted last:border-0 pb-1">
+                                                                            <span className="flex-1">{item.name} <span className="text-muted-foreground">[{item.sku}]</span></span>
+                                                                            <span className="font-bold">{item.quantity} porsi</span>
+                                                                        </li>
+                                                                    ))}
+                                                                </ul>
                                                             </div>
-                                                            <ul className="text-xs space-y-1 pl-1">
-                                                                {vItems.map((item, idx) => (
-                                                                    <li key={idx} className="flex justify-between gap-4 border-b border-muted last:border-0 pb-1">
-                                                                        <span className="flex-1">{item.name} <span className="text-muted-foreground">[{item.sku}]</span></span>
-                                                                        <span className="font-bold">{item.quantity} porsi</span>
-                                                                    </li>
-                                                                ))}
-                                                            </ul>
-                                                        </div>
-                                                    );
-                                                })}
-                                            </div>
-                                        </TableCell>
-                                        <TableCell>
-                                            <ul className="text-[10px] list-disc pl-4 space-y-2 text-muted-foreground">
-                                                {summary.addresses.map((addr, idx) => (
-                                                    <li key={idx} className="leading-tight">{addr}</li>
-                                                ))}
-                                            </ul>
-                                        </TableCell>
-                                    </TableRow>
-                                ))
+                                                        );
+                                                    })}
+                                                </div>
+                                            </TableCell>
+
+                                            {/* Column Merger for Address */}
+                                            {groupBy === 'orderId' ? (
+                                                span > 0 ? (
+                                                    <TableCell rowSpan={span} className="bg-primary/5 border-l border-primary/10">
+                                                        <ul className="text-[10px] list-disc pl-4 space-y-2 text-muted-foreground">
+                                                            {summary.addresses.map((addr, idx) => (
+                                                                <li key={idx} className="leading-tight">{addr}</li>
+                                                            ))}
+                                                        </ul>
+                                                    </TableCell>
+                                                ) : null
+                                            ) : (
+                                                <TableCell>
+                                                    <ul className="text-[10px] list-disc pl-4 space-y-2 text-muted-foreground">
+                                                        {summary.addresses.map((addr, idx) => (
+                                                            <li key={idx} className="leading-tight">{addr}</li>
+                                                        ))}
+                                                    </ul>
+                                                </TableCell>
+                                            )}
+                                        </TableRow>
+                                    );
+                                })
                             )}
                         </TableBody>
                         {filteredSummary.length > 0 && (
