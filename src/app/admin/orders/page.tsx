@@ -80,7 +80,8 @@ export default function AdminOrdersPage() {
   const [date, setDate] = useState<Date | undefined>(new Date());
   const [vendorFilter, setVendorFilter] = useState<string>('all');
   const [searchTerm, setSearchTerm] = useState('');
-  const [groupBy, setGroupBy] = useState<'orderId' | 'vendor' | 'sku'>('orderId');
+  // Set Default to orderId (1 Card per Order)
+  const [groupBy, setGroupBy] = useState<'orderId' | 'subOrderId' | 'vendor' | 'sku'>('orderId');
   const [orderToDelete, setOrderToDelete] = useState<Order | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isUpdatingStatus, setIsUpdatingStatus] = useState<string | null>(null);
@@ -169,6 +170,10 @@ export default function AdminOrdersPage() {
     
     filteredOrders.forEach(order => {
         if (groupBy === 'orderId') {
+            // Group by Order (Pesanan Utuh) - 1 Card per Order
+            if (!groups[order.id]) groups[order.id] = [];
+            groups[order.id].push(order);
+        } else if (groupBy === 'subOrderId') {
             // Group by Sub-Order (Order + Vendor)
             const vendorsInOrder = Array.from(new Set(order.items.map(item => item.vendor)));
             vendorsInOrder.forEach(v => {
@@ -369,7 +374,6 @@ export default function AdminOrdersPage() {
     
     const subtotal = itemsToPrint.reduce((sum, item) => sum + (item.priceAtOrder * item.quantity), 0);
     
-    // Kembali ke logika 1 order 1 ongkir Rp 2.500
     const calculatedDeliveryFee = 2500;
     const totalToPrint = vendorCode ? subtotal : (subtotal + calculatedDeliveryFee);
 
@@ -516,7 +520,8 @@ export default function AdminOrdersPage() {
                         <SelectValue placeholder="Group By" />
                     </SelectTrigger>
                     <SelectContent>
-                        <SelectItem value="orderId">No. Order</SelectItem>
+                        <SelectItem value="orderId">Pesanan Utuh (1 Card)</SelectItem>
+                        <SelectItem value="subOrderId">ID Sub-Order (Split)</SelectItem>
                         <SelectItem value="vendor">Kode Mitra</SelectItem>
                         <SelectItem value="sku">SKU Produk</SelectItem>
                     </SelectContent>
@@ -540,18 +545,22 @@ export default function AdminOrdersPage() {
       ) : (
         Object.entries(groupedData).map(([groupKey, groupOrders]) => (
             <div key={groupKey} className="mb-8">
-                <h2 className="text-xl font-bold mb-4 bg-primary/10 p-2 rounded px-4 text-primary flex items-center gap-2">
-                    {groupBy === 'orderId' ? (
-                      <><Store className="h-5 w-5" /> Sub-Order #{groupKey}</>
-                    ) : groupBy === 'vendor' ? (
-                      <><Store className="h-5 w-5" /> Mitra: {groupKey}</>
-                    ) : (
-                      <><Store className="h-5 w-5" /> Produk: {groupKey}</>
-                    )}
-                </h2>
+                {/* Only show heading if NOT grouped by orderId (because orderId IS the card itself) */}
+                {groupBy !== 'orderId' && (
+                  <h2 className="text-xl font-bold mb-4 bg-primary/10 p-2 rounded px-4 text-primary flex items-center gap-2">
+                      {groupBy === 'subOrderId' ? (
+                        <><Store className="h-5 w-5" /> Sub-Order #{groupKey}</>
+                      ) : groupBy === 'vendor' ? (
+                        <><Store className="h-5 w-5" /> Mitra: {groupKey}</>
+                      ) : (
+                        <><Store className="h-5 w-5" /> Produk: {groupKey}</>
+                      )}
+                  </h2>
+                )}
+                
                 <Accordion type="single" collapsible className="w-full space-y-4">
                   {groupOrders.map((order) => {
-                      const targetVendorInSubOrder = groupBy === 'orderId' ? groupKey.split('-').pop() : null;
+                      const targetVendorInSubOrder = groupBy === 'subOrderId' ? groupKey.split('-').pop() : null;
 
                       return (
                         <AccordionItem value={order.id} key={order.id} className="border-b-0">
@@ -743,7 +752,7 @@ export default function AdminOrdersPage() {
                   </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
-                  <AlertDialogCancel onClick={() => !isDeleting && setOrderToDelete(null)} disabled={isDeleting}>
+                  <AlertDialogCancel onClick={() => { if(!isDeleting) setOrderToDelete(null); }} disabled={isDeleting}>
                       Batal
                   </AlertDialogCancel>
                   <AlertDialogAction onClick={handleDeleteOrder} disabled={isDeleting} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">

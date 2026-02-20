@@ -975,7 +975,7 @@ export default function AdminSummaryPage() {
                                 <SelectValue placeholder="Group By" />
                             </SelectTrigger>
                             <SelectContent>
-                                <SelectItem value="orderId">ID Sub-Order</SelectItem>
+                                <SelectItem value="orderId">Grup per Pesanan (Merge)</SelectItem>
                                 <SelectItem value="vendor">Kode Mitra</SelectItem>
                                 <SelectItem value="sku">SKU Produk</SelectItem>
                             </SelectContent>
@@ -1056,7 +1056,7 @@ export default function AdminSummaryPage() {
                                 <TableHead className="w-[50px]">No.</TableHead>
                                 <TableHead className="cursor-pointer hover:bg-muted/50 transition-colors" onClick={() => handleSort('label')}>
                                     <div className="flex items-center gap-1">
-                                    {groupBy === 'orderId' ? 'ID Sub-Order' : groupBy === 'vendor' ? 'Mitra' : 'SKU / Produk'}
+                                    {groupBy === 'orderId' ? 'Mitra' : groupBy === 'vendor' ? 'Mitra' : 'SKU / Produk'}
                                     {getSortIcon('label')}
                                     </div>
                                 </TableHead>
@@ -1081,8 +1081,8 @@ export default function AdminSummaryPage() {
                                     Ongkir {getSortIcon('totalDeliveryFee')}
                                     </div>
                                 </TableHead>
-                                <TableHead className="min-w-[250px]">Rincian Item</TableHead>
-                                {groupBy !== 'orderId' && <TableHead className="min-w-[250px]">Profil & Alamat</TableHead>}
+                                <TableHead className="min-w-[250px]">Rincian Item & Pembayaran per Mitra</TableHead>
+                                {groupBy !== 'orderId' && <TableHead className="min-w-[250px]">Profil & Alamat Pengiriman</TableHead>}
                                 <TableHead className="text-right">Aksi</TableHead>
                             </TableRow>
                         </TableHeader>
@@ -1105,7 +1105,7 @@ export default function AdminSummaryPage() {
                                     
                                     const rows = [];
 
-                                    // Add Order Header Row if grouped by orderId
+                                    // Add Order Header Row if grouped by orderId (ID Sub-Order merge mode)
                                     if (isRowSpanned && isNewOrder) {
                                         rows.push(
                                             <TableRow key={`group-${summary.parentOrderId}`} className="bg-primary/5 border-t-2 border-primary/20">
@@ -1125,7 +1125,7 @@ export default function AdminSummaryPage() {
                                                         {parentOrder ? format(new Date(parentOrder.orderDateTime), 'eeee, d MMMM yyyy - HH:mm', { locale: id }) : '-'}
                                                     </div>
                                                 </TableCell>
-                                                <TableCell colSpan={7} className="py-3">
+                                                <TableCell colSpan={6} className="py-3">
                                                     {summary.customerProfile && (
                                                         <div className="flex flex-col gap-1.5">
                                                             <div className="flex flex-wrap items-center gap-x-6 gap-y-1 text-xs">
@@ -1216,7 +1216,7 @@ export default function AdminSummaryPage() {
                                                         {summary.status}
                                                     </Badge>
                                                 ) : summary.statuses && summary.statuses.length > 0 ? (
-                                                    <div className="flex flex-wrap gap-1">
+                                                    <div className="flex wrap gap-1">
                                                         {summary.statuses.map(s => (
                                                             <Badge key={s} className={cn("text-[10px]", getStatusBadgeColor(s))}>
                                                                 {s}
