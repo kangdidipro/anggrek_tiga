@@ -5,7 +5,7 @@ import { useFirestore, useUser, useCollection, useMemoFirebase } from '@/firebas
 import { collectionGroup, getDocs, query, collection } from 'firebase/firestore';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Loader2, FileDown, CalendarIcon, FileText, Mail, Search, LayoutGrid, ArrowUpDown, ArrowUp, ArrowDown, Filter, Check } from 'lucide-react';
+import { Loader2, FileDown, CalendarIcon, FileText, Mail, Search, LayoutGrid, ArrowUpDown, ArrowUp, ArrowDown, Filter } from 'lucide-react';
 import { formatPrice, getVendorFromSku } from '@/lib/utils';
 import * as XLSX from 'xlsx';
 import { saveAs } from 'file-saver';
@@ -386,17 +386,29 @@ export default function AdminSummaryPage() {
   const exportToPDF = () => {
     const doc = new jsPDF('l', 'mm', 'a4');
     const tableColumn = ["No.", "ID Sub-Order / Group", "Status", "Total Produk", "Admin (5%)", "Bayar ke Mitra", "Ongkir", "Rincian Item", "Alamat"];
-    const tableRows = filteredSummary.map((summary, index) => [
-        (index + 1).toString(),
-        summary.label + (summary.subLabel ? `\n(${summary.subLabel})` : ''),
-        summary.status || summary.statuses?.join(', ') || '-',
-        formatPrice(summary.totalAmount),
-        formatPrice(summary.adminFee),
-        formatPrice(summary.netToVendor),
-        summary.totalDeliveryFee > 0 ? formatPrice(summary.totalDeliveryFee) : '-',
-        summary.items.map(i => `${i.name} [${i.sku}]\n${i.quantity} porsi`).join('\n---\n'),
-        summary.addresses.join('\n\n')
-    ]);
+    
+    // Grouping tracking for PDF visual merging
+    let currentParentId = '';
+
+    const tableRows = filteredSummary.map((summary, index) => {
+        // Decide if we should show the "merged" columns (Ongkir and Alamat)
+        const isFirstInOrderGroup = groupBy === 'orderId' ? summary.parentOrderId !== currentParentId : true;
+        if (groupBy === 'orderId') currentParentId = summary.parentOrderId;
+
+        return [
+            (index + 1).toString(),
+            summary.label + (summary.subLabel ? `\n(${summary.subLabel})` : ''),
+            summary.status || summary.statuses?.join(', ') || '-',
+            formatPrice(summary.totalAmount),
+            formatPrice(summary.adminFee),
+            formatPrice(summary.netToVendor),
+            // Show Ongkir only for the first row of an order group when grouped by orderId
+            isFirstInOrderGroup ? formatPrice(2500) : '-',
+            summary.items.map(i => `${i.name} [${i.sku}]\n${i.quantity} porsi`).join('\n---\n'),
+            // Show Alamat only for the first row of an order group when grouped by orderId
+            isFirstInOrderGroup ? summary.addresses.join('\n\n') : '-'
+        ];
+    });
 
     tableRows.push([
       "",

@@ -4,14 +4,9 @@ service cloud.firestore {
 
     /**
      * APPLICATION SECURITY FILOSOPHY:
-     * 1. Ownership Model: Most data (Users, Orders, OrderItems) is strictly partitioned by the user's UID.
-     *    Access is granted if the {userId} in the path matches the authenticated user's UID.
-     * 2. Public Catalog: Products are publicly readable to allow unauthenticated users to browse the menu.
+     * 1. Ownership Model: Most data (Customers, Orders, OrderItems) is strictly partitioned by the user's UID.
+     * 2. Public Catalog: Products and Vendors are publicly readable to allow all users to browse.
      * 3. Admin Override: A dedicated /admin_roles collection identifies users with elevated privileges.
-     * 4. Relational Integrity: Security rules enforce that documents created within a user's path
-     *    contain the correct internal references (e.g., an Order's customerId must match the path's userId).
-     * 5. Prototyping Flexibility: Rules enforce WHO can access data and relational links, but do NOT 
-     *    enforce strict schemas or data types for content fields, allowing for rapid front-end iteration.
      */
 
     // --- Helper Functions ---
@@ -36,65 +31,67 @@ service cloud.firestore {
     // --- Collection Rules ---
 
     /**
-     * @description Publicly readable catalog of food and snack items. Writes restricted to admins.
-     * @path /products/{productId}
-     * @allow (get/list) for any user. (create) for admins.
-     * @deny (write) for non-admin users.
-     * @principle Public Read with Admin-Only Writes.
+     * @description Publicly readable catalog of takjil items.
+     * @path /menuItems/{itemId}
      */
-    match /products/{productId} {
-      allow get, list: if true;
-      allow create, update, delete: if isAdmin();
+    match /menuItems/{itemId} {
+      allow read: if true;
+      allow write: if isAdmin();
     }
 
     /**
-     * @description User profile documents. Users manage their own profiles.
-     * @path /users/{userId}
-     * @allow (get/list/create/update) if userId matches auth.uid.
-     * @deny (delete) for standard users. (read) for other users.
-     * @principle Path-based ownership and self-creation.
+     * @description Publicly readable list of vendors/partners.
+     * @path /vendors/{vendorId}
      */
-    match /users/{userId} {
+    match /vendors/{vendorId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    /**
+     * @description Customer profile documents.
+     * @path /customers/{userId}
+     */
+    match /customers/{userId} {
       allow get, list: if isOwner(userId) || isAdmin();
       allow create: if isOwner(userId);
-      allow update: if isExistingOwner(userId);
+      allow update: if isExistingOwner(userId) || isAdmin();
       allow delete: if isAdmin();
     }
 
     /**
-     * @description Orders placed by customers. Nested under user to ensure isolation.
-     * @path /users/{userId}/orders/{orderId}
-     * @allow (get/list/create) if userId matches auth.uid AND internal customerId matches path.
-     * @deny (write) if userId does not match request.auth.uid.
-     * @principle Relational integrity via path-to-field matching.
+     * @description Orders placed by customers.
+     * @path /customers/{userId}/orders/{orderId}
      */
-    match /users/{userId}/orders/{orderId} {
+    match /customers/{userId}/orders/{orderId} {
       allow get, list: if isOwner(userId) || isAdmin();
       allow create: if isOwner(userId) && request.resource.data.customerId == userId;
-      allow update: if isExistingOwner(userId) && request.resource.data.customerId == resource.data.customerId;
+      allow update: if isExistingOwner(userId) || isAdmin();
       allow delete: if isAdmin();
     }
 
     /**
-     * @description Items within an order. Nested under the specific order.
-     * @path /users/{userId}/orders/{orderId}/orderItems/{orderItemId}
-     * @allow (get/list/create/delete) if user owns the parent path.
-     * @deny (create) if the internal orderId does not match the parent orderId in the path.
-     * @principle Hierarchical ownership with internal reference validation.
+     * @description Items within an order.
+     * @path /customers/{userId}/orders/{orderId}/orderItems/{orderItemId}
      */
-    match /users/{userId}/orders/{orderId}/orderItems/{orderItemId} {
+    match /customers/{userId}/orders/{orderId}/orderItems/{orderItemId} {
       allow get, list: if isOwner(userId) || isAdmin();
       allow create: if isOwner(userId) && request.resource.data.orderId == orderId;
-      allow update: if isExistingOwner(userId) && request.resource.data.orderId == resource.data.orderId;
+      allow update: if isExistingOwner(userId) || isAdmin();
       allow delete: if isExistingOwner(userId) || isAdmin();
     }
 
     /**
-     * @description Administrative roles used for Database Access Control (DBAC).
+     * @description System settings (Mail, Inventory).
+     * @path /settings/{settingId}
+     */
+    match /settings/{settingId} {
+      allow read, write: if isAdmin();
+    }
+
+    /**
+     * @description Administrative roles.
      * @path /admin_roles/{uid}
-     * @allow (get) for the user themselves to verify admin status. (list) for existing admins.
-     * @deny (write) via client SDK; managed via Admin SDK/Console only.
-     * @principle Existence-based RBAC.
      */
     match /admin_roles/{uid} {
       allow get: if isSignedIn() && (request.auth.uid == uid || isAdmin());
