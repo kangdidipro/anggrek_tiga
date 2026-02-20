@@ -13,12 +13,12 @@ export const metadata: Metadata = {
   metadataBase: new URL('https://takjilku.netlify.app'),
   openGraph: {
     title: 'TakjilKu - Form Pemesanan Takjil Ramadhan, UMKM Anggrek 3',
-    description: 'Dukung UMKM warga Anggrek 3! Pesan takjil favoritmu secara online dengan fasilitas pesan antar ke rumah.',
-    url: '/',
+    description: 'Dukung UMKM warga Anggrek 3! Pesan takjil favoritmu secara online dengan fasilitas pesan antar langsung ke rumah.',
+    url: 'https://takjilku.netlify.app',
     siteName: 'TakjilKu',
     images: [
       {
-        url: '/logo.jpeg',
+        url: 'https://takjilku.netlify.app/logo.jpeg',
         width: 800,
         height: 800,
         alt: 'Logo TakjilKu Ramadhan Anggrek 3',
@@ -31,7 +31,7 @@ export const metadata: Metadata = {
     card: 'summary_large_image',
     title: 'TakjilKu - Form Pemesanan Takjil Ramadhan, UMKM Anggrek 3',
     description: 'Pesan takjil favoritmu secara online. Antar langsung ke rumah.',
-    images: ['/logo.jpeg'],
+    images: ['https://takjilku.netlify.app/logo.jpeg'],
   },
 };
 

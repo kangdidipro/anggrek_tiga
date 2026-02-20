@@ -3,7 +3,7 @@
     {
       "id": "og-preview",
       "description": "Logo utama TakjilKu untuk pratinjau media sosial",
-      "imageUrl": "/logo.jpeg",
+      "imageUrl": "https://takjilku.netlify.app/logo.jpeg",
       "imageHint": "TakjilKu logo"
     }
   ]
