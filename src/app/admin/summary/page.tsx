@@ -6,7 +6,7 @@ import { useFirestore, useUser, useCollection, useMemoFirebase, errorEmitter, Fi
 import { collectionGroup, getDocs, query, collection, writeBatch, doc, updateDoc, arrayUnion } from 'firebase/firestore';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Loader2, FileDown, CalendarIcon, FileText, Mail, Search, LayoutGrid, ArrowUpDown, ArrowUp, ArrowDown, Filter, Trash2, Phone, User, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Loader2, FileDown, CalendarIcon, FileText, Mail, Search, LayoutGrid, ArrowUpDown, ArrowUp, ArrowDown, Filter, Trash2, Phone, User, ChevronLeft, ChevronRight, Send, X } from 'lucide-react';
 import { formatPrice, getVendorFromSku } from '@/lib/utils';
 import * as XLSX from 'xlsx';
 import { saveAs } from 'file-saver';
@@ -24,6 +24,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { cn } from '@/lib/utils';
 import type { Vendor } from '@/lib/types';
 import { Badge } from '@/components/ui/badge';
+import { Label } from '@/components/ui/label';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -702,407 +703,449 @@ export default function AdminSummaryPage() {
   
   return (
     <div className="space-y-6">
-        <Card>
-            <CardHeader>
-                <CardTitle>Rekap Harian</CardTitle>
-                <CardDescription>
-                  Rekapitulasi transaksi lengkap per {groupBy === 'orderId' ? 'ID Sub-Order' : groupBy === 'vendor' ? 'Mitra' : 'SKU'} untuk tanggal {date ? format(date, 'eeee, d MMMM yyyy', { locale: id }) : 'semua waktu'}.
-                </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-                <div className="flex flex-wrap gap-4 items-center mb-4">
-                    <div className="relative flex-1 min-w-[240px]">
+        <div>
+            <h1 className="text-3xl font-bold tracking-tight font-headline">Rekap Harian</h1>
+            <p className="text-muted-foreground">
+              Rekapitulasi transaksi lengkap per {groupBy === 'orderId' ? 'ID Sub-Order' : groupBy === 'vendor' ? 'Mitra' : 'SKU'} untuk tanggal {date ? format(date, 'eeee, d MMMM yyyy', { locale: id }) : 'semua waktu'}.
+            </p>
+        </div>
+
+        <Card className="border-primary/10 shadow-sm">
+            <CardContent className="p-6 space-y-6">
+                {/* Section 1: Search */}
+                <div className="space-y-2">
+                    <Label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Pencarian Cepat</Label>
+                    <div className="relative">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                         <Input 
-                            placeholder="Cari kata kunci (No Order, Alamat, Menu)..." 
+                            placeholder="Cari No Order, Nama Pemesan, Alamat, atau Nama Menu..." 
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
-                            className="pl-10"
+                            className="pl-10 h-11 bg-muted/20 border-primary/10 focus-visible:ring-primary"
                         />
+                        {searchTerm && (
+                            <Button 
+                                variant="ghost" 
+                                size="icon" 
+                                className="absolute right-2 top-1/2 -translate-y-1/2 h-7 w-7"
+                                onClick={() => setSearchTerm('')}
+                            >
+                                <X className="h-4 w-4" />
+                            </Button>
+                        )}
                     </div>
-                    <Popover>
-                        <PopoverTrigger asChild>
-                            <Button variant={"outline"} className="w-[200px] justify-start text-left font-normal border-primary/20">
-                                <CalendarIcon className="mr-2 h-4 w-4" />
-                                {date ? format(date, "PPP", { locale: id }) : <span>Pilih tanggal</span>}
-                            </Button>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-auto p-0">
-                            <Calendar mode="single" selected={date} onSelect={setDate} initialFocus locale={id} />
-                        </PopoverContent>
-                    </Popover>
-                    
-                    <Select value={vendorFilter} onValueChange={setVendorFilter}>
-                        <SelectTrigger className="w-[150px]">
-                            <SelectValue placeholder="Semua Mitra" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="all">Semua Mitra</SelectItem>
-                            {availableVendors.filter(v => v !== 'all').map(v => (
-                                <SelectItem key={v} value={v}>
-                                    {getMitraDisplayName(v)}
-                                </SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
+                </div>
 
-                    <Popover>
-                        <PopoverTrigger asChild>
-                            <Button variant="outline" className="w-[180px] justify-between border-primary/30">
-                                <div className="flex items-center gap-2 overflow-hidden">
-                                    <Filter className="h-4 w-4 text-primary shrink-0" />
-                                    <span className="truncate">
-                                        {selectedStatuses.length === 0 ? "Semua Status" : `Status (${selectedStatuses.length})`}
-                                    </span>
-                                </div>
-                                <ArrowDown className="h-3 w-3 opacity-50 shrink-0" />
-                            </Button>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-[200px] p-2" align="start">
-                            <div className="space-y-2">
-                                <Button 
-                                    variant="ghost" 
-                                    size="sm" 
-                                    className="w-full justify-start font-normal text-xs h-8"
-                                    onClick={() => setSelectedStatuses([])}
-                                >
-                                    Reset Pilihan
+                {/* Section 2: Filters */}
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 p-4 bg-muted/30 rounded-xl border border-primary/5">
+                    <div className="space-y-2">
+                        <Label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Pilih Tanggal</Label>
+                        <Popover>
+                            <PopoverTrigger asChild>
+                                <Button variant={"outline"} className="w-full justify-start text-left font-normal bg-background border-primary/10">
+                                    <CalendarIcon className="mr-2 h-4 w-4 text-primary" />
+                                    {date ? format(date, "PPP", { locale: id }) : <span>Pilih tanggal</span>}
                                 </Button>
-                                <div className="border-t pt-2 space-y-1">
-                                    {ALL_STATUSES.map(status => (
-                                        <div 
-                                            key={status} 
-                                            className="flex items-center space-x-2 p-1 rounded hover:bg-muted cursor-pointer"
-                                            onClick={() => toggleStatus(status)}
-                                        >
-                                            <Checkbox 
-                                                id={`status-${status}`} 
-                                                checked={selectedStatuses.includes(status)}
-                                                onCheckedChange={() => toggleStatus(status)}
-                                            />
-                                            <label 
-                                                htmlFor={`status-${status}`}
-                                                className="text-sm font-medium leading-none cursor-pointer flex-1"
+                            </PopoverTrigger>
+                            <PopoverContent className="w-auto p-0" align="start">
+                                <Calendar mode="single" selected={date} onSelect={setDate} initialFocus locale={id} />
+                            </PopoverContent>
+                        </Popover>
+                    </div>
+
+                    <div className="space-y-2">
+                        <Label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Mitra / UMKM</Label>
+                        <Select value={vendorFilter} onValueChange={setVendorFilter}>
+                            <SelectTrigger className="w-full bg-background border-primary/10">
+                                <SelectValue placeholder="Semua Mitra" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all">Semua Mitra</SelectItem>
+                                {availableVendors.filter(v => v !== 'all').map(v => (
+                                    <SelectItem key={v} value={v}>
+                                        {getMitraDisplayName(v)}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    </div>
+
+                    <div className="space-y-2">
+                        <Label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Status Pesanan</Label>
+                        <Popover>
+                            <PopoverTrigger asChild>
+                                <Button variant="outline" className="w-full justify-between bg-background border-primary/10">
+                                    <div className="flex items-center gap-2 overflow-hidden">
+                                        <Filter className="h-4 w-4 text-primary shrink-0" />
+                                        <span className="truncate">
+                                            {selectedStatuses.length === 0 ? "Semua Status" : `Status (${selectedStatuses.length})`}
+                                        </span>
+                                    </div>
+                                    <ArrowDown className="h-3 w-3 opacity-50 shrink-0" />
+                                </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-[200px] p-2" align="start">
+                                <div className="space-y-2">
+                                    <Button 
+                                        variant="ghost" 
+                                        size="sm" 
+                                        className="w-full justify-start font-normal text-xs h-8"
+                                        onClick={() => setSelectedStatuses([])}
+                                    >
+                                        Reset Pilihan
+                                    </Button>
+                                    <div className="border-t pt-2 space-y-1">
+                                        {ALL_STATUSES.map(status => (
+                                            <div 
+                                                key={status} 
+                                                className="flex items-center space-x-2 p-1 rounded hover:bg-muted cursor-pointer"
+                                                onClick={() => toggleStatus(status)}
                                             >
-                                                {status}
-                                            </label>
-                                        </div>
-                                    ))}
+                                                <Checkbox 
+                                                    id={`status-${status}`} 
+                                                    checked={selectedStatuses.includes(status)}
+                                                    onCheckedChange={() => toggleStatus(status)}
+                                                />
+                                                <label 
+                                                    htmlFor={`status-${status}`}
+                                                    className="text-sm font-medium leading-none cursor-pointer flex-1"
+                                                >
+                                                    {status}
+                                                </label>
+                                            </div>
+                                        ))}
+                                    </div>
                                 </div>
-                            </div>
-                        </PopoverContent>
-                    </Popover>
+                            </PopoverContent>
+                        </Popover>
+                    </div>
 
-                    <Select value={groupBy} onValueChange={(val: any) => setGroupBy(val)}>
-                        <SelectTrigger className="w-[180px] border-primary/50 bg-primary/5">
-                            <LayoutGrid className="mr-2 h-4 w-4 text-primary" />
-                            <SelectValue placeholder="Group By" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="orderId">ID Sub-Order</SelectItem>
-                            <SelectItem value="vendor">Kode Mitra</SelectItem>
-                            <SelectItem value="sku">SKU Produk</SelectItem>
-                        </SelectContent>
-                    </Select>
+                    <div className="space-y-2">
+                        <Label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Kelompokkan Berdasar</Label>
+                        <Select value={groupBy} onValueChange={(val: any) => setGroupBy(val)}>
+                            <SelectTrigger className="w-full bg-primary/5 border-primary/20 text-primary font-bold">
+                                <LayoutGrid className="mr-2 h-4 w-4" />
+                                <SelectValue placeholder="Group By" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="orderId">ID Sub-Order</SelectItem>
+                                <SelectItem value="vendor">Kode Mitra</SelectItem>
+                                <SelectItem value="sku">SKU Produk</SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </div>
+                </div>
 
-                    <div className="flex flex-wrap gap-2 items-center">
+                {/* Section 3: Actions */}
+                <div className="flex flex-wrap items-center justify-between gap-4 pt-4 border-t">
+                    <div className="flex flex-wrap gap-2">
                         {selectedOrderIds.size > 0 && (
                           <Button 
                             variant="destructive" 
                             size="sm" 
                             onClick={() => executeDeleteOrders(Array.from(selectedOrderIds))}
                             disabled={isDeleting}
+                            className="shadow-sm"
                           >
                             <Trash2 className="mr-2 h-4 w-4" />
                             Hapus Terpilih ({selectedOrderIds.size})
                           </Button>
                         )}
-                        <Button variant="outline" size="sm" onClick={exportToExcel} disabled={filteredSummary.length === 0}>
-                            <FileDown className="mr-2 h-4 w-4" /> Excel
+                        <Button variant="outline" size="sm" onClick={exportToExcel} disabled={filteredSummary.length === 0} className="border-primary/20 hover:bg-primary/5">
+                            <FileDown className="mr-2 h-4 w-4 text-primary" /> Excel
                         </Button>
-                        <Button variant="outline" size="sm" onClick={exportToPDF} disabled={filteredSummary.length === 0}>
-                            <FileText className="mr-2 h-4 w-4" /> PDF
+                        <Button variant="outline" size="sm" onClick={exportToPDF} disabled={filteredSummary.length === 0} className="border-primary/20 hover:bg-primary/5">
+                            <FileText className="mr-2 h-4 w-4 text-primary" /> PDF
                         </Button>
-                        <div className="flex items-center gap-1 border rounded-md p-1 bg-muted/20">
+                    </div>
+
+                    <div className="flex items-center gap-2 bg-muted/50 p-1.5 rounded-lg border border-primary/5">
+                        <div className="relative">
+                            <Mail className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground" />
                             <Input 
                                 type="email" 
                                 placeholder="Email Laporan" 
-                                className="h-8 w-32 text-xs border-0 bg-transparent focus-visible:ring-0" 
+                                className="h-8 w-48 text-xs pl-7 bg-background" 
                                 value={targetEmail}
                                 onChange={(e) => setTargetEmail(e.target.value)}
                             />
-                            <Button variant="default" size="sm" className="h-8" onClick={sendToEmail} disabled={filteredSummary.length === 0 || isSending || !targetEmail.includes('@')}>
-                                {isSending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Mail className="mr-2 h-4 w-4" />}
-                            </Button>
-                        </div>
-                    </div>
-                </div>
-
-                <div className="rounded-md border overflow-hidden">
-                    <Table>
-                        <TableHeader>
-                            <TableRow>
-                                <TableHead className="w-[40px]">
-                                  <Checkbox 
-                                    checked={selectedOrderIds.size > 0 && selectedOrderIds.size === new Set(paginatedSummary.map(s => s.parentOrderId)).size}
-                                    onCheckedChange={toggleSelectAllOrders}
-                                  />
-                                </TableHead>
-                                <TableHead className="w-[50px]">No.</TableHead>
-                                <TableHead className="cursor-pointer hover:bg-muted/50" onClick={() => handleSort('label')}>
-                                    <div className="flex items-center">
-                                      {groupBy === 'orderId' ? 'ID Sub-Order' : groupBy === 'vendor' ? 'Mitra' : 'SKU / Produk'}
-                                      {getSortIcon('label')}
-                                    </div>
-                                </TableHead>
-                                <TableHead className="w-[150px]">Status</TableHead>
-                                <TableHead className="text-right cursor-pointer hover:bg-muted/50" onClick={() => handleSort('totalAmount')}>
-                                    <div className="flex items-center justify-end">
-                                      Total Produk {getSortIcon('totalAmount')}
-                                    </div>
-                                </TableHead>
-                                <TableHead className="text-right cursor-pointer hover:bg-muted/50" onClick={() => handleSort('adminFee')}>
-                                    <div className="flex items-center justify-end">
-                                      Admin (5%) {getSortIcon('adminFee')}
-                                    </div>
-                                </TableHead>
-                                <TableHead className="text-right cursor-pointer hover:bg-muted/50" onClick={() => handleSort('netToVendor')}>
-                                    <div className="flex items-center justify-end">
-                                      Bayar ke Mitra {getSortIcon('netToVendor')}
-                                    </div>
-                                </TableHead>
-                                <TableHead className="text-right cursor-pointer hover:bg-muted/50" onClick={() => handleSort('totalDeliveryFee')}>
-                                    <div className="flex items-center justify-end">
-                                      Ongkir {getSortIcon('totalDeliveryFee')}
-                                    </div>
-                                </TableHead>
-                                <TableHead className="min-w-[250px]">Rincian Item & Pembayaran per Mitra</TableHead>
-                                <TableHead className="min-w-[250px]">Profil & Alamat Pengiriman</TableHead>
-                                <TableHead className="text-right">Aksi</TableHead>
-                            </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                            {paginatedSummary.length === 0 ? (
-                                <TableRow>
-                                    <TableCell colSpan={11} className="text-center text-muted-foreground py-10">
-                                    Tidak ada transaksi ditemukan.
-                                    </TableCell>
-                                </TableRow>
-                            ) : (
-                                paginatedSummary.map((summary, index) => {
-                                    const span = rowSpans[summary.key] || 0;
-                                    const isRowSpanned = groupBy === 'orderId';
-                                    const parentOrder = orders.find(o => o.id === summary.parentOrderId);
-                                    
-                                    return (
-                                        <TableRow key={summary.key} className={selectedOrderIds.has(summary.parentOrderId) ? 'bg-primary/5' : ''}>
-                                            <TableCell>
-                                              {(span > 0 || !isRowSpanned) && (
-                                                <Checkbox 
-                                                  checked={selectedOrderIds.has(summary.parentOrderId)}
-                                                  onCheckedChange={() => toggleOrderSelection(summary.parentOrderId)}
-                                                />
-                                              )}
-                                            </TableCell>
-                                            <TableCell className="text-muted-foreground font-mono text-xs">{(currentPage - 1) * pageSize + index + 1}</TableCell>
-                                            <TableCell className="font-medium">
-                                                {summary.label}
-                                                {summary.subLabel && <span className="block text-[10px] text-muted-foreground">{summary.subLabel}</span>}
-                                            </TableCell>
-                                            <TableCell>
-                                                {groupBy === 'orderId' && summary.status ? (
-                                                    <Select 
-                                                        disabled={isUpdatingStatus === summary.key} 
-                                                        value={summary.status} 
-                                                        onValueChange={(val) => handleUpdateVendorStatus(summary, val)}
-                                                    >
-                                                        <SelectTrigger className={cn("h-8 text-[10px] font-bold text-white border-0", getStatusBadgeColor(summary.status))}>
-                                                            <SelectValue />
-                                                        </SelectTrigger>
-                                                        <SelectContent>
-                                                            {(parentOrder?.paymentMethod === 'QRIS' ? STATUS_FLOWS.QRIS : STATUS_FLOWS.COD).map(s => (
-                                                                <SelectItem key={s} value={s} className="text-xs">{s}</SelectItem>
-                                                            ))}
-                                                        </SelectContent>
-                                                    </Select>
-                                                ) : summary.status ? (
-                                                    <Badge className={cn("text-[10px]", getStatusBadgeColor(summary.status))}>
-                                                        {summary.status}
-                                                    </Badge>
-                                                ) : summary.statuses && summary.statuses.length > 0 ? (
-                                                    <div className="flex flex-wrap gap-1">
-                                                        {summary.statuses.map(s => (
-                                                            <Badge key={s} className={cn("text-[10px]", getStatusBadgeColor(s))}>
-                                                                {s}
-                                                            </Badge>
-                                                        ))}
-                                                    </div>
-                                                ) : null}
-                                            </TableCell>
-                                            <TableCell className="text-right">{formatPrice(summary.totalAmount)}</TableCell>
-                                            <TableCell className="text-right text-destructive font-medium">{formatPrice(summary.adminFee)}</TableCell>
-                                            <TableCell className="text-right font-bold text-green-600">{formatPrice(summary.netToVendor)}</TableCell>
-                                            
-                                            {isRowSpanned ? (
-                                                span > 0 ? (
-                                                    <TableCell rowSpan={span} className="text-right bg-primary/5 border-l border-primary/10 font-bold">
-                                                        {formatPrice(2500)}
-                                                    </TableCell>
-                                                ) : null
-                                            ) : (
-                                                <TableCell className="text-right">
-                                                    {summary.totalDeliveryFee > 0 ? formatPrice(summary.totalDeliveryFee) : '-'}
-                                                </TableCell>
-                                            )}
-
-                                            <TableCell>
-                                                <div className="space-y-3">
-                                                    {Object.entries(groupItemsByVendor(summary.items)).map(([vCode, vItems]) => {
-                                                        const subtotalMitra = vItems.reduce((sum, i) => sum + (i.price * i.quantity), 0);
-                                                        const netMitra = subtotalMitra * 0.95;
-                                                        return (
-                                                            <div key={vCode} className="space-y-1 bg-muted/20 p-2 rounded-sm border">
-                                                                <div className="flex justify-between items-center bg-primary/10 px-2 py-1 rounded-sm border border-primary/20 mb-1">
-                                                                    <span className="text-[10px] font-bold text-primary uppercase">Mitra: {vCode}</span>
-                                                                    <div className="flex gap-2 text-[10px]">
-                                                                        <span className="text-muted-foreground">Bruto: {formatPrice(subtotalMitra)}</span>
-                                                                        <span className="font-bold text-green-700">Bayar: {formatPrice(netMitra)}</span>
-                                                                    </div>
-                                                                </div>
-                                                                <ul className="text-xs space-y-1 pl-1">
-                                                                    {vItems.map((item, idx) => (
-                                                                        <li key={idx} className="flex justify-between gap-4 border-b border-muted last:border-0 pb-1">
-                                                                            <span className="flex-1">{item.name} <span className="text-muted-foreground">[{item.sku}]</span></span>
-                                                                            <span className="font-bold">{item.quantity} porsi</span>
-                                                                        </li>
-                                                                    ))}
-                                                                </ul>
-                                                            </div>
-                                                        );
-                                                    })}
-                                                </div>
-                                            </TableCell>
-
-                                            {isRowSpanned ? (
-                                                span > 0 ? (
-                                                    <TableCell rowSpan={span} className="bg-primary/5 border-l border-primary/10">
-                                                        <div className="space-y-2">
-                                                            {summary.customerProfile && (
-                                                                <div className="text-[10px] space-y-0.5 border-b border-primary/10 pb-2 mb-2">
-                                                                    <p className="font-bold text-foreground uppercase flex items-center gap-1"><User className="h-2 w-2" /> {summary.customerProfile.name}</p>
-                                                                    <p className="flex items-center gap-1"><Phone className="h-2 w-2" /> {summary.customerProfile.phone}</p>
-                                                                    {summary.customerProfile.email && <p className="flex items-center gap-1 text-muted-foreground"><Mail className="h-2 w-2" /> {summary.customerProfile.email}</p>}
-                                                                </div>
-                                                            )}
-                                                            <ul className="text-[10px] list-disc pl-4 space-y-2 text-muted-foreground">
-                                                                {summary.addresses.map((addr, idx) => (
-                                                                    <li key={idx} className="leading-tight">{addr}</li>
-                                                                ))}
-                                                            </ul>
-                                                        </div>
-                                                    </TableCell>
-                                                ) : null
-                                            ) : (
-                                                <TableCell>
-                                                    <div className="space-y-2">
-                                                        {summary.customerProfile && (
-                                                            <div className="text-[10px] space-y-0.5 border-b border-primary/10 pb-2 mb-2">
-                                                                <p className="font-bold text-foreground uppercase flex items-center gap-1"><User className="h-2 w-2" /> {summary.customerProfile.name}</p>
-                                                                <p className="flex items-center gap-1"><Phone className="h-2 w-2" /> {summary.customerProfile.phone}</p>
-                                                                {summary.customerProfile.email && <p className="flex items-center gap-1 text-muted-foreground"><Mail className="h-2 w-2" /> {summary.customerProfile.email}</p>}
-                                                            </div>
-                                                        )}
-                                                        <ul className="text-[10px] list-disc pl-4 space-y-2 text-muted-foreground">
-                                                            {summary.addresses.map((addr, idx) => (
-                                                                <li key={idx} className="leading-tight">{addr}</li>
-                                                            ))}
-                                                        </ul>
-                                                    </div>
-                                                </TableCell>
-                                            )}
-
-                                            <TableCell className="text-right">
-                                              {(span > 0 || !isRowSpanned) && (
-                                                <Button 
-                                                  variant="ghost" 
-                                                  size="icon" 
-                                                  className="text-destructive"
-                                                  onClick={() => setOrderToDelete(summary.parentOrderId)}
-                                                >
-                                                  <Trash2 className="h-4 w-4" />
-                                                </Button>
-                                              )}
-                                            </TableCell>
-                                        </TableRow>
-                                    );
-                                })
-                            )}
-                        </TableBody>
-                        {filteredSummary.length > 0 && (
-                            <TableFooter>
-                                <TableRow className="bg-primary/5 font-bold">
-                                    <TableCell colSpan={4}></TableCell>
-                                    <TableCell className="text-right text-primary">{formatPrice(actualGrandTotals.amount)}</TableCell>
-                                    <TableCell className="text-right text-destructive">{formatPrice(actualGrandTotals.admin)}</TableCell>
-                                    <TableCell className="text-right text-green-700">{formatPrice(actualGrandTotals.net)}</TableCell>
-                                    <TableCell className="text-right">{formatPrice(actualGrandTotals.ongkir)}</TableCell>
-                                    <TableCell colSpan={3}></TableCell>
-                                </TableRow>
-                            </TableFooter>
-                        )}
-                    </Table>
-                </div>
-
-                <div className="flex flex-col md:flex-row items-center justify-between gap-4 bg-card p-4 rounded-lg border shadow-sm">
-                    <div className="flex items-center gap-4">
-                        <div className="flex items-center gap-2">
-                            <span className="text-sm text-muted-foreground">Tampilkan</span>
-                            <Select value={pageSize.toString()} onValueChange={(v) => { setPageSize(Number(v)); setCurrentPage(1); }}>
-                                <SelectTrigger className="w-[80px]">
-                                    <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="5">5</SelectItem>
-                                    <SelectItem value="10">10</SelectItem>
-                                    <SelectItem value="30">30</SelectItem>
-                                    <SelectItem value="50">50</SelectItem>
-                                    <SelectItem value="100">100</SelectItem>
-                                    <SelectItem value="200">200</SelectItem>
-                                </SelectContent>
-                            </Select>
-                            <span className="text-sm text-muted-foreground">baris per halaman</span>
-                        </div>
-                        <div className="text-sm text-muted-foreground border-l pl-4">
-                            Total: <span className="font-bold text-foreground">{filteredSummary.length}</span> baris ditemukan
-                        </div>
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                        <Button 
-                            variant="outline" 
-                            size="sm" 
-                            onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-                            disabled={currentPage === 1}
-                        >
-                            <ChevronLeft className="h-4 w-4 mr-1" /> Prev
-                        </Button>
-                        <div className="flex items-center gap-1 px-2">
-                            <span className="text-sm font-medium">Halaman</span>
-                            <span className="bg-primary/10 text-primary px-2 py-0.5 rounded text-sm font-bold">{currentPage}</span>
-                            <span className="text-sm font-medium">dari {totalPages || 1}</span>
                         </div>
                         <Button 
-                            variant="outline" 
+                            variant="default" 
                             size="sm" 
-                            onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
-                            disabled={currentPage === totalPages || totalPages === 0}
+                            className="h-8 px-3" 
+                            onClick={sendToEmail} 
+                            disabled={filteredSummary.length === 0 || isSending || !targetEmail.includes('@')}
                         >
-                            Next <ChevronRight className="h-4 w-4 ml-1" />
+                            {isSending ? <Loader2 className="mr-2 h-3 w-3 animate-spin" /> : <Send className="mr-2 h-3 w-3" />}
+                            Kirim
                         </Button>
                     </div>
                 </div>
             </CardContent>
         </Card>
+
+        <div className="rounded-xl border shadow-sm overflow-hidden bg-card">
+            <Table>
+                <TableHeader className="bg-muted/50">
+                    <TableRow>
+                        <TableHead className="w-[40px]">
+                          <Checkbox 
+                            checked={selectedOrderIds.size > 0 && selectedOrderIds.size === new Set(paginatedSummary.map(s => s.parentOrderId)).size}
+                            onCheckedChange={toggleSelectAllOrders}
+                          />
+                        </TableHead>
+                        <TableHead className="w-[50px]">No.</TableHead>
+                        <TableHead className="cursor-pointer hover:bg-muted/50 transition-colors" onClick={() => handleSort('label')}>
+                            <div className="flex items-center gap-1">
+                              {groupBy === 'orderId' ? 'ID Sub-Order' : groupBy === 'vendor' ? 'Mitra' : 'SKU / Produk'}
+                              {getSortIcon('label')}
+                            </div>
+                        </TableHead>
+                        <TableHead className="w-[150px]">Status</TableHead>
+                        <TableHead className="text-right cursor-pointer hover:bg-muted/50 transition-colors" onClick={() => handleSort('totalAmount')}>
+                            <div className="flex items-center justify-end gap-1">
+                              Produk {getSortIcon('totalAmount')}
+                            </div>
+                        </TableHead>
+                        <TableHead className="text-right cursor-pointer hover:bg-muted/50 transition-colors" onClick={() => handleSort('adminFee')}>
+                            <div className="flex items-center justify-end gap-1">
+                              Admin {getSortIcon('adminFee')}
+                            </div>
+                        </TableHead>
+                        <TableHead className="text-right cursor-pointer hover:bg-muted/50 transition-colors" onClick={() => handleSort('netToVendor')}>
+                            <div className="flex items-center justify-end gap-1">
+                              Netto {getSortIcon('netToVendor')}
+                            </div>
+                        </TableHead>
+                        <TableHead className="text-right cursor-pointer hover:bg-muted/50 transition-colors" onClick={() => handleSort('totalDeliveryFee')}>
+                            <div className="flex items-center justify-end gap-1">
+                              Ongkir {getSortIcon('totalDeliveryFee')}
+                            </div>
+                        </TableHead>
+                        <TableHead className="min-w-[250px]">Rincian Item</TableHead>
+                        <TableHead className="min-w-[250px]">Profil & Alamat</TableHead>
+                        <TableHead className="text-right">Aksi</TableHead>
+                    </TableRow>
+                </TableHeader>
+                <TableBody>
+                    {paginatedSummary.length === 0 ? (
+                        <TableRow>
+                            <TableCell colSpan={11} className="text-center text-muted-foreground py-20">
+                                <div className="flex flex-col items-center gap-2">
+                                    <Search className="h-8 w-8 opacity-20" />
+                                    <p>Tidak ada transaksi yang ditemukan.</p>
+                                </div>
+                            </TableCell>
+                        </TableRow>
+                    ) : (
+                        paginatedSummary.map((summary, index) => {
+                            const span = rowSpans[summary.key] || 0;
+                            const isRowSpanned = groupBy === 'orderId';
+                            const parentOrder = orders.find(o => o.id === summary.parentOrderId);
+                            
+                            return (
+                                <TableRow key={summary.key} className={cn("transition-colors", selectedOrderIds.has(summary.parentOrderId) ? 'bg-primary/5' : 'hover:bg-muted/30')}>
+                                    <TableCell>
+                                      {(span > 0 || !isRowSpanned) && (
+                                        <Checkbox 
+                                          checked={selectedOrderIds.has(summary.parentOrderId)}
+                                          onCheckedChange={() => toggleOrderSelection(summary.parentOrderId)}
+                                        />
+                                      )}
+                                    </TableCell>
+                                    <TableCell className="text-muted-foreground font-mono text-xs">{(currentPage - 1) * pageSize + index + 1}</TableCell>
+                                    <TableCell className="font-medium">
+                                        <span className="text-sm font-bold block">{summary.label}</span>
+                                        {summary.subLabel && <span className="block text-[10px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded-sm inline-block mt-1">{summary.subLabel}</span>}
+                                    </TableCell>
+                                    <TableCell>
+                                        {groupBy === 'orderId' && summary.status ? (
+                                            <Select 
+                                                disabled={isUpdatingStatus === summary.key} 
+                                                value={summary.status} 
+                                                onValueChange={(val) => handleUpdateVendorStatus(summary, val)}
+                                            >
+                                                <SelectTrigger className={cn("h-8 text-[10px] font-bold text-white border-0 shadow-sm", getStatusBadgeColor(summary.status))}>
+                                                    <SelectValue />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    {(parentOrder?.paymentMethod === 'QRIS' ? STATUS_FLOWS.QRIS : STATUS_FLOWS.COD).map(s => (
+                                                        <SelectItem key={s} value={s} className="text-xs">{s}</SelectItem>
+                                                    ))}
+                                                </SelectContent>
+                                            </Select>
+                                        ) : summary.status ? (
+                                            <Badge className={cn("text-[10px]", getStatusBadgeColor(summary.status))}>
+                                                {summary.status}
+                                            </Badge>
+                                        ) : summary.statuses && summary.statuses.length > 0 ? (
+                                            <div className="flex flex-wrap gap-1">
+                                                {summary.statuses.map(s => (
+                                                    <Badge key={s} className={cn("text-[10px]", getStatusBadgeColor(s))}>
+                                                        {s}
+                                                    </Badge>
+                                                ))}
+                                            </div>
+                                        ) : null}
+                                    </TableCell>
+                                    <TableCell className="text-right text-sm">{formatPrice(summary.totalAmount)}</TableCell>
+                                    <TableCell className="text-right text-xs text-destructive/80 italic">{formatPrice(summary.adminFee)}</TableCell>
+                                    <TableCell className="text-right font-bold text-green-600 text-sm">{formatPrice(summary.netToVendor)}</TableCell>
+                                    
+                                    {isRowSpanned ? (
+                                        span > 0 ? (
+                                            <TableCell rowSpan={span} className="text-right bg-primary/5 border-l border-primary/10 font-bold text-primary text-sm">
+                                                {formatPrice(2500)}
+                                            </TableCell>
+                                        ) : null
+                                    ) : (
+                                        <TableCell className="text-right text-sm">
+                                            {summary.totalDeliveryFee > 0 ? formatPrice(summary.totalDeliveryFee) : '-'}
+                                        </TableCell>
+                                    )}
+
+                                    <TableCell>
+                                        <div className="space-y-2">
+                                            {Object.entries(groupItemsByVendor(summary.items)).map(([vCode, vItems]) => {
+                                                const subtotalMitra = vItems.reduce((sum, i) => sum + (i.price * i.quantity), 0);
+                                                const netMitra = subtotalMitra * 0.95;
+                                                return (
+                                                    <div key={vCode} className="space-y-1.5 bg-muted/20 p-2 rounded-lg border border-primary/5">
+                                                        <div className="flex justify-between items-center bg-primary/10 px-2 py-1 rounded-md mb-1">
+                                                            <span className="text-[10px] font-bold text-primary uppercase">Mitra: {vCode}</span>
+                                                            <span className="text-[10px] font-bold text-green-700">Netto: {formatPrice(netMitra)}</span>
+                                                        </div>
+                                                        <ul className="text-xs space-y-1">
+                                                            {vItems.map((item, idx) => (
+                                                                <li key={idx} className="flex justify-between gap-4 border-b border-muted/50 last:border-0 pb-1">
+                                                                    <span className="text-muted-foreground">{item.name} <span className="text-[9px] bg-muted px-1 rounded">[{item.sku}]</span></span>
+                                                                    <span className="font-bold shrink-0">{item.quantity} porsi</span>
+                                                                </li>
+                                                            ))}
+                                                        </ul>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    </TableCell>
+
+                                    {isRowSpanned ? (
+                                        span > 0 ? (
+                                            <TableCell rowSpan={span} className="bg-primary/5 border-l border-primary/10">
+                                                <div className="space-y-3">
+                                                    {summary.customerProfile && (
+                                                        <div className="p-2 bg-background/50 rounded-lg border border-primary/10">
+                                                            <p className="font-bold text-xs text-foreground uppercase flex items-center gap-1.5 mb-1"><User className="h-3 w-3 text-primary" /> {summary.customerProfile.name}</p>
+                                                            <p className="flex items-center gap-1.5 text-[10px] text-muted-foreground"><Phone className="h-3 w-3" /> {summary.customerProfile.phone}</p>
+                                                            {summary.customerProfile.email && <p className="flex items-center gap-1.5 text-[10px] text-muted-foreground truncate"><Mail className="h-3 w-3" /> {summary.customerProfile.email}</p>}
+                                                        </div>
+                                                    )}
+                                                    <div className="text-[10px] text-muted-foreground italic px-1 flex gap-1.5">
+                                                        <span className="shrink-0 font-bold">📍</span>
+                                                        <p className="leading-tight">{summary.addresses.join(', ')}</p>
+                                                    </div>
+                                                </div>
+                                            </TableCell>
+                                        ) : null
+                                    ) : (
+                                        <TableCell>
+                                            <div className="space-y-3">
+                                                {summary.customerProfile && (
+                                                    <div className="p-2 bg-muted/20 rounded-lg border">
+                                                        <p className="font-bold text-xs text-foreground uppercase flex items-center gap-1.5 mb-1"><User className="h-3 w-3 text-primary" /> {summary.customerProfile.name}</p>
+                                                        <p className="flex items-center gap-1.5 text-[10px] text-muted-foreground"><Phone className="h-3 w-3" /> {summary.customerProfile.phone}</p>
+                                                    </div>
+                                                )}
+                                                <div className="text-[10px] text-muted-foreground italic px-1 flex gap-1.5">
+                                                    <span className="shrink-0">📍</span>
+                                                    <p className="leading-tight">{summary.addresses.join(', ')}</p>
+                                                </div>
+                                            </div>
+                                        </TableCell>
+                                    )}
+
+                                    <TableCell className="text-right">
+                                      {(span > 0 || !isRowSpanned) && (
+                                        <Button 
+                                          variant="ghost" 
+                                          size="icon" 
+                                          className="text-destructive hover:bg-destructive/10 h-8 w-8"
+                                          onClick={() => setOrderToDelete(summary.parentOrderId)}
+                                        >
+                                          <Trash2 className="h-4 w-4" />
+                                        </Button>
+                                      )}
+                                    </TableCell>
+                                </TableRow>
+                            );
+                        })
+                    )}
+                </TableBody>
+                {filteredSummary.length > 0 && (
+                    <TableFooter className="bg-primary/5">
+                        <TableRow className="font-bold border-t-2 border-primary/20">
+                            <TableCell colSpan={4} className="text-right text-xs uppercase tracking-widest text-muted-foreground">Total Keseluruhan</TableCell>
+                            <TableCell className="text-right text-primary text-sm">{formatPrice(actualGrandTotals.amount)}</TableCell>
+                            <TableCell className="text-right text-destructive text-xs italic">{formatPrice(actualGrandTotals.admin)}</TableCell>
+                            <TableCell className="text-right text-green-700 text-sm">{formatPrice(actualGrandTotals.net)}</TableCell>
+                            <TableCell className="text-right text-primary text-sm">{formatPrice(actualGrandTotals.ongkir)}</TableCell>
+                            <TableCell colSpan={3}></TableCell>
+                        </TableRow>
+                    </TableFooter>
+                )}
+            </Table>
+        </div>
+
+        <div className="flex flex-col md:flex-row items-center justify-between gap-4 bg-muted/30 p-4 rounded-xl border">
+            <div className="flex items-center gap-4">
+                <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold text-muted-foreground uppercase">Baris per halaman:</span>
+                    <Select value={pageSize.toString()} onValueChange={(v) => { setPageSize(Number(v)); setCurrentPage(1); }}>
+                        <SelectTrigger className="w-[80px] h-8 bg-background border-primary/10">
+                            <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="5">5</SelectItem>
+                            <SelectItem value="10">10</SelectItem>
+                            <SelectItem value="30">30</SelectItem>
+                            <SelectItem value="50">50</SelectItem>
+                            <SelectItem value="100">100</SelectItem>
+                            <SelectItem value="200">200</SelectItem>
+                        </SelectContent>
+                    </Select>
+                </div>
+                <div className="text-[10px] text-muted-foreground border-l pl-4 font-bold uppercase tracking-wider">
+                    Total: <span className="text-foreground">{filteredSummary.length}</span> baris
+                </div>
+            </div>
+
+            <div className="flex items-center gap-3">
+                <Button 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                    disabled={currentPage === 1}
+                    className="h-8 px-3"
+                >
+                    <ChevronLeft className="h-4 w-4 mr-1" /> Prev
+                </Button>
+                <div className="flex items-center gap-1.5">
+                    <span className="text-xs font-bold text-muted-foreground">Hal.</span>
+                    <span className="bg-primary text-primary-foreground px-2.5 py-0.5 rounded-md text-xs font-bold shadow-sm">{currentPage}</span>
+                    <span className="text-xs font-bold text-muted-foreground">dari {totalPages || 1}</span>
+                </div>
+                <Button 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                    disabled={currentPage === totalPages || totalPages === 0}
+                    className="h-8 px-3"
+                >
+                    Next <ChevronRight className="h-4 w-4 ml-1" />
+                </Button>
+            </div>
+        </div>
 
         <AlertDialog open={!!orderToDelete} onOpenChange={(open) => !open && setOrderToDelete(null)}>
           <AlertDialogContent>
