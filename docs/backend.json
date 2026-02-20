@@ -1,131 +1,71 @@
-
 {
   "entities": {
+    "Product": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Product",
+      "type": "object",
+      "description": "Represents a single food or snack item available for ordering in the Ramadhan Takjil app.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the Product entity. Corresponds to RpSKU-X in the source data."
+        },
+        "name": {
+          "type": "string",
+          "description": "The name of the food or snack item, e.g., 'Nasi Bakar Ayam'."
+        },
+        "price": {
+          "type": "number",
+          "description": "The price of one unit of the product in Indonesian Rupiah (IDR)."
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "price"
+      ]
+    },
     "Customer": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "title": "Customer",
       "type": "object",
-      "description": "Represents a customer who places food orders, linked to their Google account for authentication.",
+      "description": "Stores information about a customer who places an order. This entity consolidates contact and delivery details.",
       "properties": {
         "id": {
           "type": "string",
           "description": "Unique identifier for the Customer entity."
         },
-        "googleAccountId": {
-          "type": "string",
-          "description": "Unique identifier provided by the Google authentication system for the customer."
-        },
         "name": {
           "type": "string",
-          "description": "Full name of the customer as provided in the order form."
+          "description": "The full name of the customer as provided in the order form."
         },
         "email": {
           "type": "string",
-          "description": "Email address of the customer, used for communication.",
+          "description": "The email address of the customer.",
           "format": "email"
         },
         "phoneNumber": {
           "type": "string",
-          "description": "Contact phone number or WhatsApp number of the customer."
+          "description": "The contact phone or WhatsApp number of the customer."
         },
         "deliveryAddress": {
           "type": "string",
-          "description": "The default delivery address for the customer."
+          "description": "The full address where the order should be delivered."
         }
       },
       "required": [
         "id",
-        "googleAccountId",
         "name",
         "email",
         "phoneNumber",
         "deliveryAddress"
       ]
     },
-    "MenuItem": {
-      "$schema": "http://json-schema.org/draft-07/schema#",
-      "title": "MenuItem",
-      "type": "object",
-      "description": "Represents a single food or drink item available on the Ramadhan Takjil menu.",
-      "properties": {
-        "id": {
-          "type": "string",
-          "description": "Unique identifier for the MenuItem entity, often corresponding to the SKU."
-        },
-        "name": {
-          "type": "string",
-          "description": "The name of the menu item (e.g., 'Nasi Bakar Ayam')."
-        },
-        "price": {
-          "type": "number",
-          "description": "The price of the menu item in Indonesian Rupiah (e.g., 12000)."
-        },
-        "sku": {
-          "type": "string",
-          "description": "Stock Keeping Unit (SKU) for the menu item, used for identification (e.g., RpSKU-1)."
-        },
-        "category": {
-          "type": "string",
-          "description": "The category of the menu item (e.g., 'Nasi & Lauk', 'Pempek')."
-        },
-        "vendor": {
-          "type": "string",
-          "description": "The vendor code or ID of this menu item (e.g., 'NL')."
-        },
-        "stock": {
-          "type": "number",
-          "description": "The current available stock for this menu item."
-        }
-      },
-      "required": [
-        "id",
-        "name",
-        "price",
-        "sku",
-        "category",
-        "vendor",
-        "stock"
-      ]
-    },
-    "Vendor": {
-      "$schema": "http://json-schema.org/draft-07/schema#",
-      "title": "Vendor",
-      "type": "object",
-      "description": "Represents a mitra or vendor selling food items.",
-      "properties": {
-        "id": {
-          "type": "string",
-          "description": "Unique identifier for the vendor."
-        },
-        "name": {
-          "type": "string",
-          "description": "Full name or brand of the vendor."
-        },
-        "code": {
-          "type": "string",
-          "description": "Short code representing the vendor (e.g., 'NL')."
-        },
-        "email": {
-          "type": "string",
-          "format": "email",
-          "description": "Email address of the vendor for communication and reports."
-        },
-        "phoneNumber": {
-          "type": "string",
-          "description": "Contact phone number or WhatsApp number of the vendor."
-        }
-      },
-      "required": [
-        "id",
-        "name",
-        "code"
-      ]
-    },
     "Order": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "title": "Order",
       "type": "object",
-      "description": "Represents a single customer order for Takjil items, including delivery and payment details.",
+      "description": "Represents a single order placed by a customer, containing general order details like total amount, payment method, and delivery information.",
       "properties": {
         "id": {
           "type": "string",
@@ -140,60 +80,44 @@
           "description": "The date and time when the order was placed.",
           "format": "date-time"
         },
-        "totalAmount": {
-          "type": "number",
-          "description": "The total monetary amount of the order, including all items and the delivery fee."
+        "paymentMethod": {
+          "type": "string",
+          "description": "The chosen payment method for the order, either 'QRIS' or 'COD'.",
+          "items": {
+            "type": "string"
+          }
         },
         "deliveryFee": {
           "type": "number",
-          "description": "The fixed delivery fee applied to this order (Rp. 2.500)."
+          "description": "The fixed delivery fee applied to this order (Rp. 2,500)."
         },
-        "paymentMethod": {
+        "totalAmount": {
+          "type": "number",
+          "description": "The total amount of the order, including item costs and delivery fee."
+        },
+        "status": {
           "type": "string",
-          "description": "The chosen payment method for the order.",
-          "enum": ["QRIS", "COD"]
-        },
-        "vendorStatuses": {
-          "type": "object",
-          "description": "A map of vendor codes to their processing status within this order.",
-          "additionalProperties": {
-            "type": "object",
-            "properties": {
-              "status": { "type": "string" },
-              "statusHistory": {
-                "type": "array",
-                "items": {
-                  "type": "object",
-                  "properties": {
-                    "status": { "type": "string" },
-                    "timestamp": { "type": "string", "format": "date-time" }
-                  }
-                }
-              }
-            }
+          "description": "The current status of the order (e.g., 'Pending', 'Confirmed', 'Delivered', 'Cancelled').",
+          "items": {
+            "type": "string"
           }
-        },
-        "deliveryAddress": {
-          "type": "string",
-          "description": "The full delivery address specified for this particular order (copied from customer at order time)."
         }
       },
       "required": [
         "id",
         "customerId",
         "orderDateTime",
-        "totalAmount",
-        "deliveryFee",
         "paymentMethod",
-        "vendorStatuses",
-        "deliveryAddress"
+        "deliveryFee",
+        "totalAmount",
+        "status"
       ]
     },
     "OrderItem": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "title": "OrderItem",
       "type": "object",
-      "description": "Represents a specific menu item and its quantity within a larger order.",
+      "description": "Represents a specific item included within a customer's order, detailing the product, quantity, and its price at the time of order.",
       "properties": {
         "id": {
           "type": "string",
@@ -203,114 +127,83 @@
           "type": "string",
           "description": "Reference to the Order this item belongs to. (Relationship: Order 1:N OrderItem)"
         },
-        "menuItemId": {
+        "productId": {
           "type": "string",
-          "description": "Reference to the MenuItem that was ordered. (Relationship: MenuItem 1:N OrderItem)"
+          "description": "Reference to the Product being ordered. (Relationship: Product 1:N OrderItem)"
         },
         "quantity": {
           "type": "number",
-          "description": "The quantity of the specific menu item included in the order."
+          "description": "The quantity of the product ordered.",
+          "items": {
+            "type": "string"
+          }
         },
-        "priceAtOrder": {
+        "unitPrice": {
           "type": "number",
-          "description": "The price of the menu item at the time the order was placed, to ensure historical accuracy."
-        },
-        "vendor": {
-          "type": "string",
-          "description": "The vendor code for the item at the time of order."
+          "description": "The price of one unit of the product at the time the order was placed. This preserves historical price data, even if the product's price changes later."
         }
       },
       "required": [
         "id",
         "orderId",
-        "menuItemId",
+        "productId",
         "quantity",
-        "priceAtOrder",
-        "vendor"
+        "unitPrice"
       ]
-    },
-    "Settings": {
-      "$schema": "http://json-schema.org/draft-07/schema#",
-      "title": "Settings",
-      "type": "object",
-      "description": "System configuration settings, such as mail server credentials and inventory defaults.",
-      "properties": {
-        "host": { "type": "string" },
-        "port": { "type": "string" },
-        "user": { "type": "string" },
-        "pass": { "type": "string" },
-        "from": { "type": "string" },
-        "defaultStock": { "type": "number" }
-      }
     }
   },
   "auth": {
     "providers": [
-      "google.com"
+      "password",
+      "anonymous"
     ]
   },
   "firestore": {
     "structure": [
       {
-        "path": "/customers/{customerId}",
+        "path": "/products/{productId}",
+        "definition": {
+          "entityName": "Product",
+          "schema": {
+            "$ref": "#/backend/entities/Product"
+          },
+          "description": "Stores information about available food and snack items. Documents in this collection are publicly readable by all users (authenticated or unauthenticated).",
+          "params": [
+            {
+              "name": "productId",
+              "description": "The unique identifier for a specific product."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/users/{userId}",
         "definition": {
           "entityName": "Customer",
           "schema": {
             "$ref": "#/backend/entities/Customer"
           },
-          "description": "Stores individual customer profiles.",
+          "description": "Stores the profile information for an authenticated customer. The document ID (`userId`) corresponds to `request.auth.uid`. Includes fields like name, email, phone number, and delivery address.",
           "params": [
             {
-              "name": "customerId",
-              "description": "The unique identifier for the customer."
+              "name": "userId",
+              "description": "The unique identifier of the authenticated customer, matching `request.auth.uid`."
             }
           ]
         }
       },
       {
-        "path": "/menuItems/{menuItemId}",
-        "definition": {
-          "entityName": "MenuItem",
-          "schema": {
-            "$ref": "#/backend/entities/MenuItem"
-          },
-          "description": "Contains all available food and drink items.",
-          "params": [
-            {
-              "name": "menuItemId",
-              "description": "The unique identifier for a menu item."
-            }
-          ]
-        }
-      },
-      {
-        "path": "/vendors/{vendorId}",
-        "definition": {
-          "entityName": "Vendor",
-          "schema": {
-            "$ref": "#/backend/entities/Vendor"
-          },
-          "description": "Stores vendor/mitra information.",
-          "params": [
-            {
-              "name": "vendorId",
-              "description": "The unique identifier for a vendor."
-            }
-          ]
-        }
-      },
-      {
-        "path": "/customers/{customerId}/orders/{orderId}",
+        "path": "/users/{userId}/orders/{orderId}",
         "definition": {
           "entityName": "Order",
           "schema": {
             "$ref": "#/backend/entities/Order"
           },
-          "description": "Stores individual orders placed by a customer.",
+          "description": "Stores individual orders placed by a specific customer. The `customerId` field within each order document is denormalized to match the `userId` in the path, ensuring authorization independence.",
           "params": [
             {
-              "name": "customerId",
-              "description": "The unique identifier for the customer."
+              "name": "userId",
+              "description": "The unique identifier of the customer who placed the order."
             },
             {
               "name": "orderId",
@@ -320,17 +213,17 @@
         }
       },
       {
-        "path": "/customers/{customerId}/orders/{orderId}/orderItems/{orderItemId}",
+        "path": "/users/{userId}/orders/{orderId}/orderItems/{orderItemId}",
         "definition": {
           "entityName": "OrderItem",
           "schema": {
             "$ref": "#/backend/entities/OrderItem"
           },
-          "description": "Contains the specific items included in an order.",
+          "description": "Stores the details of specific items within an order. The `customerId` field is denormalized from the parent order to ensure authorization independence. Each document also includes `orderId` and `productId` references, along with quantity and unit price.",
           "params": [
             {
-              "name": "customerId",
-              "description": "The unique identifier for the customer."
+              "name": "userId",
+              "description": "The unique identifier of the customer who owns the parent order."
             },
             {
               "name": "orderId",
@@ -344,21 +237,22 @@
         }
       },
       {
-        "path": "/settings/{settingId}",
+        "path": "/admin_roles/{uid}",
         "definition": {
-          "entityName": "Settings",
+          "entityName": "AdminRole",
           "schema": {
-            "$ref": "#/backend/entities/Settings"
+            "$ref": "#/backend/entities/Customer"
           },
-          "description": "Stores application-wide settings.",
+          "description": "A collection used for Database Access Control (DBAC) to designate administrative users. The existence of a document at this path for a given UID signifies that the user is an administrator. Content of documents can be empty or contain simple role information. (Note: Using Customer schema as a placeholder for a simple existence check, actual schema could be minimal or empty).",
           "params": [
             {
-              "name": "settingId",
-              "description": "The unique identifier for a settings document."
+              "name": "uid",
+              "description": "The unique identifier of a user who has an administrative role."
             }
           ]
         }
       }
-    ]
+    ],
+    "reasoning": "The Firestore structure is designed following the CORE DESIGN PRINCIPLES and DESIGN STRATEGY MANDATES to ensure security, scalability, and debuggability. \n\n**1. Authorization Independence via Denormalization:**\n   *   For `Order` documents at `/users/{userId}/orders/{orderId}`, the `customerId` field will be denormalized to explicitly store the ID of the user who placed the order. This `customerId` will match the `userId` in the path, allowing security rules to directly check `request.auth.uid == resource.data.customerId` without requiring a `get()` call to a parent `User` document.\n   *   For `OrderItem` documents at `/users/{userId}/orders/{orderId}/orderItems/{orderItemId}`, the `customerId` (or `orderOwnerId`) will be denormalized from the parent `Order`. This enables security rules to verify `request.auth.uid == resource.data.customerId` directly on the `OrderItem` document, eliminating `get()` calls to both `Order` and `User` documents. This is critical for robust atomic operations and simplified rule logic.\n\n**2. Structural Segregation for QAPs (Rules are not Filters):**\n   *   **Products:** Stored in a top-level collection `/products`. These items are publicly viewable by all users, so a `list` operation on this collection is inherently secure and does not require complex filtering by rules.\n   *   **Customer Profiles:** Each authenticated user's profile is stored as a document at `/users/{userId}`. This path directly scopes access, meaning a `list` or `get` operation is only valid for `request.auth.uid`, thus enabling secure QAPs.\n   *   **Orders:** Each customer's orders are stored in a subcollection `/users/{userId}/orders`. Access to these orders is naturally scoped by the `{userId}` wildcard, ensuring that `list` operations (e.g., fetching all orders for the current user) only return data owned by `request.auth.uid`.\n   *   **Order Items:** Nested under specific orders in `/users/{userId}/orders/{orderId}/orderItems`. Their access is implicitly secured by the parent `Order`'s path, and explicitly secured by the denormalized `customerId` field, making `list` operations within an order context also secure.\n   *   **Admin Roles:** A dedicated collection `/admin_roles/{uid}` uses the 'existence over content' pattern for DBAC. A `get` operation on `roles_admin/$(request.auth.uid)` securely checks if a user is an admin without needing to filter data.\n\nThis design prioritizes a clear, path-based ownership model for user-specific and nested data, combined with strategic denormalization to eliminate `get()` calls in security rules, thereby achieving high levels of security, debuggability, and performance for common query patterns and atomic writes."
   }
 }
