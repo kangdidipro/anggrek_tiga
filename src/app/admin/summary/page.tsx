@@ -6,7 +6,7 @@ import { useFirestore, useUser, useCollection, useMemoFirebase } from '@/firebas
 import { collectionGroup, getDocs, query, collection, writeBatch, doc } from 'firebase/firestore';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Loader2, FileDown, CalendarIcon, FileText, Mail, Search, LayoutGrid, ArrowUpDown, ArrowUp, ArrowDown, Filter, Trash2 } from 'lucide-react';
+import { Loader2, FileDown, CalendarIcon, FileText, Mail, Search, LayoutGrid, ArrowUpDown, ArrowUp, ArrowDown, Filter, Trash2, Phone, User } from 'lucide-react';
 import { formatPrice, getVendorFromSku } from '@/lib/utils';
 import * as XLSX from 'xlsx';
 import { saveAs } from 'file-saver';
@@ -34,6 +34,13 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+
+interface Customer {
+  id: string;
+  name: string;
+  email: string;
+  phoneNumber: string;
+}
 
 interface OrderItem {
   id: string;
@@ -69,6 +76,11 @@ type SummaryItem = {
     totalDeliveryFee: number; // Ongkir based on filter/group
     items: { name: string, quantity: number, sku: string, price: number, vendor: string }[];
     addresses: string[];
+    customerProfile?: {
+      name: string;
+      phone: string;
+      email: string;
+    };
     status?: string; // For Sub-Order view
     statuses?: string[]; // For aggregate view
 }
@@ -106,6 +118,12 @@ export default function AdminSummaryPage() {
   }, [firestore]);
   const { data: vendorsData } = useCollection<Vendor>(vendorsQuery);
 
+  const customersQuery = useMemoFirebase(() => {
+    if (!firestore) return null;
+    return collection(firestore, 'customers');
+  }, [firestore]);
+  const { data: customersData } = useCollection<Customer>(customersQuery);
+
   const vendorLookup = useMemo(() => {
     const map: Record<string, string> = {};
     vendorsData?.forEach(v => {
@@ -113,6 +131,14 @@ export default function AdminSummaryPage() {
     });
     return map;
   }, [vendorsData]);
+
+  const customerLookup = useMemo(() => {
+    const map: Record<string, Customer> = {};
+    customersData?.forEach(c => {
+      map[c.id] = c;
+    });
+    return map;
+  }, [customersData]);
 
   const getStatusBadgeColor = (status: string) => {
     switch (status) {
@@ -177,6 +203,7 @@ export default function AdminSummaryPage() {
       items: Record<string, { name: string, quantity: number, sku: string, price: number, vendor: string }>;
       addresses: Set<string>;
       statuses: Set<string>;
+      customerProfile?: { name: string; phone: string; email: string };
     }> = {};
 
     const parentOrdersIncludedInDelivery = new Set<string>();
@@ -203,6 +230,7 @@ export default function AdminSummaryPage() {
         uniqueItemsForThisOrder.forEach(item => {
             const vendor = item.vendor || getVendorFromSku(item.sku);
             const currentStatus = order.vendorStatuses?.[vendor]?.status || 'Dipesan';
+            const customer = customerLookup[order.customerId];
             
             let key = '';
             let label = '';
@@ -233,6 +261,11 @@ export default function AdminSummaryPage() {
                     items: {}, 
                     addresses: new Set(),
                     statuses: new Set(),
+                    customerProfile: customer ? {
+                      name: customer.name,
+                      phone: customer.phoneNumber,
+                      email: customer.email
+                    } : undefined
                 };
             }
             
@@ -273,11 +306,12 @@ export default function AdminSummaryPage() {
             totalDeliveryFee: data.totalDeliveryFee,
             items: Object.values(data.items),
             addresses: Array.from(data.addresses),
+            customerProfile: data.customerProfile,
             status: statusesArr.length === 1 ? statusesArr[0] : undefined,
             statuses: statusesArr
         };
     });
-  }, [orders, date, groupBy, vendorLookup, vendorFilter, selectedStatuses, searchTerm]);
+  }, [orders, date, groupBy, vendorLookup, customerLookup, vendorFilter, selectedStatuses, searchTerm]);
 
   const filteredSummary = useMemo(() => {
     let result = [...summaryData];
@@ -362,6 +396,8 @@ export default function AdminSummaryPage() {
     const dataForExport = filteredSummary.map((summary, index) => ({
         'No.': index + 1,
         'ID Order': summary.parentOrderId,
+        'Pemesan': summary.customerProfile?.name || '-',
+        'No HP': summary.customerProfile?.phone || '-',
         'Group (ID Sub-Order/Mitra/SKU)': summary.label,
         'Info': summary.subLabel || '',
         'Status': summary.status || summary.statuses?.join(', '),
@@ -376,6 +412,8 @@ export default function AdminSummaryPage() {
     dataForExport.push({
       'No.': '',
       'ID Order': '',
+      'Pemesan': '',
+      'No HP': '',
       'Group (ID Sub-Order/Mitra/SKU)': 'TOTAL KESELURUHAN',
       'Info': '',
       'Status': '',
@@ -415,8 +453,13 @@ export default function AdminSummaryPage() {
         };
 
         if (showOngkirAlamat) {
+            const cp = summary.customerProfile;
+            const profileText = cp 
+              ? `${cp.name.toUpperCase()}\nHP: ${cp.phone}${cp.email ? '\nEmail: ' + cp.email : ''}\n\n`
+              : '';
+
             row.ongkir = { content: formatPrice(isSpannedRow ? 2500 : summary.totalDeliveryFee), rowSpan: isSpannedRow ? span : 1, styles: { halign: 'right', valign: 'middle', fillColor: [255, 248, 225] } };
-            row.alamat = { content: summary.addresses.join('\n\n'), rowSpan: isSpannedRow ? span : 1, styles: { fontSize: 6, valign: 'middle', fillColor: [255, 248, 225] } };
+            row.alamat = { content: profileText + summary.addresses.join('\n\n'), rowSpan: isSpannedRow ? span : 1, styles: { fontSize: 6, valign: 'middle', fillColor: [255, 248, 225] } };
         }
 
         return row;
@@ -435,7 +478,7 @@ export default function AdminSummaryPage() {
     doc.text(`Rekap Harian Takjil - ${date ? format(date, 'd MMMM yyyy', { locale: id }) : 'Semua'}`, 14, 15);
     
     autoTable(doc, {
-        head: [["No.", "ID Sub-Order / Group", "Status", "Total Produk", "Admin (5%)", "Bayar ke Mitra", "Ongkir", "Rincian Item", "Alamat"]],
+        head: [["No.", "ID Sub-Order / Group", "Status", "Total Produk", "Admin (5%)", "Bayar ke Mitra", "Ongkir", "Rincian Item", "Profil & Alamat"]],
         body: [...tableRows, grandTotalRow],
         columns: [
             { header: 'No.', dataKey: 'no' },
@@ -446,7 +489,7 @@ export default function AdminSummaryPage() {
             { header: 'Bayar ke Mitra', dataKey: 'net' },
             { header: 'Ongkir', dataKey: 'ongkir' },
             { header: 'Rincian Item', dataKey: 'items' },
-            { header: 'Alamat', dataKey: 'alamat' },
+            { header: 'Profil & Alamat', dataKey: 'alamat' },
         ],
         startY: 20,
         theme: 'grid',
@@ -454,7 +497,7 @@ export default function AdminSummaryPage() {
         styles: { fontSize: 7, overflow: 'linebreak' },
         columnStyles: {
           items: { cellWidth: 40 },
-          alamat: { cellWidth: 40 },
+          alamat: { cellWidth: 45 },
         }
     });
     doc.save(`rekap_${groupBy}_${date ? date.toISOString().split('T')[0] : 'semua'}.pdf`);
@@ -728,7 +771,7 @@ export default function AdminSummaryPage() {
                                     </div>
                                 </TableHead>
                                 <TableHead className="min-w-[250px]">Rincian Item & Pembayaran per Mitra</TableHead>
-                                <TableHead className="min-w-[200px]">Alamat Pengiriman</TableHead>
+                                <TableHead className="min-w-[250px]">Profil & Alamat Pengiriman</TableHead>
                                 <TableHead className="text-right">Aksi</TableHead>
                             </TableRow>
                         </TableHeader>
@@ -821,20 +864,38 @@ export default function AdminSummaryPage() {
                                             {isRowSpanned ? (
                                                 span > 0 ? (
                                                     <TableCell rowSpan={span} className="bg-primary/5 border-l border-primary/10">
+                                                        <div className="space-y-2">
+                                                            {summary.customerProfile && (
+                                                                <div className="text-[10px] space-y-0.5 border-b border-primary/10 pb-2 mb-2">
+                                                                    <p className="font-bold text-foreground uppercase flex items-center gap-1"><User className="h-2 w-2" /> {summary.customerProfile.name}</p>
+                                                                    <p className="flex items-center gap-1"><Phone className="h-2 w-2" /> {summary.customerProfile.phone}</p>
+                                                                    {summary.customerProfile.email && <p className="flex items-center gap-1 text-muted-foreground"><Mail className="h-2 w-2" /> {summary.customerProfile.email}</p>}
+                                                                </div>
+                                                            )}
+                                                            <ul className="text-[10px] list-disc pl-4 space-y-2 text-muted-foreground">
+                                                                {summary.addresses.map((addr, idx) => (
+                                                                    <li key={idx} className="leading-tight">{addr}</li>
+                                                                ))}
+                                                            </ul>
+                                                        </div>
+                                                    </TableCell>
+                                                ) : null
+                                            ) : (
+                                                <TableCell>
+                                                    <div className="space-y-2">
+                                                        {summary.customerProfile && (
+                                                            <div className="text-[10px] space-y-0.5 border-b border-primary/10 pb-2 mb-2">
+                                                                <p className="font-bold text-foreground uppercase flex items-center gap-1"><User className="h-2 w-2" /> {summary.customerProfile.name}</p>
+                                                                <p className="flex items-center gap-1"><Phone className="h-2 w-2" /> {summary.customerProfile.phone}</p>
+                                                                {summary.customerProfile.email && <p className="flex items-center gap-1 text-muted-foreground"><Mail className="h-2 w-2" /> {summary.customerProfile.email}</p>}
+                                                            </div>
+                                                        )}
                                                         <ul className="text-[10px] list-disc pl-4 space-y-2 text-muted-foreground">
                                                             {summary.addresses.map((addr, idx) => (
                                                                 <li key={idx} className="leading-tight">{addr}</li>
                                                             ))}
                                                         </ul>
-                                                    </TableCell>
-                                                ) : null
-                                            ) : (
-                                                <TableCell>
-                                                    <ul className="text-[10px] list-disc pl-4 space-y-2 text-muted-foreground">
-                                                        {summary.addresses.map((addr, idx) => (
-                                                            <li key={idx} className="leading-tight">{addr}</li>
-                                                        ))}
-                                                    </ul>
+                                                    </div>
                                                 </TableCell>
                                             )}
 
