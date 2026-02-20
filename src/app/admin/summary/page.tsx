@@ -5,7 +5,7 @@ import { useFirestore, useUser, useCollection, useMemoFirebase, errorEmitter, Fi
 import { collectionGroup, getDocs, query, collection, writeBatch, doc, updateDoc, arrayUnion } from 'firebase/firestore';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Loader2, FileDown, CalendarIcon, FileText, Mail, Search, LayoutGrid, ArrowUpDown, ArrowUp, ArrowDown, Filter, Trash2, Phone, User, ChevronLeft, ChevronRight, Send, X, BarChart3, PieChart as PieChartIcon, Table as TableIcon } from 'lucide-react';
+import { Loader2, FileDown, CalendarIcon, FileText, Mail, Search, LayoutGrid, ArrowUpDown, ArrowUp, ArrowDown, Filter, Trash2, Phone, User, ChevronLeft, ChevronRight, Send, X, BarChart3, PieChart as PieChartIcon, Table as TableIcon, Package } from 'lucide-react';
 import { formatPrice, getVendorFromSku } from '@/lib/utils';
 import * as XLSX from 'xlsx';
 import { saveAs } from 'file-saver';
@@ -414,9 +414,13 @@ export default function AdminSummaryPage() {
 
   const actualGrandTotals = useMemo(() => {
     const uniqueOrders = new Set(filteredSummary.map(s => s.parentOrderId));
+    const totalPcs = filteredSummary.reduce((acc, curr) => 
+      acc + curr.items.reduce((sum, i) => sum + i.quantity, 0), 0
+    );
     return {
         ...grandTotals,
-        ongkir: uniqueOrders.size * 2500
+        ongkir: uniqueOrders.size * 2500,
+        totalPcs
     };
   }, [filteredSummary, grandTotals]);
 
@@ -1236,85 +1240,116 @@ export default function AdminSummaryPage() {
                 </div>
             </>
         ) : (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <Card className="col-span-1 lg:col-span-2">
-                    <CardHeader>
-                        <CardTitle className="text-lg flex items-center gap-2">
-                            <BarChart3 className="h-5 w-5 text-primary" />
-                            Omzet Bersih per Mitra (Netto)
-                        </CardTitle>
-                        <CardDescription>Pendapatan yang diterima mitra setelah dipotong admin 5%.</CardDescription>
-                    </CardHeader>
-                    <CardContent className="h-[400px]">
-                        <ResponsiveContainer width="100%" height="100%">
-                            <BarChart data={chartDataMitra}>
-                                <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                                <XAxis dataKey="name" fontSize={10} tickLine={false} axisLine={false} />
-                                <YAxis fontSize={10} tickLine={false} axisLine={false} tickFormatter={(value) => `Rp ${value/1000}k`} />
-                                <RechartsTooltip 
-                                    formatter={(value: any) => [formatPrice(value), 'Omzet Netto']}
-                                    contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
-                                />
-                                <Bar dataKey="value" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
-                            </BarChart>
-                        </ResponsiveContainer>
-                    </CardContent>
-                </Card>
+            <div className="space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <Card className="bg-primary/5 border-primary/20 shadow-sm overflow-hidden relative">
+                        <div className="absolute right-4 top-4 text-primary/10">
+                            <Package className="h-12 w-12" />
+                        </div>
+                        <CardHeader className="pb-2">
+                            <CardDescription className="text-xs font-bold text-primary/70 uppercase tracking-wider">
+                                Jumlah Item Terjual ({date ? format(date, 'd MMM yyyy', { locale: id }) : 'Semua'})
+                            </CardDescription>
+                            <CardTitle className="text-3xl md:text-4xl font-bold text-primary">
+                                {actualGrandTotals.totalPcs.toLocaleString('id-ID')} <span className="text-sm font-medium text-muted-foreground">Pcs</span>
+                            </CardTitle>
+                        </CardHeader>
+                    </Card>
+                    <Card className="bg-green-500/5 border-green-500/20 shadow-sm overflow-hidden relative">
+                        <div className="absolute right-4 top-4 text-green-500/10">
+                            <TableIcon className="h-12 w-12" />
+                        </div>
+                        <CardHeader className="pb-2">
+                            <CardDescription className="text-xs font-bold text-green-600 uppercase tracking-wider">
+                                Total Omzet Penjualan (Bruto)
+                            </CardDescription>
+                            <CardTitle className="text-3xl md:text-4xl font-bold text-green-600">
+                                {formatPrice(actualGrandTotals.amount)}
+                            </CardTitle>
+                        </CardHeader>
+                    </Card>
+                </div>
 
-                <Card>
-                    <CardHeader>
-                        <CardTitle className="text-lg flex items-center gap-2">
-                            <PieChartIcon className="h-5 w-5 text-primary" />
-                            Distribusi Status Pesanan
-                        </CardTitle>
-                        <CardDescription>Berdasarkan jumlah sub-order pengerjaan.</CardDescription>
-                    </CardHeader>
-                    <CardContent className="h-[300px]">
-                        <ResponsiveContainer width="100%" height="100%">
-                            <PieChart>
-                                <Pie
-                                    data={chartDataStatus}
-                                    cx="50%"
-                                    cy="50%"
-                                    innerRadius={60}
-                                    outerRadius={80}
-                                    paddingAngle={5}
-                                    dataKey="value"
-                                    label={({ name, percent }) => `${name} (${(percent * 100).toFixed(0)}%)`}
-                                >
-                                    {chartDataStatus.map((entry, index) => (
-                                        <Cell key={`cell-${index}`} fill={CHART_COLORS[index % CHART_COLORS.length]} />
-                                    ))}
-                                </Pie>
-                                <RechartsTooltip />
-                            </PieChart>
-                        </ResponsiveContainer>
-                    </CardContent>
-                </Card>
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <Card className="col-span-1 lg:col-span-2">
+                        <CardHeader>
+                            <CardTitle className="text-lg flex items-center gap-2">
+                                <BarChart3 className="h-5 w-5 text-primary" />
+                                Omzet Bersih per Mitra (Netto)
+                            </CardTitle>
+                            <CardDescription>Pendapatan yang diterima mitra setelah dipotong admin 5%.</CardDescription>
+                        </CardHeader>
+                        <CardContent className="h-[400px]">
+                            <ResponsiveContainer width="100%" height="100%">
+                                <BarChart data={chartDataMitra}>
+                                    <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                                    <XAxis dataKey="name" fontSize={10} tickLine={false} axisLine={false} />
+                                    <YAxis fontSize={10} tickLine={false} axisLine={false} tickFormatter={(value) => `Rp ${value/1000}k`} />
+                                    <RechartsTooltip 
+                                        formatter={(value: any) => [formatPrice(value), 'Omzet Netto']}
+                                        contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
+                                    />
+                                    <Bar dataKey="value" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
+                                </BarChart>
+                            </ResponsiveContainer>
+                        </CardContent>
+                    </Card>
 
-                <Card>
-                    <CardHeader>
-                        <CardTitle className="text-lg flex items-center gap-2">
-                            <LayoutGrid className="h-5 w-5 text-primary" />
-                            Produk Terlaris
-                        </CardTitle>
-                        <CardDescription>8 item dengan jumlah pesanan terbanyak.</CardDescription>
-                    </CardHeader>
-                    <CardContent className="h-[300px]">
-                        <ResponsiveContainer width="100%" height="100%">
-                            <BarChart data={chartDataProducts} layout="vertical">
-                                <CartesianGrid strokeDasharray="3 3" horizontal={false} />
-                                <XAxis type="number" hide />
-                                <YAxis dataKey="name" type="category" fontSize={10} width={100} tickLine={false} axisLine={false} />
-                                <RechartsTooltip 
-                                    formatter={(value: any) => [value, 'Porsi']}
-                                    contentStyle={{ borderRadius: '8px' }}
-                                />
-                                <Bar dataKey="value" fill="hsl(var(--chart-2))" radius={[0, 4, 4, 0]} />
-                            </BarChart>
-                        </ResponsiveContainer>
-                    </CardContent>
-                </Card>
+                    <Card>
+                        <CardHeader>
+                            <CardTitle className="text-lg flex items-center gap-2">
+                                <PieChartIcon className="h-5 w-5 text-primary" />
+                                Distribusi Status Pesanan
+                            </CardTitle>
+                            <CardDescription>Berdasarkan jumlah sub-order pengerjaan.</CardDescription>
+                        </CardHeader>
+                        <CardContent className="h-[300px]">
+                            <ResponsiveContainer width="100%" height="100%">
+                                <PieChart>
+                                    <Pie
+                                        data={chartDataStatus}
+                                        cx="50%"
+                                        cy="50%"
+                                        innerRadius={60}
+                                        outerRadius={80}
+                                        paddingAngle={5}
+                                        dataKey="value"
+                                        label={({ name, percent }) => `${name} (${(percent * 100).toFixed(0)}%)`}
+                                    >
+                                        {chartDataStatus.map((entry, index) => (
+                                            <Cell key={`cell-${index}`} fill={CHART_COLORS[index % CHART_COLORS.length]} />
+                                        ))}
+                                    </Pie>
+                                    <RechartsTooltip />
+                                </PieChart>
+                            </ResponsiveContainer>
+                        </CardContent>
+                    </Card>
+
+                    <Card>
+                        <CardHeader>
+                            <CardTitle className="text-lg flex items-center gap-2">
+                                <LayoutGrid className="h-5 w-5 text-primary" />
+                                Produk Terlaris
+                            </CardTitle>
+                            <CardDescription>8 item dengan jumlah pesanan terbanyak.</CardDescription>
+                        </CardHeader>
+                        <CardContent className="h-[300px]">
+                            <ResponsiveContainer width="100%" height="100%">
+                                <BarChart data={chartDataProducts} layout="vertical">
+                                    <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+                                    <XAxis type="number" hide />
+                                    <YAxis dataKey="name" type="category" fontSize={10} width={100} tickLine={false} axisLine={false} />
+                                    <RechartsTooltip 
+                                        formatter={(value: any) => [value, 'Porsi']}
+                                        contentStyle={{ borderRadius: '8px' }}
+                                    />
+                                    <Bar dataKey="value" fill="hsl(var(--chart-2))" radius={[0, 4, 4, 0]} />
+                                </BarChart>
+                            </ResponsiveContainer>
+                        </CardContent>
+                    </Card>
+                </div>
             </div>
         )}
 
