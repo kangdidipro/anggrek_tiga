@@ -6,7 +6,7 @@ import { useFirestore, useUser, useCollection, useMemoFirebase, errorEmitter, Fi
 import { collectionGroup, getDocs, query, collection, writeBatch, doc, updateDoc, arrayUnion } from 'firebase/firestore';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Loader2, FileDown, CalendarIcon, FileText, Mail, Search, LayoutGrid, ArrowUpDown, ArrowUp, ArrowDown, Filter, Trash2, Phone, User } from 'lucide-react';
+import { Loader2, FileDown, CalendarIcon, FileText, Mail, Search, LayoutGrid, ArrowUpDown, ArrowUp, ArrowDown, Filter, Trash2, Phone, User, ChevronLeft, ChevronRight } from 'lucide-react';
 import { formatPrice, getVendorFromSku } from '@/lib/utils';
 import * as XLSX from 'xlsx';
 import { saveAs } from 'file-saver';
@@ -118,6 +118,10 @@ export default function AdminSummaryPage() {
   const [isDeleting, setIsDeleting] = useState(false);
   const [isUpdatingStatus, setIsUpdatingStatus] = useState<string | null>(null);
 
+  // Pagination State
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+
   const vendorsQuery = useMemoFirebase(() => {
     if (!firestore) return null;
     return collection(firestore, 'vendors');
@@ -193,6 +197,11 @@ export default function AdminSummaryPage() {
     };
     fetchOrders();
   }, [firestore, user, isUserLoading]);
+
+  // Reset pagination on filter change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [date, vendorFilter, selectedStatuses, searchTerm, groupBy, sortConfig]);
 
   const summaryData: SummaryItem[] = useMemo(() => {
     if (!date) return [];
@@ -337,34 +346,52 @@ export default function AdminSummaryPage() {
     return result;
   }, [summaryData, sortConfig, groupBy]);
 
+  // Paginated Data
+  const paginatedSummary = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return filteredSummary.slice(start, start + pageSize);
+  }, [filteredSummary, currentPage, pageSize]);
+
+  const totalPages = Math.ceil(filteredSummary.length / pageSize);
+
   const rowSpans = useMemo(() => {
     const spans: Record<string, number> = {};
     if (groupBy !== 'orderId') return spans;
 
     let i = 0;
-    while (i < filteredSummary.length) {
-        const currentOrder = filteredSummary[i].parentOrderId;
+    while (i < paginatedSummary.length) {
+        const currentOrder = paginatedSummary[i].parentOrderId;
         let count = 1;
         let j = i + 1;
-        while (j < filteredSummary.length && filteredSummary[j].parentOrderId === currentOrder) {
+        while (j < paginatedSummary.length && paginatedSummary[j].parentOrderId === currentOrder) {
             count++;
             j++;
         }
-        spans[filteredSummary[i].key] = count;
+        spans[paginatedSummary[i].key] = count;
         i = j;
     }
     return spans;
-  }, [filteredSummary, groupBy]);
+  }, [paginatedSummary, groupBy]);
 
   const grandTotals = useMemo(() => {
+    // Grand totals based on entire filtered set
     return filteredSummary.reduce((acc, curr) => ({
       orders: acc.orders + curr.totalOrders,
       amount: acc.amount + curr.totalAmount,
       admin: acc.admin + curr.adminFee,
       net: acc.net + curr.netToVendor,
-      ongkir: acc.ongkir + (rowSpans[curr.key] > 0 ? 2500 : (groupBy !== 'orderId' ? curr.totalDeliveryFee : 0))
+      ongkir: acc.ongkir + (groupBy === 'orderId' ? (new Set(filteredSummary.map(s => s.parentOrderId)).size * 2500 / filteredSummary.length) : curr.totalDeliveryFee)
     }), { orders: 0, amount: 0, admin: 0, net: 0, ongkir: 0 });
-  }, [filteredSummary, rowSpans, groupBy]);
+  }, [filteredSummary, groupBy]);
+
+  // Fix grand totals ongkir logic
+  const actualGrandTotals = useMemo(() => {
+    const uniqueOrders = new Set(filteredSummary.map(s => s.parentOrderId));
+    return {
+        ...grandTotals,
+        ongkir: uniqueOrders.size * 2500
+    };
+  }, [filteredSummary, grandTotals]);
 
   const availableVendors = useMemo(() => {
     const vendors = new Set<string>();
@@ -478,10 +505,10 @@ export default function AdminSummaryPage() {
       'Group (ID Sub-Order/Mitra/SKU)': 'TOTAL KESELURUHAN',
       'Info': '',
       'Status': '',
-      'Total Produk (Bruto)': grandTotals.amount,
-      'Admin (5%)': grandTotals.admin,
-      'Bayar ke Mitra (Netto)': grandTotals.net,
-      'Ongkir': grandTotals.ongkir,
+      'Total Produk (Bruto)': actualGrandTotals.amount,
+      'Admin (5%)': actualGrandTotals.admin,
+      'Bayar ke Mitra (Netto)': actualGrandTotals.net,
+      'Ongkir': actualGrandTotals.ongkir,
       'Rincian Item': '',
       'Alamat Pengiriman': ''
     });
@@ -499,7 +526,25 @@ export default function AdminSummaryPage() {
     const doc = new jsPDF('l', 'mm', 'a4');
     
     const tableRows = filteredSummary.map((summary, index) => {
-        const span = rowSpans[summary.key] || 0;
+        // Logika rowspan di PDF (berbeda dengan paginated view karena PDF mencetak seluruh filteredSummary)
+        // Kita butuh spans khusus untuk filter full
+        const allSpans: Record<string, number> = {};
+        if (groupBy === 'orderId') {
+            let k = 0;
+            while (k < filteredSummary.length) {
+                const currentOrder = filteredSummary[k].parentOrderId;
+                let count = 1;
+                let l = k + 1;
+                while (l < filteredSummary.length && filteredSummary[l].parentOrderId === currentOrder) {
+                    count++;
+                    l++;
+                }
+                allSpans[filteredSummary[k].key] = count;
+                k = l;
+            }
+        }
+
+        const span = allSpans[summary.key] || 0;
         const isSpannedRow = groupBy === 'orderId';
         const showOngkirAlamat = !isSpannedRow || (isSpannedRow && span > 0);
 
@@ -528,10 +573,10 @@ export default function AdminSummaryPage() {
 
     const grandTotalRow = {
       no: { content: "TOTAL KESELURUHAN", colSpan: 3, styles: { halign: 'right', fontStyle: 'bold' } },
-      produk: { content: formatPrice(grandTotals.amount), styles: { fontStyle: 'bold' } },
-      admin: { content: formatPrice(grandTotals.admin), styles: { fontStyle: 'bold' } },
-      net: { content: formatPrice(grandTotals.net), styles: { fontStyle: 'bold' } },
-      ongkir: { content: formatPrice(grandTotals.ongkir), styles: { fontStyle: 'bold' } },
+      produk: { content: formatPrice(actualGrandTotals.amount), styles: { fontStyle: 'bold' } },
+      admin: { content: formatPrice(actualGrandTotals.admin), styles: { fontStyle: 'bold' } },
+      net: { content: formatPrice(actualGrandTotals.net), styles: { fontStyle: 'bold' } },
+      ongkir: { content: formatPrice(actualGrandTotals.ongkir), styles: { fontStyle: 'bold' } },
       items: "",
       alamat: ""
     };
@@ -604,7 +649,7 @@ export default function AdminSummaryPage() {
   };
 
   const toggleSelectAllOrders = () => {
-    const visibleOrderIds = new Set(filteredSummary.map(s => s.parentOrderId));
+    const visibleOrderIds = new Set(paginatedSummary.map(s => s.parentOrderId));
     if (selectedOrderIds.size === visibleOrderIds.size) {
       setSelectedOrderIds(new Set());
     } else {
@@ -799,7 +844,7 @@ export default function AdminSummaryPage() {
                             <TableRow>
                                 <TableHead className="w-[40px]">
                                   <Checkbox 
-                                    checked={selectedOrderIds.size > 0 && selectedOrderIds.size === new Set(filteredSummary.map(s => s.parentOrderId)).size}
+                                    checked={selectedOrderIds.size > 0 && selectedOrderIds.size === new Set(paginatedSummary.map(s => s.parentOrderId)).size}
                                     onCheckedChange={toggleSelectAllOrders}
                                   />
                                 </TableHead>
@@ -837,14 +882,14 @@ export default function AdminSummaryPage() {
                             </TableRow>
                         </TableHeader>
                         <TableBody>
-                            {filteredSummary.length === 0 ? (
+                            {paginatedSummary.length === 0 ? (
                                 <TableRow>
                                     <TableCell colSpan={11} className="text-center text-muted-foreground py-10">
                                     Tidak ada transaksi ditemukan.
                                     </TableCell>
                                 </TableRow>
                             ) : (
-                                filteredSummary.map((summary, index) => {
+                                paginatedSummary.map((summary, index) => {
                                     const span = rowSpans[summary.key] || 0;
                                     const isRowSpanned = groupBy === 'orderId';
                                     const parentOrder = orders.find(o => o.id === summary.parentOrderId);
@@ -859,7 +904,7 @@ export default function AdminSummaryPage() {
                                                 />
                                               )}
                                             </TableCell>
-                                            <TableCell className="text-muted-foreground font-mono text-xs">{index + 1}</TableCell>
+                                            <TableCell className="text-muted-foreground font-mono text-xs">{(currentPage - 1) * pageSize + index + 1}</TableCell>
                                             <TableCell className="font-medium">
                                                 {summary.label}
                                                 {summary.subLabel && <span className="block text-[10px] text-muted-foreground">{summary.subLabel}</span>}
@@ -997,15 +1042,64 @@ export default function AdminSummaryPage() {
                             <TableFooter>
                                 <TableRow className="bg-primary/5 font-bold">
                                     <TableCell colSpan={4}></TableCell>
-                                    <TableCell className="text-right text-primary">{formatPrice(grandTotals.amount)}</TableCell>
-                                    <TableCell className="text-right text-destructive">{formatPrice(grandTotals.admin)}</TableCell>
-                                    <TableCell className="text-right text-green-700">{formatPrice(grandTotals.net)}</TableCell>
-                                    <TableCell className="text-right">{formatPrice(grandTotals.ongkir)}</TableCell>
+                                    <TableCell className="text-right text-primary">{formatPrice(actualGrandTotals.amount)}</TableCell>
+                                    <TableCell className="text-right text-destructive">{formatPrice(actualGrandTotals.admin)}</TableCell>
+                                    <TableCell className="text-right text-green-700">{formatPrice(actualGrandTotals.net)}</TableCell>
+                                    <TableCell className="text-right">{formatPrice(actualGrandTotals.ongkir)}</TableCell>
                                     <TableCell colSpan={3}></TableCell>
                                 </TableRow>
                             </TableFooter>
                         )}
                     </Table>
+                </div>
+
+                <div className="flex flex-col md:flex-row items-center justify-between gap-4 bg-card p-4 rounded-lg border shadow-sm">
+                    <div className="flex items-center gap-4">
+                        <div className="flex items-center gap-2">
+                            <span className="text-sm text-muted-foreground">Tampilkan</span>
+                            <Select value={pageSize.toString()} onValueChange={(v) => { setPageSize(Number(v)); setCurrentPage(1); }}>
+                                <SelectTrigger className="w-[80px]">
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="5">5</SelectItem>
+                                    <SelectItem value="10">10</SelectItem>
+                                    <SelectItem value="30">30</SelectItem>
+                                    <SelectItem value="50">50</SelectItem>
+                                    <SelectItem value="100">100</SelectItem>
+                                    <SelectItem value="200">200</SelectItem>
+                                </SelectContent>
+                            </Select>
+                            <span className="text-sm text-muted-foreground">baris per halaman</span>
+                        </div>
+                        <div className="text-sm text-muted-foreground border-l pl-4">
+                            Total: <span className="font-bold text-foreground">{filteredSummary.length}</span> baris ditemukan
+                        </div>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                        <Button 
+                            variant="outline" 
+                            size="sm" 
+                            onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                            disabled={currentPage === 1}
+                        >
+                            <ChevronLeft className="h-4 w-4 mr-1" /> Prev
+                        </Button>
+                        <div className="flex items-center gap-1 px-2">
+                            <span className="text-sm font-medium">Halaman</span>
+                            <span className="bg-primary/10 text-primary px-2 py-0.5 rounded text-sm font-bold">{currentPage}</span>
+                            <span className="text-sm font-medium">dari {totalPages || 1}</span>
+                        </div>
+                        <Button 
+                            variant="outline" 
+                            size="sm" 
+                            onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                            disabled={currentPage === totalPages || totalPages === 0}
+                        >
+                            Next <ChevronRight className="h-4 w-4 ml-1" />
+                        </Button>
+                    </div>
                 </div>
             </CardContent>
         </Card>
