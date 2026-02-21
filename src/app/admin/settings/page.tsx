@@ -362,25 +362,109 @@ export default function AdminSettingsPage() {
         <p className="text-muted-foreground">Kelola konfigurasi pengiriman email, parameter operasional, dan pemeliharaan data.</p>
       </div>
 
-      <Tabs defaultValue="mail" className="w-full">
+      <Tabs defaultValue="params" className="w-full">
         <TabsList className="grid w-full grid-cols-4 max-w-xl">
-          <TabsTrigger value="mail" className="flex items-center gap-2">
-            <Mail className="h-4 w-4" />
-            Mail Server
-          </TabsTrigger>
           <TabsTrigger value="params" className="flex items-center gap-2">
             <Package className="h-4 w-4" />
             Set Parameter
           </TabsTrigger>
-          <TabsTrigger value="data" className="flex items-center gap-2">
-            <Database className="h-4 w-4" />
-            Maintenance
+          <TabsTrigger value="mail" className="flex items-center gap-2">
+            <Mail className="h-4 w-4" />
+            Mail Server
           </TabsTrigger>
           <TabsTrigger value="backup" className="flex items-center gap-2">
             <FileJson className="h-4 w-4" />
             Backup
           </TabsTrigger>
+          <TabsTrigger value="data" className="flex items-center gap-2">
+            <Database className="h-4 w-4" />
+            Maintenance
+          </TabsTrigger>
         </TabsList>
+
+        <TabsContent value="params" className="space-y-4 pt-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Parameter Operasional</CardTitle>
+              <CardDescription>
+                Tentukan nilai-nilai dasar yang digunakan untuk operasional harian.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <form onSubmit={handleSaveParams} className="space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-2xl">
+                  <div className="space-y-2 p-4 border rounded-lg bg-muted/10">
+                    <Label htmlFor="default-stock" className="font-bold flex items-center gap-2">
+                      <Package className="h-4 w-4 text-primary" />
+                      Angka Stok Default
+                    </Label>
+                    <Input 
+                      id="default-stock" 
+                      type="number" 
+                      min="0"
+                      value={defaultStock} 
+                      onChange={(e) => setDefaultStock(Number(e.target.value))}
+                      placeholder="Contoh: 20" 
+                    />
+                    <p className="text-[10px] text-muted-foreground">
+                      Digunakan saat melakukan "Reset Stok" di halaman Manajemen Menu.
+                    </p>
+                  </div>
+
+                  <div className="space-y-2 p-4 border rounded-lg bg-muted/10">
+                    <Label htmlFor="admin-fee" className="font-bold flex items-center gap-2 text-destructive">
+                      <AlertTriangle className="h-4 w-4" />
+                      Potongan Admin (%)
+                    </Label>
+                    <div className="relative">
+                      <Input 
+                        id="admin-fee" 
+                        type="number" 
+                        min="0"
+                        max="100"
+                        value={adminFee} 
+                        onChange={(e) => setAdminFee(Number(e.target.value))}
+                        placeholder="Contoh: 10" 
+                        className="pr-8"
+                      />
+                      <span className="absolute right-3 top-1/2 -translate-y-1/2 font-bold text-muted-foreground">%</span>
+                    </div>
+                    <p className="text-[10px] text-muted-foreground">
+                      Persentase biaya administrasi yang dipotong dari total penjualan kotor per mitra.
+                    </p>
+                  </div>
+
+                  <div className="space-y-2 p-4 border rounded-lg bg-muted/10 md:col-span-2">
+                    <Label htmlFor="delivery-fee" className="font-bold flex items-center gap-2 text-blue-600">
+                      <Truck className="h-4 w-4" />
+                      Biaya Ongkos Antar (Rp)
+                    </Label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 font-bold text-muted-foreground">Rp</span>
+                      <Input 
+                        id="delivery-fee" 
+                        type="number" 
+                        min="0"
+                        value={deliveryFee} 
+                        onChange={(e) => setDeliveryFee(Number(e.target.value))}
+                        placeholder="Contoh: 2500" 
+                        className="pl-10"
+                      />
+                    </div>
+                    <p className="text-[10px] text-muted-foreground">
+                      Biaya pengiriman tetap (flat) yang dikenakan untuk setiap satu kali pesanan.
+                    </p>
+                  </div>
+                </div>
+                
+                <Button type="submit" disabled={isSavingParams} className="w-full md:w-auto px-12">
+                  {isSavingParams ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+                  Simpan Semua Parameter
+                </Button>
+              </form>
+            </CardContent>
+          </Card>
+        </TabsContent>
 
         <TabsContent value="mail" className="space-y-4 pt-4">
           <Alert className="bg-primary/5 border-primary/20">
@@ -479,140 +563,6 @@ export default function AdminSettingsPage() {
           </Card>
         </TabsContent>
 
-        <TabsContent value="params" className="space-y-4 pt-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>Parameter Operasional</CardTitle>
-              <CardDescription>
-                Tentukan nilai-nilai dasar yang digunakan untuk operasional harian.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <form onSubmit={handleSaveParams} className="space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-2xl">
-                  <div className="space-y-2 p-4 border rounded-lg bg-muted/10">
-                    <Label htmlFor="default-stock" className="font-bold flex items-center gap-2">
-                      <Package className="h-4 w-4 text-primary" />
-                      Angka Stok Default
-                    </Label>
-                    <Input 
-                      id="default-stock" 
-                      type="number" 
-                      min="0"
-                      value={defaultStock} 
-                      onChange={(e) => setDefaultStock(Number(e.target.value))}
-                      placeholder="Contoh: 20" 
-                    />
-                    <p className="text-[10px] text-muted-foreground">
-                      Digunakan saat melakukan "Reset Stok" di halaman Manajemen Menu.
-                    </p>
-                  </div>
-
-                  <div className="space-y-2 p-4 border rounded-lg bg-muted/10">
-                    <Label htmlFor="admin-fee" className="font-bold flex items-center gap-2 text-destructive">
-                      <AlertTriangle className="h-4 w-4" />
-                      Potongan Admin (%)
-                    </Label>
-                    <div className="relative">
-                      <Input 
-                        id="admin-fee" 
-                        type="number" 
-                        min="0"
-                        max="100"
-                        value={adminFee} 
-                        onChange={(e) => setAdminFee(Number(e.target.value))}
-                        placeholder="Contoh: 10" 
-                        className="pr-8"
-                      />
-                      <span className="absolute right-3 top-1/2 -translate-y-1/2 font-bold text-muted-foreground">%</span>
-                    </div>
-                    <p className="text-[10px] text-muted-foreground">
-                      Persentase biaya administrasi yang dipotong dari total penjualan kotor per mitra.
-                    </p>
-                  </div>
-
-                  <div className="space-y-2 p-4 border rounded-lg bg-muted/10 md:col-span-2">
-                    <Label htmlFor="delivery-fee" className="font-bold flex items-center gap-2 text-blue-600">
-                      <Truck className="h-4 w-4" />
-                      Biaya Ongkos Antar (Rp)
-                    </Label>
-                    <div className="relative">
-                      <span className="absolute left-3 top-1/2 -translate-y-1/2 font-bold text-muted-foreground">Rp</span>
-                      <Input 
-                        id="delivery-fee" 
-                        type="number" 
-                        min="0"
-                        value={deliveryFee} 
-                        onChange={(e) => setDeliveryFee(Number(e.target.value))}
-                        placeholder="Contoh: 2500" 
-                        className="pl-10"
-                      />
-                    </div>
-                    <p className="text-[10px] text-muted-foreground">
-                      Biaya pengiriman tetap (flat) yang dikenakan untuk setiap satu kali pesanan.
-                    </p>
-                  </div>
-                </div>
-                
-                <Button type="submit" disabled={isSavingParams} className="w-full md:w-auto px-12">
-                  {isSavingParams ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-                  Simpan Semua Parameter
-                </Button>
-              </form>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="data" className="space-y-4 pt-4">
-          <Card className="border-destructive/20">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-destructive">
-                <AlertTriangle className="h-5 w-5" />
-                Zona Berbahaya (Maintenance)
-              </CardTitle>
-              <CardDescription>
-                Kosongkan data tabel secara permanen. Tindakan ini memerlukan konfirmasi kata kunci.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {TABLES.map((table) => (
-                  <div key={table.id} className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/30 transition-colors">
-                    <div className="space-y-0.5">
-                      <h4 className="text-sm font-bold">{table.label}</h4>
-                      <p className="text-xs text-muted-foreground">{table.description}</p>
-                    </div>
-                    {table.id !== 'settings' && (
-                      <Button 
-                        variant="outline" 
-                        size="sm" 
-                        className="text-destructive border-destructive/20 hover:bg-destructive/10"
-                        onClick={() => setActionTarget(table)}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    )}
-                  </div>
-                ))}
-              </div>
-
-              <div className="pt-6 border-t">
-                <Button 
-                  variant="destructive" 
-                  className="w-full flex items-center gap-2 h-12 text-lg font-bold"
-                  onClick={() => setActionTarget({ id: 'ALL', label: 'SEMUA TABEL DATA (Kecuali Pengaturan)' })}
-                >
-                  <Skull className="h-5 w-5" />
-                  HAPUS SELURUH ISI DATABASE
-                </Button>
-                <p className="text-center text-[10px] text-muted-foreground mt-2 italic">
-                  *Tindakan ini akan mengosongkan Menu, Mitra, Pelanggan, dan Pesanan. Tabel Pengaturan Sistem diproteksi.
-                </p>
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
         <TabsContent value="backup" className="space-y-4 pt-4">
           <Card>
             <CardHeader>
@@ -666,6 +616,56 @@ export default function AdminSettingsPage() {
             </CardContent>
           </Card>
         </TabsContent>
+
+        <TabsContent value="data" className="space-y-4 pt-4">
+          <Card className="border-destructive/20">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-destructive">
+                <AlertTriangle className="h-5 w-5" />
+                Zona Berbahaya (Maintenance)
+              </CardTitle>
+              <CardDescription>
+                Kosongkan data tabel secara permanen. Tindakan ini memerlukan konfirmasi kata kunci.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {TABLES.map((table) => (
+                  <div key={table.id} className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/30 transition-colors">
+                    <div className="space-y-0.5">
+                      <h4 className="text-sm font-bold">{table.label}</h4>
+                      <p className="text-xs text-muted-foreground">{table.description}</p>
+                    </div>
+                    {table.id !== 'settings' && (
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        className="text-destructive border-destructive/20 hover:bg-destructive/10"
+                        onClick={() => setActionTarget(table)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    )}
+                  </div>
+                ))}
+              </div>
+
+              <div className="pt-6 border-t">
+                <Button 
+                  variant="destructive" 
+                  className="w-full flex items-center gap-2 h-12 text-lg font-bold"
+                  onClick={() => setActionTarget({ id: 'ALL', label: 'SEMUA TABEL DATA (Kecuali Pengaturan)' })}
+                >
+                  <Skull className="h-5 w-5" />
+                  HAPUS SELURUH ISI DATABASE
+                </Button>
+                <p className="text-center text-[10px] text-muted-foreground mt-2 italic">
+                  *Tindakan ini akan mengosongkan Menu, Mitra, Pelanggan, dan Pesanan. Tabel Pengaturan Sistem diproteksi.
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
       </Tabs>
 
       {/* Security Confirmation Dialog */}
@@ -695,7 +695,9 @@ export default function AdminSettingsPage() {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => { setConfirmInput(''); setActionTarget(null); }}>Batal</AlertDialogCancel>
+            <Popover>
+              <AlertDialogCancel onClick={() => { setConfirmInput(''); setActionTarget(null); }}>Batal</AlertDialogCancel>
+            </Popover>
             <AlertDialogAction 
               onClick={executeClear} 
               disabled={confirmInput !== 'HAPUS' || isDeleting}
