@@ -6,7 +6,7 @@ import { collection, doc, deleteDoc, setDoc, writeBatch, updateDoc } from 'fireb
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Loader2, Plus, Pencil, Trash2, RefreshCcw, Search, X, FileUp, ArrowUpDown, ArrowUp, ArrowDown, RotateCcw, ChevronLeft, ChevronRight, PackageOpen, Tags, Image as ImageIcon, ImageOff } from 'lucide-react';
+import { Loader2, Plus, Pencil, Trash2, RefreshCcw, Search, X, FileUp, ArrowUpDown, ArrowUp, ArrowDown, RotateCcw, ChevronLeft, ChevronRight, PackageOpen, Tags, Image as ImageIcon, ImageOff, Info } from 'lucide-react';
 import { formatPrice } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
@@ -18,6 +18,7 @@ import { Switch } from '@/components/ui/switch';
 import { products as initialProducts } from '@/lib/products';
 import type { Product, Vendor } from '@/lib/types';
 import * as XLSX from 'xlsx';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -454,10 +455,50 @@ export default function AdminMenuPage() {
             ref={fileInputRef}
             onChange={handleExcelUpload}
           />
-          <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()} disabled={isExcelImporting}>
-            {isExcelImporting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileUp className="mr-2 h-4 w-4" />}
-            Import Excel
-          </Button>
+          
+          <Dialog>
+            <DialogTrigger asChild>
+              <Button variant="outline" size="sm" disabled={isExcelImporting}>
+                {isExcelImporting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileUp className="mr-2 h-4 w-4" />}
+                Import Excel
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-[500px]">
+              <DialogHeader>
+                <DialogTitle>Import Menu via Excel</DialogTitle>
+                <DialogDescription>
+                  Unggah file .xlsx atau .xls dengan struktur kolom yang benar untuk menambah menu secara masal.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4 py-4">
+                <div className="bg-muted/30 p-4 rounded-lg border border-primary/10">
+                  <h4 className="text-sm font-bold mb-2 uppercase tracking-tight">Struktur Kolom Wajib:</h4>
+                  <ul className="text-xs space-y-1.5 list-disc pl-5 text-muted-foreground">
+                    <li><strong>Nama</strong>: Nama menu (Contoh: Nasi Bakar)</li>
+                    <li><strong>Harga</strong>: Angka saja (Contoh: 12000)</li>
+                    <li><strong>SKU</strong>: Kode unik produk</li>
+                    <li><strong>Kategori</strong>: Harus sesuai dengan Master Kategori</li>
+                    <li><strong>Mitra</strong>: Kode singkat penjual (Contoh: NL)</li>
+                    <li><strong>Foto</strong>: <u>Link / URL Gambar</u> (Google Drive, dll)</li>
+                  </ul>
+                </div>
+                
+                <Alert className="bg-orange-50 border-orange-200">
+                  <Info className="h-4 w-4 text-orange-600" />
+                  <AlertTitle className="text-xs font-bold text-orange-800 uppercase">Penting Tentang Gambar!</AlertTitle>
+                  <AlertDescription className="text-[11px] text-orange-700 leading-relaxed">
+                    Sistem <strong>TIDAK</strong> bisa membaca file gambar yang ditempel/copy-paste di dalam sel Excel. 
+                    Anda harus menggunakan <strong>URL Link Gambar</strong> yang valid agar foto muncul di menu pelanggan.
+                  </AlertDescription>
+                </Alert>
+              </div>
+              <DialogFooter>
+                <Button onClick={() => fileInputRef.current?.click()} className="w-full">
+                  Pilih File & Import Sekarang
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
           
           <AlertDialog>
             <AlertDialogTrigger asChild>
