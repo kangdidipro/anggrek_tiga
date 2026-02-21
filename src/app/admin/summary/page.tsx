@@ -5,7 +5,7 @@ import { useFirestore, useUser, useCollection, useMemoFirebase, errorEmitter, Fi
 import { collectionGroup, getDocs, query, collection, writeBatch, doc, updateDoc, arrayUnion } from 'firebase/firestore';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Loader2, FileDown, CalendarIcon, FileText, Mail, Search, LayoutGrid, ArrowUpDown, ArrowUp, ArrowDown, Filter, Trash2, Phone, User, ChevronLeft, ChevronRight, Send, X, BarChart3, PieChart as PieChartIcon, Table as TableIcon, Package, Truck, Share2, MapPin, Clock } from 'lucide-react';
+import { Loader2, FileDown, CalendarIcon, FileText, Mail, Search, LayoutGrid, ArrowUpDown, ArrowUp, ArrowDown, Filter, Trash2, Phone, User, ChevronLeft, ChevronRight, Send, X, BarChart3, PieChart as PieChartIcon, Table as TableIcon, Package, Truck, Share2, MapPin, Clock, CreditCard } from 'lucide-react';
 import { formatPrice, getVendorFromSku } from '@/lib/utils';
 import * as XLSX from 'xlsx';
 import { saveAs } from 'file-saver';
@@ -99,6 +99,7 @@ type SummaryItem = {
     };
     status?: string; // For Sub-Order view
     statuses?: string[]; // For aggregate view
+    paymentMethod?: string;
 }
 
 type SortConfig = {
@@ -267,6 +268,7 @@ export default function AdminSummaryPage() {
       addresses: Set<string>;
       statuses: Set<string>;
       customerProfile?: { name: string; phone: string; email: string };
+      paymentMethod: string;
     }> = {};
 
     const parentOrdersIncludedInDelivery = new Set<string>();
@@ -328,7 +330,8 @@ export default function AdminSummaryPage() {
                       name: customer.name,
                       phone: customer.phoneNumber,
                       email: customer.email
-                    } : undefined
+                    } : undefined,
+                    paymentMethod: order.paymentMethod
                 };
             }
             
@@ -371,7 +374,8 @@ export default function AdminSummaryPage() {
             addresses: Array.from(data.addresses),
             customerProfile: data.customerProfile,
             status: statusesArr.length === 1 ? statusesArr[0] : undefined,
-            statuses: statusesArr
+            statuses: statusesArr,
+            paymentMethod: data.paymentMethod
         };
     });
   }, [orders, date, groupBy, vendorLookup, customerLookup, vendorFilter, selectedStatuses, searchTerm]);
@@ -587,6 +591,7 @@ export default function AdminSummaryPage() {
         'Pemesan': summary.customerProfile?.name || '-',
         'No HP': summary.customerProfile?.phone || '-',
         'Email': summary.customerProfile?.email || '-',
+        'Metode Bayar': summary.paymentMethod || '-',
         'Group (ID Sub-Order/Mitra/SKU)': summary.label,
         'Info': summary.subLabel || '',
         'Status': summary.status || summary.statuses?.join(', '),
@@ -604,6 +609,7 @@ export default function AdminSummaryPage() {
       'Pemesan': '',
       'No HP': '',
       'Email': '',
+      'Metode Bayar': '',
       'Group (ID Sub-Order/Mitra/SKU)': 'TOTAL KESELURUHAN',
       'Info': '',
       'Status': '',
@@ -653,7 +659,7 @@ export default function AdminSummaryPage() {
         if (isRowSpanned && isNewOrder) {
             const cp = summary.customerProfile;
             const profileText = cp 
-              ? `${cp.name.toUpperCase()} | HP: ${cp.phone}${cp.email ? ' | ' + cp.email : ''}`
+              ? `${cp.name.toUpperCase()} | HP: ${cp.phone}${cp.email ? ' | ' + cp.email : ''} | BAYAR: ${summary.paymentMethod || '-'}`
               : '';
             const dateText = parentOrder ? format(new Date(parentOrder.orderDateTime), 'eeee, d MMM yyyy - HH:mm', { locale: id }) : '';
 
@@ -703,7 +709,7 @@ export default function AdminSummaryPage() {
         // Profile & Alamat column (only if not orderId grouping since it's in header)
         if (!isRowSpanned) {
             const cp = summary.customerProfile;
-            const profileText = cp ? `${cp.name}\n${cp.phone}` : '';
+            const profileText = cp ? `${cp.name}\n${cp.phone}\n${summary.paymentMethod || '-'}` : '';
             row.push(`${profileText}\n${summary.addresses.join(', ')}`);
         }
 
@@ -1133,6 +1139,11 @@ export default function AdminSummaryPage() {
                                                                     <User className="h-3.5 w-3.5 text-primary" />
                                                                     <span className="font-bold uppercase tracking-tight">{summary.customerProfile.name}</span>
                                                                 </div>
+                                                                {summary.paymentMethod && (
+                                                                  <Badge variant={summary.paymentMethod === 'QRIS' ? 'default' : 'destructive'} className="text-[10px] h-5 px-1.5 py-0">
+                                                                    {summary.paymentMethod}
+                                                                  </Badge>
+                                                                )}
                                                                 <div className="flex items-center gap-1.5">
                                                                     <Phone className="h-3.5 w-3.5 text-green-600" />
                                                                     <span className="font-mono">{summary.customerProfile.phone}</span>
@@ -1272,7 +1283,14 @@ export default function AdminSummaryPage() {
                                                     <div className="space-y-3">
                                                         {summary.customerProfile && (
                                                             <div className="p-2 bg-muted/20 rounded-lg border">
-                                                                <p className="font-bold text-xs text-foreground uppercase flex items-center gap-1.5 mb-1"><User className="h-3 w-3 text-primary" /> {summary.customerProfile.name}</p>
+                                                                <div className="flex justify-between items-start mb-1">
+                                                                  <p className="font-bold text-xs text-foreground uppercase flex items-center gap-1.5"><User className="h-3 w-3 text-primary" /> {summary.customerProfile.name}</p>
+                                                                  {summary.paymentMethod && (
+                                                                    <Badge variant={summary.paymentMethod === 'QRIS' ? 'default' : 'destructive'} className="text-[9px] h-4 px-1 py-0 leading-none">
+                                                                      {summary.paymentMethod}
+                                                                    </Badge>
+                                                                  )}
+                                                                </div>
                                                                 <p className="flex items-center gap-1.5 text-[10px] text-muted-foreground"><Phone className="h-3 w-3" /> {summary.customerProfile.phone}</p>
                                                             </div>
                                                         )}
