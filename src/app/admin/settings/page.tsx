@@ -398,14 +398,17 @@ export default function AdminSettingsPage() {
                       <Package className="h-4 w-4 text-primary" />
                       Angka Stok Default
                     </Label>
-                    <Input 
-                      id="default-stock" 
-                      type="number" 
-                      min="0"
-                      value={defaultStock} 
-                      onChange={(e) => setDefaultStock(Number(e.target.value))}
-                      placeholder="Contoh: 20" 
-                    />
+                    <div className="relative">
+                      <input 
+                        id="default-stock" 
+                        type="number" 
+                        min="0"
+                        value={defaultStock} 
+                        onChange={(e) => setDefaultStock(Number(e.target.value))}
+                        placeholder="Contoh: 20"
+                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-base ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 md:text-sm"
+                      />
+                    </div>
                     <p className="text-[10px] text-muted-foreground">
                       Digunakan saat melakukan "Reset Stok" di halaman Manajemen Menu.
                     </p>
@@ -417,7 +420,7 @@ export default function AdminSettingsPage() {
                       Potongan Admin (%)
                     </Label>
                     <div className="relative">
-                      <Input 
+                      <input 
                         id="admin-fee" 
                         type="number" 
                         min="0"
@@ -425,7 +428,7 @@ export default function AdminSettingsPage() {
                         value={adminFee} 
                         onChange={(e) => setAdminFee(Number(e.target.value))}
                         placeholder="Contoh: 10" 
-                        className="pr-8"
+                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-base ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 md:text-sm pr-8"
                       />
                       <span className="absolute right-3 top-1/2 -translate-y-1/2 font-bold text-muted-foreground">%</span>
                     </div>
@@ -441,14 +444,14 @@ export default function AdminSettingsPage() {
                     </Label>
                     <div className="relative">
                       <span className="absolute left-3 top-1/2 -translate-y-1/2 font-bold text-muted-foreground">Rp</span>
-                      <Input 
+                      <input 
                         id="delivery-fee" 
                         type="number" 
                         min="0"
                         value={deliveryFee} 
                         onChange={(e) => setDeliveryFee(Number(e.target.value))}
                         placeholder="Contoh: 2500" 
-                        className="pl-10"
+                        className="flex h-10 w-full rounded-md border border-input bg-background px-10 py-2 text-base ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 md:text-sm"
                       />
                     </div>
                     <p className="text-[10px] text-muted-foreground">
@@ -695,9 +698,7 @@ export default function AdminSettingsPage() {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <Popover>
-              <AlertDialogCancel onClick={() => { setConfirmInput(''); setActionTarget(null); }}>Batal</AlertDialogCancel>
-            </Popover>
+            <AlertDialogCancel onClick={() => { setConfirmInput(''); setActionTarget(null); }}>Batal</AlertDialogCancel>
             <AlertDialogAction 
               onClick={executeClear} 
               disabled={confirmInput !== 'HAPUS' || isDeleting}
