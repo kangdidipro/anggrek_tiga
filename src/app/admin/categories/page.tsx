@@ -7,17 +7,23 @@ import { collection, doc, deleteDoc, setDoc, writeBatch } from 'firebase/firesto
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Loader2, Plus, Pencil, Trash2, Search, Tag, RefreshCcw, Eraser } from 'lucide-react';
+import { Loader2, Plus, Pencil, Trash2, Search, Tag, RefreshCcw, Eraser, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { products as initialProducts } from '@/lib/products';
 import type { Product } from '@/lib/types';
+import { Badge } from '@/components/ui/badge';
 
 interface Category {
   id: string;
   name: string;
+}
+
+interface DisplayCategory extends Category {
+  isFromDb: boolean;
+  itemCount: number;
 }
 
 export default function AdminCategoriesPage() {
@@ -28,7 +34,7 @@ export default function AdminCategoriesPage() {
   const [isSeeding, setIsSeeding] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
 
-  // Fetch Categories
+  // Fetch Categories from DB
   const categoriesQuery = useMemoFirebase(() => {
     if (!firestore) return null;
     return collection(firestore, 'categories');
@@ -42,21 +48,45 @@ export default function AdminCategoriesPage() {
   }, [firestore]);
   const { data: menuItems, isLoading: isItemsLoading } = useCollection<Product>(menuItemsQuery);
 
-  // Calculate usage per category
+  // Calculate usage per category with robust matching (trimmed)
   const categoryUsage = useMemo(() => {
     const counts: Record<string, number> = {};
     menuItems?.forEach(item => {
-      counts[item.category] = (counts[item.category] || 0) + 1;
+      const catName = (item.category || 'Tanpa Kategori').trim();
+      counts[catName] = (counts[catName] || 0) + 1;
     });
     return counts;
   }, [menuItems]);
 
-  const filteredCategories = useMemo(() => {
+  const displayCategories = useMemo((): DisplayCategory[] => {
     if (!categories) return [];
-    return categories.filter(c => 
+    
+    const dbCatNames = new Set(categories.map(c => c.name.trim()));
+    const itemCatNames = new Set(Object.keys(categoryUsage));
+    
+    // Start with items from DB
+    const list: DisplayCategory[] = categories.map(c => ({
+      ...c,
+      isFromDb: true,
+      itemCount: categoryUsage[c.name.trim()] || 0
+    }));
+    
+    // Add "orphan" categories found in products but missing from DB
+    itemCatNames.forEach(name => {
+      if (name && !dbCatNames.has(name)) {
+        list.push({
+          id: `missing-${name}`,
+          name: name,
+          isFromDb: false,
+          itemCount: categoryUsage[name] || 0
+        });
+      }
+    });
+
+    return list.filter(c => 
       c.name.toLowerCase().includes(searchTerm.toLowerCase())
     ).sort((a, b) => a.name.localeCompare(b.name));
-  }, [categories, searchTerm]);
+  }, [categories, categoryUsage, searchTerm]);
 
   const handleDelete = async (id: string) => {
     if (!firestore) return;
@@ -68,6 +98,17 @@ export default function AdminCategoriesPage() {
     }
   };
 
+  const handleRegisterOrphan = async (name: string) => {
+    if (!firestore) return;
+    const id = (Math.floor(Math.random() * 1000) + 100).toString();
+    try {
+      await setDoc(doc(firestore, 'categories', id), { id, name });
+      toast({ title: "Berhasil", description: `Kategori "${name}" telah didaftarkan ke Master.` });
+    } catch (error) {
+      toast({ variant: "destructive", title: "Gagal", description: "Gagal mendaftarkan kategori." });
+    }
+  };
+
   const handleClearUnused = async () => {
     if (!firestore || !categories) return;
     setIsSeeding(true);
@@ -76,7 +117,7 @@ export default function AdminCategoriesPage() {
       let removedCount = 0;
       
       categories.forEach(cat => {
-        const count = categoryUsage[cat.name] || 0;
+        const count = categoryUsage[cat.name.trim()] || 0;
         if (count === 0) {
           batch.delete(doc(firestore, 'categories', cat.id));
           removedCount++;
@@ -101,7 +142,7 @@ export default function AdminCategoriesPage() {
     if (!firestore) return;
 
     const formData = new FormData(e.currentTarget);
-    const categoryName = formData.get('name') as string;
+    const categoryName = (formData.get('name') as string).trim();
     
     const categoryData: Category = {
       id: isEditing?.id || (Math.floor(Math.random() * 1000) + 100).toString(),
@@ -122,7 +163,7 @@ export default function AdminCategoriesPage() {
     if (!firestore) return;
     setIsSeeding(true);
     try {
-      const uniqueCategories = Array.from(new Set(initialProducts.map(p => p.category)));
+      const uniqueCategories = Array.from(new Set(initialProducts.map(p => p.category.trim())));
       const batch = writeBatch(firestore);
       
       uniqueCategories.forEach((catName, index) => {
@@ -196,7 +237,7 @@ export default function AdminCategoriesPage() {
       </div>
 
       <div className="relative max-w-sm">
-        <Tag className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
         <Input
           placeholder="Cari kategori..."
           value={searchTerm}
@@ -213,21 +254,21 @@ export default function AdminCategoriesPage() {
                 <TableHead className="w-[60px]">No.</TableHead>
                 <TableHead>Nama Kategori</TableHead>
                 <TableHead className="text-center">Jumlah Menu</TableHead>
+                <TableHead>Status Master</TableHead>
                 <TableHead className="text-right">Aksi</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredCategories.length === 0 ? (
+              {displayCategories.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={4} className="text-center py-12 text-muted-foreground">
+                  <TableCell colSpan={5} className="text-center py-12 text-muted-foreground">
                     Belum ada kategori. {(!categories || categories.length === 0) && "Klik 'Ambil dari Menu' untuk memulai."}
                   </TableCell>
                 </TableRow>
               ) : (
-                filteredCategories.map((category, index) => {
-                  const itemCount = categoryUsage[category.name] || 0;
+                displayCategories.map((category, index) => {
                   return (
-                    <TableRow key={category.id}>
+                    <TableRow key={category.id} className={!category.isFromDb ? "bg-destructive/5" : ""}>
                       <TableCell className="text-muted-foreground font-mono text-xs">{index + 1}</TableCell>
                       <TableCell className="font-medium">
                         <div className="flex items-center gap-2">
@@ -236,39 +277,63 @@ export default function AdminCategoriesPage() {
                         </div>
                       </TableCell>
                       <TableCell className="text-center">
-                        <span className={`inline-flex items-center justify-center min-w-[2rem] px-2 py-0.5 rounded-full text-xs font-bold ${itemCount > 0 ? 'bg-primary/10 text-primary' : 'bg-destructive/10 text-destructive'}`}>
-                          {itemCount}
+                        <span className={`inline-flex items-center justify-center min-w-[2rem] px-2 py-0.5 rounded-full text-xs font-bold ${category.itemCount > 0 ? 'bg-primary/10 text-primary' : 'bg-destructive/10 text-destructive'}`}>
+                          {category.itemCount}
                         </span>
+                      </TableCell>
+                      <TableCell>
+                        {category.isFromDb ? (
+                          <Badge variant="outline" className="text-green-600 border-green-200 bg-green-50 gap-1">
+                            <CheckCircle2 className="h-3 w-3" /> Terdaftar
+                          </Badge>
+                        ) : (
+                          <Badge variant="destructive" className="gap-1 animate-pulse">
+                            <AlertCircle className="h-3 w-3" /> Belum Terdaftar
+                          </Badge>
+                        )}
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-2">
-                          <Dialog open={isEditing?.id === category.id} onOpenChange={(open) => !open && setIsEditing(null)}>
-                            <DialogTrigger asChild>
-                              <Button variant="ghost" size="icon" onClick={() => setIsEditing(category)}>
-                                <Pencil className="h-4 w-4" />
+                          {!category.isFromDb ? (
+                            <Button 
+                              size="sm" 
+                              variant="secondary" 
+                              className="h-8 text-xs font-bold"
+                              onClick={() => handleRegisterOrphan(category.name)}
+                            >
+                              Daftarkan
+                            </Button>
+                          ) : (
+                            <>
+                              <Dialog open={isEditing?.id === category.id} onOpenChange={(open) => !open && setIsEditing(null)}>
+                                <DialogTrigger asChild>
+                                  <Button variant="ghost" size="icon" onClick={() => setIsEditing(category)}>
+                                    <Pencil className="h-4 w-4" />
+                                  </Button>
+                                </DialogTrigger>
+                                <DialogContent className="sm:max-w-[425px]">
+                                  <DialogHeader>
+                                    <DialogTitle>Edit Kategori</DialogTitle>
+                                    <DialogDescription>Ubah nama kategori.</DialogDescription>
+                                  </DialogHeader>
+                                  <form onSubmit={handleSave} className="space-y-4">
+                                    <div className="grid gap-4 py-4">
+                                      <div className="grid gap-2">
+                                        <Label htmlFor="edit-name">Nama Kategori</Label>
+                                        <Input id="edit-name" name="name" defaultValue={category.name} required />
+                                      </div>
+                                    </div>
+                                    <DialogFooter>
+                                      <Button type="submit" className="w-full">Simpan Perubahan</Button>
+                                    </DialogFooter>
+                                  </form>
+                                </DialogContent>
+                              </Dialog>
+                              <Button variant="ghost" size="icon" className="text-destructive" onClick={() => handleDelete(category.id)}>
+                                <Trash2 className="h-4 w-4" />
                               </Button>
-                            </DialogTrigger>
-                            <DialogContent className="sm:max-w-[425px]">
-                              <DialogHeader>
-                                <DialogTitle>Edit Kategori</DialogTitle>
-                                <DialogDescription>Ubah nama kategori.</DialogDescription>
-                              </DialogHeader>
-                              <form onSubmit={handleSave} className="space-y-4">
-                                <div className="grid gap-4 py-4">
-                                  <div className="grid gap-2">
-                                    <Label htmlFor="edit-name">Nama Kategori</Label>
-                                    <Input id="edit-name" name="name" defaultValue={category.name} required />
-                                  </div>
-                                </div>
-                                <DialogFooter>
-                                  <Button type="submit" className="w-full">Simpan Perubahan</Button>
-                                </DialogFooter>
-                              </form>
-                            </DialogContent>
-                          </Dialog>
-                          <Button variant="ghost" size="icon" className="text-destructive" onClick={() => handleDelete(category.id)}>
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
+                            </>
+                          )}
                         </div>
                       </TableCell>
                     </TableRow>

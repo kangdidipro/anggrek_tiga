@@ -104,16 +104,18 @@ export default function AdminMenuPage() {
     setCurrentPage(1);
   }, [searchTerm, nameFilter, categoryFilter, vendorFilter]);
 
-  // Unique values for dropdown filters - Only show categories that HAVE products
+  // Unique values for dropdown filters
   const uniqueNames = useMemo(() => {
     if (!menuItems) return [];
     return Array.from(new Set(menuItems.map(i => i.name))).sort();
   }, [menuItems]);
 
-  const uniqueCategories = useMemo(() => {
-    if (!menuItems) return [];
-    return Array.from(new Set(menuItems.map(i => i.category))).filter(Boolean).sort();
-  }, [menuItems]);
+  // COMBINED CATEGORIES: Master DB Categories + any orphan categories in products
+  const filterCategories = useMemo(() => {
+    const dbSet = new Set(dbCategories?.map(c => c.name.trim()) || []);
+    const itemSet = new Set(menuItems?.map(i => i.category.trim()) || []);
+    return Array.from(new Set([...dbSet, ...itemSet])).filter(Boolean).sort();
+  }, [dbCategories, menuItems]);
 
   const uniqueVendors = useMemo(() => {
     if (!vendors) return [];
@@ -147,7 +149,7 @@ export default function AdminMenuPage() {
         item.vendor.toLowerCase().includes(search);
       
       const matchesName = nameFilter === 'all' || item.name === nameFilter;
-      const matchesCategory = categoryFilter === 'all' || item.category === categoryFilter;
+      const matchesCategory = categoryFilter === 'all' || item.category.trim() === categoryFilter;
       const matchesVendor = vendorFilter === 'all' || item.vendor === vendorFilter;
 
       return matchesSearch && matchesName && matchesCategory && matchesVendor;
@@ -264,10 +266,10 @@ export default function AdminMenuPage() {
     
     const productData: Product = {
       id: isEditing?.id || (Math.floor(Math.random() * 10000) + 1000).toString(),
-      name: formData.get('name') as string,
+      name: (formData.get('name') as string).trim(),
       price: Number(formData.get('price')),
-      sku: formData.get('sku') as string,
-      category: formData.get('category') as string,
+      sku: (formData.get('sku') as string).trim(),
+      category: (formData.get('category') as string).trim(),
       vendor: formData.get('vendor') as string,
       stock: Math.max(0, stockValue),
       isActive: isEditing ? isEditing.isActive : true,
@@ -363,11 +365,11 @@ export default function AdminMenuPage() {
           if (name && price && sku) {
             const productData: Product = {
               id: (Math.floor(Math.random() * 100000) + 10000).toString(),
-              name: String(name),
+              name: String(name).trim(),
               price: price,
-              sku: sku,
-              category: String(category),
-              vendor: String(vendor),
+              sku: sku.trim(),
+              category: String(category).trim(),
+              vendor: String(vendor).trim(),
               stock: Math.max(0, stock),
               isActive: true,
             };
@@ -636,7 +638,7 @@ export default function AdminMenuPage() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Semua Kategori</SelectItem>
-                {uniqueCategories.map(cat => (
+                {filterCategories.map(cat => (
                   <SelectItem key={cat} value={cat}>{cat}</SelectItem>
                 ))}
               </SelectContent>
