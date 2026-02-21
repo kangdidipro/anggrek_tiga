@@ -31,7 +31,7 @@ const TABLES = [
   { id: 'customers', label: 'Data Pelanggan', description: 'Profil warga yang pernah memesan.' },
   { id: 'orders', label: 'Data Pesanan', description: 'Riwayat pesanan (Orders).' },
   { id: 'orderItems', label: 'Detail Pesanan', description: 'Rincian item di dalam pesanan.' },
-  { id: 'settings', label: 'Pengaturan Sistem', description: 'Konfigurasi SMTP & Stok Default.' },
+  { id: 'settings', label: 'Pengaturan Sistem', description: 'Konfigurasi SMTP & Parameter.' },
 ];
 
 export default function AdminSettingsPage() {
@@ -40,7 +40,7 @@ export default function AdminSettingsPage() {
   const [isDeleting, setIsDeleting] = useState(false);
   const [isSavingEmail, setIsSavingEmail] = useState(false);
   const [isTestingEmail, setIsTestingEmail] = useState(false);
-  const [isSavingStok, setIsSavingStok] = useState(false);
+  const [isSavingParams, setIsSavingParams] = useState(false);
   const [isBackingUp, setIsBackingUp] = useState(false);
   const [isRestoring, setIsRestoring] = useState(false);
   const restoreFileInputRef = useRef<HTMLInputElement>(null);
@@ -58,8 +58,9 @@ export default function AdminSettingsPage() {
     from: '',
   });
 
-  // Inventory Settings State
+  // Global Parameters State
   const [defaultStock, setDefaultStock] = useState<number>(20);
+  const [adminFee, setAdminFee] = useState<number>(10);
 
   // Load Email Settings from Firestore
   const mailDocRef = useMemoFirebase(() => {
@@ -68,12 +69,12 @@ export default function AdminSettingsPage() {
   }, [firestore]);
   const { data: savedMailSettings, isLoading: isLoadingMail } = useDoc<SmtpConfig>(mailDocRef);
 
-  // Load Inventory Settings from Firestore
-  const invDocRef = useMemoFirebase(() => {
+  // Load Inventory/Params Settings from Firestore
+  const paramsDocRef = useMemoFirebase(() => {
     if (!firestore) return null;
     return doc(firestore, 'settings', 'inventory');
   }, [firestore]);
-  const { data: savedInvSettings, isLoading: isLoadingInv } = useDoc<{ defaultStock: number }>(invDocRef);
+  const { data: savedParams, isLoading: isLoadingParams } = useDoc<{ defaultStock: number, adminFee?: number }>(paramsDocRef);
 
   useEffect(() => {
     if (savedMailSettings) {
@@ -88,10 +89,11 @@ export default function AdminSettingsPage() {
   }, [savedMailSettings]);
 
   useEffect(() => {
-    if (savedInvSettings) {
-      setDefaultStock(savedInvSettings.defaultStock ?? 20);
+    if (savedParams) {
+      setDefaultStock(savedParams.defaultStock ?? 20);
+      setAdminFee(savedParams.adminFee ?? 10);
     }
-  }, [savedInvSettings]);
+  }, [savedParams]);
 
   const handleSaveEmailSettings = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -115,17 +117,17 @@ export default function AdminSettingsPage() {
     }
   };
 
-  const handleSaveStokSettings = async (e: React.FormEvent) => {
+  const handleSaveParams = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!firestore) return;
     
-    setIsSavingStok(true);
-    const data = { defaultStock };
+    setIsSavingParams(true);
+    const data = { defaultStock, adminFee };
     try {
-      await setDoc(doc(firestore, 'settings', 'inventory'), data);
+      await setDoc(doc(firestore, 'settings', 'inventory'), data, { merge: true });
       toast({
-        title: "Stok Default Disimpan",
-        description: "Nilai stok default telah diperbarui.",
+        title: "Parameter Disimpan",
+        description: "Nilai stok default dan persentase admin telah diperbarui.",
       });
     } catch (error: any) {
       errorEmitter.emit('permission-error', new FirestorePermissionError({
@@ -134,7 +136,7 @@ export default function AdminSettingsPage() {
         requestResourceData: data
       }));
     } finally {
-      setIsSavingStok(false);
+      setIsSavingParams(false);
     }
   };
 
@@ -310,7 +312,6 @@ export default function AdminSettingsPage() {
       const batch = writeBatch(firestore);
       
       if (actionTarget.id === 'ALL') {
-        // Clear all tables EXCEPT settings
         const allPaths = TABLES.filter(t => t.id !== 'settings').map(t => t.id);
         for (const path of allPaths) {
           let q;
@@ -323,7 +324,6 @@ export default function AdminSettingsPage() {
           snapshot.docs.forEach(d => batch.delete(d.ref));
         }
       } else {
-        // Clear specific table
         let q;
         if (['orders', 'orderItems'].includes(actionTarget.id)) {
           q = query(collectionGroup(firestore, actionTarget.id));
@@ -349,7 +349,7 @@ export default function AdminSettingsPage() {
     }
   };
 
-  if (isLoadingMail || isLoadingInv) {
+  if (isLoadingMail || isLoadingParams) {
     return <div className="flex h-full items-center justify-center p-24"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
   }
 
@@ -357,7 +357,7 @@ export default function AdminSettingsPage() {
     <div className="space-y-6">
       <div>
         <h1 className="text-3xl font-bold tracking-tight font-headline">Pengaturan Sistem</h1>
-        <p className="text-muted-foreground">Kelola konfigurasi pengiriman email, pemeliharaan basis data, dan pencadangan.</p>
+        <p className="text-muted-foreground">Kelola konfigurasi pengiriman email, parameter operasional, dan pemeliharaan data.</p>
       </div>
 
       <Tabs defaultValue="mail" className="w-full">
@@ -366,9 +366,9 @@ export default function AdminSettingsPage() {
             <Mail className="h-4 w-4" />
             Mail Server
           </TabsTrigger>
-          <TabsTrigger value="stok" className="flex items-center gap-2">
+          <TabsTrigger value="params" className="flex items-center gap-2">
             <Package className="h-4 w-4" />
-            Set Stok
+            Set Parameter
           </TabsTrigger>
           <TabsTrigger value="data" className="flex items-center gap-2">
             <Database className="h-4 w-4" />
@@ -477,30 +477,62 @@ export default function AdminSettingsPage() {
           </Card>
         </TabsContent>
 
-        <TabsContent value="stok" className="space-y-4 pt-4">
+        <TabsContent value="params" className="space-y-4 pt-4">
           <Card>
             <CardHeader>
-              <CardTitle>Pengaturan Stok Default</CardTitle>
+              <CardTitle>Parameter Operasional</CardTitle>
               <CardDescription>
-                Tentukan angka stok default yang akan digunakan saat melakukan "Reset Stok" di halaman Manajemen Menu.
+                Tentukan nilai-nilai dasar yang digunakan untuk operasional harian.
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <form onSubmit={handleSaveStokSettings} className="space-y-4">
-                <div className="max-w-xs space-y-2">
-                  <Label htmlFor="default-stock">Angka Stok Default</Label>
-                  <Input 
-                    id="default-stock" 
-                    type="number" 
-                    min="0"
-                    value={defaultStock} 
-                    onChange={(e) => setDefaultStock(Number(e.target.value))}
-                    placeholder="Contoh: 20" 
-                  />
+              <form onSubmit={handleSaveParams} className="space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-2xl">
+                  <div className="space-y-2 p-4 border rounded-lg bg-muted/10">
+                    <Label htmlFor="default-stock" className="font-bold flex items-center gap-2">
+                      <Package className="h-4 w-4 text-primary" />
+                      Angka Stok Default
+                    </Label>
+                    <Input 
+                      id="default-stock" 
+                      type="number" 
+                      min="0"
+                      value={defaultStock} 
+                      onChange={(e) => setDefaultStock(Number(e.target.value))}
+                      placeholder="Contoh: 20" 
+                    />
+                    <p className="text-[10px] text-muted-foreground">
+                      Digunakan saat melakukan "Reset Stok" di halaman Manajemen Menu.
+                    </p>
+                  </div>
+
+                  <div className="space-y-2 p-4 border rounded-lg bg-muted/10">
+                    <Label htmlFor="admin-fee" className="font-bold flex items-center gap-2 text-destructive">
+                      <AlertTriangle className="h-4 w-4" />
+                      Potongan Admin (%)
+                    </Label>
+                    <div className="relative">
+                      <Input 
+                        id="admin-fee" 
+                        type="number" 
+                        min="0"
+                        max="100"
+                        value={adminFee} 
+                        onChange={(e) => setAdminFee(Number(e.target.value))}
+                        placeholder="Contoh: 10" 
+                        className="pr-8"
+                      />
+                      <span className="absolute right-3 top-1/2 -translate-y-1/2 font-bold text-muted-foreground">%</span>
+                    </div>
+                    <p className="text-[10px] text-muted-foreground">
+                      Persentase biaya administrasi yang dipotong dari total penjualan kotor per mitra.
+                    </p>
+                  </div>
                 </div>
-                <Button type="submit" disabled={isSavingStok}>
-                  {isSavingStok ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-                  Simpan Stok Default
+                
+                <Button type="submit" disabled={isSavingParams} className="w-full md:w-auto px-12">
+                  {isSavingParams ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+                  Simpan Semua Parameter
                 </Button>
               </form>
             </CardContent>

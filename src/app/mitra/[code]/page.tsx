@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useMemo } from 'react';
-import { useFirestore, useCollection, useMemoFirebase, useUser, errorEmitter, FirestorePermissionError } from '@/firebase';
+import { useFirestore, useCollection, useMemoFirebase, useUser, errorEmitter, FirestorePermissionError, useDoc } from '@/firebase';
 import { collectionGroup, getDocs, query, collection, where, doc, updateDoc, arrayUnion, setDoc, deleteDoc } from 'firebase/firestore';
 import { useParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
@@ -75,6 +75,15 @@ export default function MitraOrderPage() {
   const [isUpdatingStatus, setIsUpdatingStatus] = useState<string | null>(null);
   const { toast } = useToast();
 
+  // Load Global Params for dynamic Admin Fee
+  const settingsDocRef = useMemoFirebase(() => {
+    if (!firestore) return null;
+    return doc(firestore, 'settings', 'inventory');
+  }, [firestore]);
+  const { data: settings } = useDoc<{ adminFee?: number }>(settingsDocRef);
+  const adminFeePercent = settings?.adminFee ?? 10;
+  const adminFeeMultiplier = adminFeePercent / 100;
+
   // Product Management State
   const [isEditingProduct, setIsEditingProduct] = useState<Product | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string>('');
@@ -147,10 +156,10 @@ export default function MitraOrderPage() {
     const bruto = filteredOrders.reduce((acc, order) => 
       acc + order.items.reduce((sum, item) => sum + (item.quantity * item.priceAtOrder), 0), 0
     );
-    const admin = bruto * 0.10;
+    const admin = bruto * adminFeeMultiplier;
     const netto = bruto - admin;
     return { bruto, admin, netto };
-  }, [filteredOrders]);
+  }, [filteredOrders, adminFeeMultiplier]);
 
   const handleUpdateStatus = async (order: Order, newStatus: string) => {
     if (!firestore || isUpdatingStatus) return;
@@ -186,7 +195,6 @@ export default function MitraOrderPage() {
       });
   };
 
-  // Product Management Logic
   const handleEditProduct = (product: Product) => {
     setIsEditingProduct(product);
     setPreviewUrl(product.imageUrl || '');
@@ -253,7 +261,7 @@ export default function MitraOrderPage() {
     let y = 10;
     const itemsToPrint = order.items;
     const bruto = itemsToPrint.reduce((sum, item) => sum + (item.priceAtOrder * item.quantity), 0);
-    const admin = bruto * 0.10;
+    const admin = bruto * adminFeeMultiplier;
     const netto = bruto - admin;
 
     docPdf.setFontSize(12);
@@ -284,6 +292,19 @@ export default function MitraOrderPage() {
     docPdf.text("NETTO DITERIMA:", 5, y);
     docPdf.text(`${formatPrice(netto)}`, 75, y, { align: 'right' });
     docPdf.save(`slip_${order.id}_${code}.pdf`);
+  };
+
+  const getStatusBadgeColor = (status: string) => {
+    switch (status) {
+      case 'Dipesan': return 'bg-yellow-500 hover:bg-yellow-600';
+      case 'Dibayar': return 'bg-orange-500 hover:bg-orange-600';
+      case 'Diproses': return 'bg-blue-500 hover:bg-blue-600';
+      case 'Dikumpulkan': return 'bg-purple-500 hover:bg-purple-600';
+      case 'Dikirim': 
+      case 'Dikirim dan Bayar': return 'bg-green-600 hover:bg-green-700';
+      case 'Dibatalkan': return 'bg-destructive hover:bg-destructive/90';
+      default: return 'bg-gray-500 hover:bg-gray-600';
+    }
   };
 
   if (isLoading || isVendorLoading || isAuthLoading || isProductsLoading) {
@@ -349,7 +370,7 @@ export default function MitraOrderPage() {
             </Card>
             <Card className="bg-green-500/5 border-green-500/20">
               <CardContent className="p-4 text-center">
-                <p className="text-xs font-bold text-green-600 uppercase mb-1">Netto Diterima</p>
+                <p className="text-xs font-bold text-green-600 uppercase mb-1">Netto ({100 - adminFeePercent}%)</p>
                 <p className="text-2xl font-bold text-green-600">{formatPrice(financialSummary.netto)}</p>
               </CardContent>
             </Card>
@@ -364,7 +385,7 @@ export default function MitraOrderPage() {
             <Accordion type="single" collapsible className="w-full space-y-4">
               {filteredOrders.map((order) => {
                 const orderBruto = order.items.reduce((sum, item) => sum + (item.quantity * item.priceAtOrder), 0);
-                const orderAdmin = orderBruto * 0.10;
+                const orderAdmin = orderBruto * adminFeeMultiplier;
                 const orderNetto = orderBruto - orderAdmin;
                 const vStatus = order.vendorStatuses?.[code] || { status: 'Dipesan', statusHistory: [] };
                 const flow = STATUS_FLOWS[order.paymentMethod];
