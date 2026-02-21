@@ -1,8 +1,7 @@
-
 'use client';
 
 import { useState, useMemo, useRef, useEffect } from 'react';
-import { useFirestore, useCollection, useMemoFirebase, useDoc } from '@/firebase';
+import { useFirestore, useCollection, useMemoFirebase, useDoc, errorEmitter, FirestorePermissionError } from '@/firebase';
 import { collection, doc, deleteDoc, setDoc, writeBatch, updateDoc } from 'firebase/firestore';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -55,6 +54,10 @@ export default function AdminMenuPage() {
   const [isUpdatingBulk, setIsUpdatingBulk] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   
+  // Form Control State for Dialogs
+  const [selectedCategory, setSelectedCategory] = useState<string>('');
+  const [selectedVendor, setSelectedVendor] = useState<string>('');
+
   // Selection State
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
@@ -121,6 +124,17 @@ export default function AdminMenuPage() {
     if (!vendors) return [];
     return vendors.map(v => v.code).sort();
   }, [vendors]);
+
+  // Reset Form State when Dialog opens
+  useEffect(() => {
+    if (isAdding) {
+      setSelectedCategory('');
+      setSelectedVendor('');
+    } else if (isEditing) {
+      setSelectedCategory(isEditing.category);
+      setSelectedVendor(isEditing.vendor);
+    }
+  }, [isAdding, isEditing]);
 
   // Handle Sort Toggle
   const handleSort = (key: keyof Product) => {
@@ -198,15 +212,21 @@ export default function AdminMenuPage() {
 
   const handleDelete = async (id: string) => {
     if (!firestore) return;
-    try {
-      await deleteDoc(doc(firestore, 'menuItems', id));
-      toast({ title: "Berhasil", description: "Menu telah dihapus." });
-      const newSelected = new Set(selectedIds);
-      newSelected.delete(id);
-      setSelectedIds(newSelected);
-    } catch (error) {
-      toast({ variant: "destructive", title: "Gagal", description: "Tidak dapat menghapus menu." });
-    }
+    const itemRef = doc(firestore, 'menuItems', id);
+    
+    deleteDoc(itemRef)
+      .then(() => {
+        toast({ title: "Berhasil", description: "Menu telah dihapus." });
+        const newSelected = new Set(selectedIds);
+        newSelected.delete(id);
+        setSelectedIds(newSelected);
+      })
+      .catch(async (error) => {
+        errorEmitter.emit('permission-error', new FirestorePermissionError({
+          path: itemRef.path,
+          operation: 'delete'
+        }));
+      });
   };
 
   const handleBulkDelete = async () => {
@@ -257,7 +277,7 @@ export default function AdminMenuPage() {
     }
   };
 
-  const handleSave = async (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSave = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!firestore) return;
 
@@ -266,36 +286,55 @@ export default function AdminMenuPage() {
     
     const productData: Product = {
       id: isEditing?.id || (Math.floor(Math.random() * 10000) + 1000).toString(),
-      name: (formData.get('name') as string).trim(),
+      name: (formData.get('name')?.toString() || '').trim(),
       price: Number(formData.get('price')),
-      sku: (formData.get('sku') as string).trim(),
-      category: (formData.get('category') as string).trim(),
-      vendor: formData.get('vendor') as string,
+      sku: (formData.get('sku')?.toString() || '').trim(),
+      category: selectedCategory.trim(),
+      vendor: selectedVendor,
       stock: Math.max(0, stockValue),
       isActive: isEditing ? isEditing.isActive : true,
     };
 
-    try {
-      await setDoc(doc(firestore, 'menuItems', productData.id), productData, { merge: true });
-      toast({ title: "Berhasil", description: "Menu telah disimpan." });
-      setIsEditing(null);
-      setIsAdding(false);
-    } catch (error) {
-      toast({ variant: "destructive", title: "Gagal", description: "Tidak dapat menyimpan menu." });
+    if (!productData.name || isNaN(productData.price) || !productData.sku || !productData.category || !productData.vendor) {
+      toast({ variant: "destructive", title: "Data Tidak Lengkap", description: "Pastikan semua kolom bintang (*) telah diisi dengan benar." });
+      return;
     }
+
+    const itemRef = doc(firestore, 'menuItems', productData.id);
+    
+    setDoc(itemRef, productData, { merge: true })
+      .then(() => {
+        toast({ title: "Berhasil", description: "Menu telah disimpan." });
+        setIsEditing(null);
+        setIsAdding(false);
+      })
+      .catch(async (error) => {
+        errorEmitter.emit('permission-error', new FirestorePermissionError({
+          path: itemRef.path,
+          operation: 'write',
+          requestResourceData: productData
+        }));
+      });
   };
 
   const handleToggleStatus = async (id: string, isActive: boolean) => {
     if (!firestore) return;
-    try {
-      await updateDoc(doc(firestore, 'menuItems', id), { isActive });
-      toast({
-        title: "Status Diperbarui",
-        description: `Menu kini dalam status ${isActive ? 'Aktif' : 'Tidak Tersedia'}.`,
+    const itemRef = doc(firestore, 'menuItems', id);
+    
+    updateDoc(itemRef, { isActive })
+      .then(() => {
+        toast({
+          title: "Status Diperbarui",
+          description: `Menu kini dalam status ${isActive ? 'Aktif' : 'Tidak Tersedia'}.`,
+        });
+      })
+      .catch(async (error) => {
+        errorEmitter.emit('permission-error', new FirestorePermissionError({
+          path: itemRef.path,
+          operation: 'update',
+          requestResourceData: { isActive }
+        }));
       });
-    } catch (error) {
-      toast({ variant: "destructive", title: "Gagal", description: "Gagal memperbarui status menu." });
-    }
   };
 
   const handleResetStock = async () => {
@@ -327,9 +366,12 @@ export default function AdminMenuPage() {
     if (!firestore) return;
     setIsSeeding(true);
     try {
+      const batch = writeBatch(firestore);
       for (const product of initialProducts) {
-        await setDoc(doc(firestore, 'menuItems', product.id), { ...product, isActive: true });
+        const ref = doc(firestore, 'menuItems', product.id);
+        batch.set(ref, { ...product, isActive: true });
       }
+      await batch.commit();
       toast({ title: "Berhasil", description: "Menu default telah diunggah." });
     } catch (error) {
       toast({ variant: "destructive", title: "Gagal", description: "Gagal mengunggah menu default." });
@@ -352,6 +394,7 @@ export default function AdminMenuPage() {
         const worksheet = workbook.Sheets[firstSheetName];
         const jsonData = XLSX.utils.sheet_to_json(worksheet) as any[];
 
+        const batch = writeBatch(firestore);
         let importedCount = 0;
 
         for (const row of jsonData) {
@@ -363,8 +406,9 @@ export default function AdminMenuPage() {
           const vendor = row['Mitra'] || row['Vendor'] || (sku.includes('-') ? sku.split('-')[0] : '');
 
           if (name && price && sku) {
+            const id = (Math.floor(Math.random() * 100000) + 10000).toString();
             const productData: Product = {
-              id: (Math.floor(Math.random() * 100000) + 10000).toString(),
+              id,
               name: String(name).trim(),
               price: price,
               sku: sku.trim(),
@@ -373,11 +417,12 @@ export default function AdminMenuPage() {
               stock: Math.max(0, stock),
               isActive: true,
             };
-            await setDoc(doc(firestore, 'menuItems', productData.id), productData);
+            batch.set(doc(firestore, 'menuItems', id), productData);
             importedCount++;
           }
         }
 
+        await batch.commit();
         toast({
           title: "Import Selesai",
           description: `${importedCount} menu berhasil diimport.`,
@@ -537,27 +582,27 @@ export default function AdminMenuPage() {
               <form onSubmit={handleSave} className="space-y-4">
                 <div className="grid gap-4 py-4">
                   <div className="grid gap-2">
-                    <Label htmlFor="name">Nama Menu</Label>
+                    <Label htmlFor="name">Nama Menu *</Label>
                     <Input id="name" name="name" placeholder="Contoh: Nasi Bakar" required />
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div className="grid gap-2">
-                      <Label htmlFor="price">Harga (Rp)</Label>
+                      <Label htmlFor="price">Harga (Rp) *</Label>
                       <Input id="price" name="price" type="number" placeholder="12000" min="0" required />
                     </div>
                     <div className="grid gap-2">
-                      <Label htmlFor="sku">SKU / Kode Produk</Label>
+                      <Label htmlFor="sku">SKU / Kode Produk *</Label>
                       <Input id="sku" name="sku" placeholder="NL-001" required />
                     </div>
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div className="grid gap-2">
-                      <Label htmlFor="stock">Jumlah Stok</Label>
+                      <Label htmlFor="stock">Jumlah Stok *</Label>
                       <Input id="stock" name="stock" type="number" placeholder="20" defaultValue="20" min="0" required />
                     </div>
                     <div className="grid gap-2">
-                      <Label htmlFor="category">Kategori</Label>
-                      <Select name="category" required>
+                      <Label htmlFor="category">Kategori *</Label>
+                      <Select value={selectedCategory} onValueChange={setSelectedCategory} required>
                         <SelectTrigger>
                           <SelectValue placeholder="Pilih Kategori" />
                         </SelectTrigger>
@@ -574,8 +619,8 @@ export default function AdminMenuPage() {
                     </div>
                   </div>
                   <div className="grid gap-2">
-                    <Label htmlFor="vendor">Mitra / Penjual</Label>
-                    <Select name="vendor" required>
+                    <Label htmlFor="vendor">Mitra / Penjual *</Label>
+                    <Select value={selectedVendor} onValueChange={setSelectedVendor} required>
                       <SelectTrigger>
                         <SelectValue placeholder="Pilih Mitra" />
                       </SelectTrigger>
@@ -775,27 +820,27 @@ export default function AdminMenuPage() {
                             <form onSubmit={handleSave} className="space-y-4">
                               <div className="grid gap-4 py-4">
                                 <div className="grid gap-2">
-                                  <Label htmlFor="edit-name">Nama Menu</Label>
+                                  <Label htmlFor="edit-name">Nama Menu *</Label>
                                   <Input id="edit-name" name="name" defaultValue={item.name} required />
                                 </div>
                                 <div className="grid grid-cols-2 gap-4">
                                   <div className="grid gap-2">
-                                    <Label htmlFor="edit-price">Harga (Rp)</Label>
+                                    <Label htmlFor="edit-price">Harga (Rp) *</Label>
                                     <Input id="edit-price" name="price" type="number" defaultValue={item.price} min="0" required />
                                   </div>
                                   <div className="grid gap-2">
-                                    <Label htmlFor="edit-sku">SKU / Kode Produk</Label>
+                                    <Label htmlFor="edit-sku">SKU / Kode Produk *</Label>
                                     <Input id="edit-sku" name="sku" defaultValue={item.sku} required />
                                   </div>
                                 </div>
                                 <div className="grid grid-cols-2 gap-4">
                                   <div className="grid gap-2">
-                                    <Label htmlFor="edit-stock">Jumlah Stok</Label>
+                                    <Label htmlFor="edit-stock">Jumlah Stok *</Label>
                                     <Input id="edit-stock" name="stock" type="number" defaultValue={Math.max(0, item.stock ?? 0)} min="0" required />
                                   </div>
                                   <div className="grid gap-2">
-                                    <Label htmlFor="edit-category">Kategori</Label>
-                                    <Select name="category" defaultValue={item.category} required>
+                                    <Label htmlFor="edit-category">Kategori *</Label>
+                                    <Select value={selectedCategory} onValueChange={setSelectedCategory} required>
                                       <SelectTrigger>
                                         <SelectValue placeholder="Pilih Kategori" />
                                       </SelectTrigger>
@@ -812,8 +857,8 @@ export default function AdminMenuPage() {
                                   </div>
                                 </div>
                                 <div className="grid gap-2">
-                                  <Label htmlFor="edit-vendor">Mitra / Penjual</Label>
-                                  <Select name="vendor" defaultValue={item.vendor} required>
+                                  <Label htmlFor="edit-vendor">Mitra / Penjual *</Label>
+                                  <Select value={selectedVendor} onValueChange={setSelectedVendor} required>
                                     <SelectTrigger>
                                       <SelectValue placeholder="Pilih Mitra" />
                                     </SelectTrigger>
