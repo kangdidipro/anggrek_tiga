@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
@@ -78,15 +77,23 @@ export default function ProductList({ products, vendors }: ProductListProps) {
           className="w-full"
         >
           <TabsList className="flex flex-wrap h-auto bg-transparent gap-2 justify-center py-2 mb-8 border-none ring-0">
-            {categories.map((category) => (
-              <TabsTrigger 
-                key={category} 
-                value={category}
-                className="rounded-full border border-primary/20 bg-card px-4 py-1.5 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:border-primary shadow-sm hover:bg-primary/5 transition-all text-xs md:text-sm h-auto"
-              >
-                {category}
-              </TabsTrigger>
-            ))}
+            {categories.map((category) => {
+              // Calculate count for each category
+              const count = category === 'Semua' 
+                ? filteredProducts.length 
+                : (productsByCategory[category]?.length || 0);
+
+              return (
+                <TabsTrigger 
+                  key={category} 
+                  value={category}
+                  className="rounded-full border border-primary/20 bg-card px-4 py-1.5 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:border-primary shadow-sm hover:bg-primary/5 transition-all text-xs md:text-sm h-auto"
+                >
+                  {category} 
+                  <span className="ml-1 opacity-70 font-mono text-[10px]">({count})</span>
+                </TabsTrigger>
+              );
+            })}
           </TabsList>
 
           {/* Content for "Semua" tab */}
