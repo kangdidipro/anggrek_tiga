@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useMemo } from 'react';
@@ -7,7 +6,7 @@ import { collection, doc, deleteDoc, setDoc, writeBatch } from 'firebase/firesto
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Loader2, Plus, Pencil, Trash2, Search, Tag, RefreshCcw, Eraser, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { Loader2, Plus, Pencil, Trash2, Search, Tag, RefreshCcw, Eraser, AlertCircle, CheckCircle2, CheckSquare } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
@@ -15,6 +14,7 @@ import { Label } from '@/components/ui/label';
 import { products as initialProducts } from '@/lib/products';
 import type { Product } from '@/lib/types';
 import { Badge } from '@/components/ui/badge';
+import { Checkbox } from '@/components/ui/checkbox';
 
 interface Category {
   id: string;
@@ -32,7 +32,9 @@ export default function AdminCategoriesPage() {
   const [isEditing, setIsEditing] = useState<Category | null>(null);
   const [isAdding, setIsAdding] = useState(false);
   const [isSeeding, setIsSeeding] = useState(false);
+  const [isBulkRegistering, setIsBulkRegistering] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   // Fetch Categories from DB
   const categoriesQuery = useMemoFirebase(() => {
@@ -59,13 +61,10 @@ export default function AdminCategoriesPage() {
   }, [menuItems]);
 
   const displayCategories = useMemo((): DisplayCategory[] => {
-    if (!categories) return [];
+    const dbCatNames = new Set(categories?.map(c => c.name.trim().toLowerCase()) || []);
+    const itemCatNames = Object.keys(categoryUsage);
     
-    const dbCatNames = new Set(categories.map(c => c.name.trim()));
-    const itemCatNames = new Set(Object.keys(categoryUsage));
-    
-    // Start with items from DB
-    const list: DisplayCategory[] = categories.map(c => ({
+    const list: DisplayCategory[] = (categories || []).map(c => ({
       ...c,
       isFromDb: true,
       itemCount: categoryUsage[c.name.trim()] || 0
@@ -73,7 +72,7 @@ export default function AdminCategoriesPage() {
     
     // Add "orphan" categories found in products but missing from DB
     itemCatNames.forEach(name => {
-      if (name && !dbCatNames.has(name)) {
+      if (name && !dbCatNames.has(name.trim().toLowerCase())) {
         list.push({
           id: `missing-${name}`,
           name: name,
@@ -88,6 +87,30 @@ export default function AdminCategoriesPage() {
     ).sort((a, b) => a.name.localeCompare(b.name));
   }, [categories, categoryUsage, searchTerm]);
 
+  // Orphans currently visible
+  const orphanIds = useMemo(() => 
+    new Set(displayCategories.filter(c => !c.isFromDb).map(c => c.id)),
+    [displayCategories]
+  );
+
+  const toggleSelectAll = () => {
+    if (selectedIds.size === orphanIds.size && orphanIds.size > 0) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(orphanIds));
+    }
+  };
+
+  const toggleSelect = (id: string) => {
+    const newSelected = new Set(selectedIds);
+    if (newSelected.has(id)) {
+      newSelected.delete(id);
+    } else {
+      newSelected.add(id);
+    }
+    setSelectedIds(newSelected);
+  };
+
   const handleDelete = async (id: string) => {
     if (!firestore) return;
     try {
@@ -100,12 +123,34 @@ export default function AdminCategoriesPage() {
 
   const handleRegisterOrphan = async (name: string) => {
     if (!firestore) return;
-    const id = (Math.floor(Math.random() * 1000) + 100).toString();
+    const id = (Math.floor(Math.random() * 10000) + 1000).toString();
     try {
       await setDoc(doc(firestore, 'categories', id), { id, name });
       toast({ title: "Berhasil", description: `Kategori "${name}" telah didaftarkan ke Master.` });
     } catch (error) {
       toast({ variant: "destructive", title: "Gagal", description: "Gagal mendaftarkan kategori." });
+    }
+  };
+
+  const handleBulkRegister = async () => {
+    if (!firestore || selectedIds.size === 0) return;
+    setIsBulkRegistering(true);
+    try {
+      const batch = writeBatch(firestore);
+      selectedIds.forEach(id => {
+        const cat = displayCategories.find(c => c.id === id);
+        if (cat && !cat.isFromDb) {
+          const newId = (Math.floor(Math.random() * 10000) + 1000).toString();
+          batch.set(doc(firestore, 'categories', newId), { id: newId, name: cat.name });
+        }
+      });
+      await batch.commit();
+      toast({ title: "Berhasil", description: `${selectedIds.size} kategori baru telah didaftarkan.` });
+      setSelectedIds(new Set());
+    } catch (error) {
+      toast({ variant: "destructive", title: "Gagal", description: "Gagal mendaftarkan kategori secara masal." });
+    } finally {
+      setIsBulkRegistering(false);
     }
   };
 
@@ -145,7 +190,7 @@ export default function AdminCategoriesPage() {
     const categoryName = (formData.get('name') as string).trim();
     
     const categoryData: Category = {
-      id: isEditing?.id || (Math.floor(Math.random() * 1000) + 100).toString(),
+      id: isEditing?.id || (Math.floor(Math.random() * 10000) + 1000).toString(),
       name: categoryName,
     };
 
@@ -193,6 +238,18 @@ export default function AdminCategoriesPage() {
           <p className="text-muted-foreground">Kelola daftar kategori menu takjil.</p>
         </div>
         <div className="flex flex-wrap gap-2">
+          {selectedIds.size > 0 && (
+            <Button 
+              variant="default" 
+              size="sm" 
+              onClick={handleBulkRegister} 
+              disabled={isBulkRegistering}
+              className="bg-orange-600 hover:bg-orange-700 shadow-sm animate-in fade-in slide-in-from-right-2"
+            >
+              {isBulkRegistering ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckSquare className="mr-2 h-4 w-4" />}
+              Daftarkan Terpilih ({selectedIds.size})
+            </Button>
+          )}
           <Button 
             variant="outline" 
             size="sm" 
@@ -251,6 +308,13 @@ export default function AdminCategoriesPage() {
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead className="w-[50px]">
+                  <Checkbox 
+                    checked={orphanIds.size > 0 && selectedIds.size === orphanIds.size}
+                    onCheckedChange={toggleSelectAll}
+                    disabled={orphanIds.size === 0}
+                  />
+                </TableHead>
                 <TableHead className="w-[60px]">No.</TableHead>
                 <TableHead>Nama Kategori</TableHead>
                 <TableHead className="text-center">Jumlah Menu</TableHead>
@@ -261,7 +325,7 @@ export default function AdminCategoriesPage() {
             <TableBody>
               {displayCategories.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={5} className="text-center py-12 text-muted-foreground">
+                  <TableCell colSpan={6} className="text-center py-12 text-muted-foreground">
                     Belum ada kategori. {(!categories || categories.length === 0) && "Klik 'Ambil dari Menu' untuk memulai."}
                   </TableCell>
                 </TableRow>
@@ -269,6 +333,14 @@ export default function AdminCategoriesPage() {
                 displayCategories.map((category, index) => {
                   return (
                     <TableRow key={category.id} className={!category.isFromDb ? "bg-destructive/5" : ""}>
+                      <TableCell>
+                        {!category.isFromDb && (
+                          <Checkbox 
+                            checked={selectedIds.has(category.id)}
+                            onCheckedChange={() => toggleSelect(category.id)}
+                          />
+                        )}
+                      </TableCell>
                       <TableCell className="text-muted-foreground font-mono text-xs">{index + 1}</TableCell>
                       <TableCell className="font-medium">
                         <div className="flex items-center gap-2">
