@@ -2,8 +2,8 @@
 
 import type { CartItem, Product } from '@/lib/types';
 import React, { createContext, useState, useEffect, useCallback, useMemo } from 'react';
-import { getVendorFromSku } from '@/lib/utils';
-import { deliveryFee } from '@/lib/constants';
+import { useFirestore, useDoc, useMemoFirebase } from '@/firebase';
+import { doc } from 'firebase/firestore';
 
 interface CartContextType {
   cartItems: CartItem[];
@@ -21,6 +21,7 @@ export const CartContext = createContext<CartContextType | undefined>(undefined)
 const isBrowser = typeof window !== 'undefined';
 
 export function CartProvider({ children }: { children: React.ReactNode }) {
+  const firestore = useFirestore();
   const [cartItems, setCartItems] = useState<CartItem[]>(() => {
     if (!isBrowser) return [];
     try {
@@ -31,6 +32,14 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       return [];
     }
   });
+
+  // Fetch Delivery Fee from DB
+  const settingsDocRef = useMemoFirebase(() => {
+    if (!firestore) return null;
+    return doc(firestore, 'settings', 'inventory');
+  }, [firestore]);
+  const { data: settings } = useDoc<{ deliveryFee?: number }>(settingsDocRef);
+  const deliveryFeeBase = settings?.deliveryFee ?? 2500;
 
   useEffect(() => {
     if (!isBrowser) return;
@@ -77,13 +86,12 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   const cartTotal = cartItems.reduce((total, item) => total + item.product.price * item.quantity, 0);
   
   /**
-   * Hitung total ongkir.
-   * Kembali ke logika 1 order 1 biaya ongkir flat.
+   * Hitung total ongkir dinamis dari database.
    */
   const deliveryFeeTotal = useMemo(() => {
     if (cartItems.length === 0) return 0;
-    return deliveryFee;
-  }, [cartItems]);
+    return deliveryFeeBase;
+  }, [cartItems, deliveryFeeBase]);
 
   const value = {
     cartItems,

@@ -230,8 +230,8 @@ export default function OrdersPage() {
             
             docPdf.text("-".repeat(40), centerPos, y, { align: 'center' });
             y += 6;
-            // Kembali ke 1 order 1 biaya ongkir flat
-            const calculatedDeliveryFee = 2500;
+            
+            const calculatedDeliveryFee = order.deliveryFee || 2500;
             docPdf.text(`Ongkos Antar (Flat):`, 5, y);
             docPdf.text(`${formatPrice(calculatedDeliveryFee)}`, 75, y, { align: 'right' });
             y += 6;

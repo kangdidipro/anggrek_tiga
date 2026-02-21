@@ -374,7 +374,8 @@ export default function AdminOrdersPage() {
     
     const subtotal = itemsToPrint.reduce((sum, item) => sum + (item.priceAtOrder * item.quantity), 0);
     
-    const calculatedDeliveryFee = 2500;
+    // Use stored delivery fee or fallback to default
+    const calculatedDeliveryFee = order.deliveryFee || 2500;
     const totalToPrint = vendorCode ? subtotal : (subtotal + calculatedDeliveryFee);
 
     docPdf.setFontSize(12);
@@ -441,6 +442,7 @@ export default function AdminOrdersPage() {
     docPdf.setFontSize(10);
     docPdf.text(vendorCode ? "SUBTOTAL MITRA:" : "TOTAL BAYAR:", 5, y);
     docPdf.text(`${formatPrice(totalToPrint)}`, 75, y, { align: 'right' });
+    
     y += 10;
     
     docPdf.setFontSize(8);

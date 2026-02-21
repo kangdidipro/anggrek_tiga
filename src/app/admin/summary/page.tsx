@@ -151,14 +151,15 @@ export default function AdminSummaryPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
 
-  // Load Params for dynamic Admin Fee
+  // Load Params for dynamic Admin Fee & Delivery Fee
   const settingsDocRef = useMemoFirebase(() => {
     if (!firestore) return null;
     return doc(firestore, 'settings', 'inventory');
   }, [firestore]);
-  const { data: settings } = useDoc<{ adminFee?: number }>(settingsDocRef);
+  const { data: settings } = useDoc<{ adminFee?: number, deliveryFee?: number }>(settingsDocRef);
   const adminFeePercent = settings?.adminFee ?? 10;
   const adminFeeMultiplier = adminFeePercent / 100;
+  const globalDeliveryFee = settings?.deliveryFee ?? 2500;
 
   const vendorsQuery = useMemoFirebase(() => {
     if (!firestore) return null;
@@ -275,6 +276,7 @@ export default function AdminSummaryPage() {
       statuses: Set<string>;
       customerProfile?: { name: string; phone: string; email: string };
       paymentMethod: string;
+      orderDeliveryFee: number;
     }> = {};
 
     const parentOrdersIncludedInDelivery = new Set<string>();
@@ -302,6 +304,7 @@ export default function AdminSummaryPage() {
             const vendor = item.vendor || getVendorFromSku(item.sku);
             const currentStatus = order.vendorStatuses?.[vendor]?.status || 'Dipesan';
             const customer = customerLookup[order.customerId];
+            const orderDeliveryFee = order.deliveryFee ?? globalDeliveryFee;
             
             let key = '';
             let label = '';
@@ -337,7 +340,8 @@ export default function AdminSummaryPage() {
                       phone: customer.phoneNumber,
                       email: customer.email
                     } : undefined,
-                    paymentMethod: order.paymentMethod
+                    paymentMethod: order.paymentMethod,
+                    orderDeliveryFee: orderDeliveryFee
                 };
             }
             
@@ -352,7 +356,7 @@ export default function AdminSummaryPage() {
             
             if (!parentOrdersIncludedInDelivery.has(order.id)) {
                 parentOrdersIncludedInDelivery.add(order.id);
-                summaryMap[key].totalDeliveryFee += 2500;
+                summaryMap[key].totalDeliveryFee += orderDeliveryFee;
             }
 
             const itemKey = item.sku;
@@ -381,10 +385,11 @@ export default function AdminSummaryPage() {
             customerProfile: data.customerProfile,
             status: statusesArr.length === 1 ? statusesArr[0] : undefined,
             statuses: statusesArr,
-            paymentMethod: data.paymentMethod
+            paymentMethod: data.paymentMethod,
+            orderDeliveryFee: data.orderDeliveryFee
         };
     });
-  }, [orders, date, groupBy, vendorLookup, customerLookup, vendorFilter, selectedStatuses, searchTerm, adminFeeMultiplier]);
+  }, [orders, date, groupBy, vendorLookup, customerLookup, vendorFilter, selectedStatuses, searchTerm, adminFeeMultiplier, globalDeliveryFee]);
 
   const filteredSummary = useMemo(() => {
     let result = [...summaryData];
@@ -438,15 +443,22 @@ export default function AdminSummaryPage() {
     const totalPcs = filteredSummary.reduce((acc, curr) => 
       acc + curr.items.reduce((sum, i) => sum + i.quantity, 0), 0
     );
+    
+    // Sum individual delivery fees from filtered orders
+    const ongkir = Array.from(uniqueOrders).reduce((acc, orderId) => {
+      const order = orders.find(o => o.id === orderId);
+      return acc + (order?.deliveryFee ?? globalDeliveryFee);
+    }, 0);
+
     return {
         orders: uniqueOrders.size,
         amount,
         admin,
         net,
-        ongkir: uniqueOrders.size * 2500,
+        ongkir,
         totalPcs
     };
-  }, [filteredSummary]);
+  }, [filteredSummary, orders, globalDeliveryFee]);
 
   const chartDataMitra = useMemo(() => {
     const map: Record<string, number> = {};
@@ -599,7 +611,7 @@ export default function AdminSummaryPage() {
         'Total Produk (Bruto)': summary.totalAmount,
         [`Admin (${adminFeePercent}%)`]: summary.adminFee,
         'Bayar ke Mitra (Netto)': summary.netToVendor,
-        'Ongkir': (groupBy === 'orderId' && rowSpans[summary.key] > 0) ? 2500 : (groupBy !== 'orderId' ? summary.totalDeliveryFee : 0),
+        'Ongkir': (groupBy === 'orderId' && rowSpans[summary.key] > 0) ? summary.orderDeliveryFee : (groupBy !== 'orderId' ? summary.totalDeliveryFee : 0),
         'Rincian Item': summary.items.map(i => `${i.name} [${i.sku}] (${i.quantity} porsi x ${formatPrice(i.price)})`).join('\r\n'),
         'Alamat Pengiriman': summary.addresses.join('\r\n'),
     }));
@@ -691,7 +703,7 @@ export default function AdminSummaryPage() {
         if (isRowSpanned) {
             if (span > 0) {
                 row.push({ 
-                    content: formatPrice(2500), 
+                    content: formatPrice(summary.orderDeliveryFee), 
                     rowSpan: span, 
                     styles: { halign: 'right', valign: 'middle', fillColor: [255, 248, 225] } 
                 });
@@ -1055,7 +1067,7 @@ export default function AdminSummaryPage() {
                                             <TableCell className="text-right text-sm">{formatPrice(summary.totalAmount)}</TableCell>
                                             <TableCell className="text-right text-xs text-destructive/80 italic">{formatPrice(summary.adminFee)}</TableCell>
                                             <TableCell className="text-right font-bold text-green-600 text-sm">{formatPrice(summary.netToVendor)}</TableCell>
-                                            {isRowSpanned ? (span > 0 ? (<TableCell rowSpan={span} className="text-right bg-primary/5 border-l border-primary/10 font-bold text-primary text-sm">{formatPrice(2500)}</TableCell>) : null) : (<TableCell className="text-right text-sm">{summary.totalDeliveryFee > 0 ? formatPrice(summary.totalDeliveryFee) : '-'}</TableCell>)}
+                                            {isRowSpanned ? (span > 0 ? (<TableCell rowSpan={span} className="text-right bg-primary/5 border-l border-primary/10 font-bold text-primary text-sm">{formatPrice(summary.orderDeliveryFee)}</TableCell>) : null) : (<TableCell className="text-right text-sm">{summary.totalDeliveryFee > 0 ? formatPrice(summary.totalDeliveryFee) : '-'}</TableCell>)}
                                             <TableCell><div className="space-y-2">{Object.entries(groupItemsByVendor(summary.items)).map(([vCode, vItems]) => (<div key={vCode} className="space-y-1.5 bg-muted/20 p-2 rounded-lg border border-primary/5"><div className="flex justify-between items-center bg-primary/10 px-2 py-1 rounded-md mb-1"><span className="text-[10px] font-bold text-primary uppercase">Mitra: {vCode}</span><span className="text-[10px] font-bold text-green-700">Net: {formatPrice(vItems.reduce((sum, i) => sum + (i.price * i.quantity), 0) * (1 - adminFeeMultiplier))}</span></div><ul className="text-xs space-y-1">{vItems.map((item, idx) => (<li key={idx} className="flex justify-between gap-4 border-b border-muted/50 last:border-0 pb-1"><span className="text-muted-foreground">{item.name} <span className="text-[9px] bg-muted px-1 rounded">[{item.sku}]</span></span><span className="font-bold shrink-0">{item.quantity} porsi</span></li>))}</ul></div>))}</div></TableCell>
                                             {!isRowSpanned ? (<TableCell><div className="space-y-3">{summary.customerProfile && (<div className="p-2 bg-muted/20 rounded-lg border"><div className="flex justify-between items-start mb-1"><p className="font-bold text-xs text-foreground uppercase flex items-center gap-1.5"><User className="h-3 w-3 text-primary" /> {summary.customerProfile.name}</p>{summary.paymentMethod && (<Badge variant={summary.paymentMethod === 'QRIS' ? 'default' : 'destructive'} className="text-[9px] h-4 px-1 py-0 leading-none">{summary.paymentMethod}</Badge>)}</div><p className="flex items-center gap-1.5 text-[10px] text-muted-foreground"><Phone className="h-3 w-3" /> {summary.customerProfile.phone}</p></div>)}<div className="text-[10px] text-muted-foreground italic px-1 flex gap-1.5"><span className="shrink-0">📍</span><p className="leading-tight">{summary.addresses.join(', ')}</p></div></div></TableCell>) : null}
                                             <TableCell className="text-right">{!isRowSpanned && (<Button variant="ghost" size="icon" className="text-destructive hover:bg-destructive/10 h-8 w-8" onClick={() => setOrderToDelete(summary.parentOrderId)}><Trash2 className="h-4 w-4" /></Button>)}</TableCell>
@@ -1096,8 +1108,8 @@ export default function AdminSummaryPage() {
                 </div>
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                     <Card className="col-span-1 lg:col-span-2"><CardHeader><CardTitle className="text-lg flex items-center gap-2"><BarChart3 className="h-5 w-5 text-primary" />Omzet Bersih per Mitra (Netto)</CardTitle><CardDescription>Pendapatan yang diterima mitra setelah dipotong admin {adminFeePercent}%.</CardDescription></CardHeader><CardContent className="h-[400px]"><ResponsiveContainer width="100%" height="100%"><BarChart data={chartDataMitra}><CartesianGrid strokeDasharray="3 3" vertical={false} /><XAxis dataKey="name" fontSize={10} tickLine={false} axisLine={false} /><YAxis fontSize={10} tickLine={false} axisLine={false} tickFormatter={(value) => `Rp ${value/1000}k`} /><RechartsTooltip formatter={(value: any) => [formatPrice(value), 'Omzet Netto']} contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}/><Bar dataKey="value" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} /></BarChart></ResponsiveContainer></CardContent></Card>
-                    <Card><CardHeader><CardTitle className="text-lg flex items-center gap-2"><PieChartIcon className="h-5 w-5 text-primary" />Distribusi Status Pesanan</CardTitle><CardDescription>Berdasarkan jumlah sub-order pengerjaan.</CardDescription></CardHeader><CardContent className="h-[300px]"><ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={chartDataStatus} cx="50%" cy="50%" innerRadius={60} outerRadius={80} paddingAngle={5} dataKey="value" label={({ name, percent }) => `${name} (${(percent * 100).toFixed(0)}%)`}>{chartDataStatus.map((entry, index) => (<Cell key={`cell-${index}`} fill={CHART_COLORS[index % CHART_COLORS.length]} />))}</Pie><RechartsTooltip /></PieChart></ResponsiveContainer></CardContent></Card>
-                    <Card><CardHeader><CardTitle className="text-lg flex items-center gap-2"><LayoutGrid className="h-5 w-5 text-primary" />Produk Terlaris</CardTitle><CardDescription>8 item dengan jumlah pesanan terbanyak.</CardDescription></CardHeader><CardContent className="h-[300px]"><ResponsiveContainer width="100%" height="100%"><BarChart data={chartDataProducts} layout="vertical"><CartesianGrid strokeDasharray="3 3" horizontal={false} /><XAxis type="number" hide /><YAxis dataKey="name" type="category" fontSize={10} width={100} tickLine={false} axisLine={false} /><RechartsTooltip formatter={(value: any) => [value, 'Porsi']} contentStyle={{ borderRadius: '8px' }}/><Bar dataKey="value" fill="hsl(var(--chart-2))" radius={[0, 4, 4, 0]} /></BarChart></ResponsiveContainer></CardContent></Card>
+                    <Card><CardHeader><CardTitle className="text-lg flex items-center gap-2"><PieChartIcon className="h-5 w-5 text-primary" />Distribusi Status Pesanan</CardTitle><CardDescription>Berdasarkan jumlah sub-order pengerjaan.</CardDescription></CardHeader><CardContent className="h-[300px]"><ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={chartDataStatus} cx="50%" cy="50%" innerRadius={60} outerRadius={80} paddingAngle={5} dataKey="value" label={({ name, percent }) => `${name} (${(percent * 100).toFixed(0)}%)`}>{chartDataStatus.map((entry, index) => (<Cell key={`cell-${index}`} fill={CHART_COLORS[index % CHART_COLORS.length]} />))}</Pie><RechartsTooltip /></PieChart></ResponsiveContainer></CardContent>
+                    <Card><CardHeader><CardTitle className="text-lg flex items-center gap-2"><LayoutGrid className="h-5 w-5 text-primary" />Produk Terlaris</CardTitle><CardDescription>8 item dengan jumlah pesanan terbanyak.</CardDescription></CardHeader><CardContent className="h-[300px]"><ResponsiveContainer width="100%" height="100%"><BarChart data={chartDataProducts} layout="vertical"><CartesianGrid strokeDasharray="3 3" horizontal={false} /><XAxis type="number" hide /><YAxis dataKey="name" type="category" fontSize={10} width={100} tickLine={false} axisLine={false} /><RechartsTooltip formatter={(value: any) => [value, 'Porsi']} contentStyle={{ borderRadius: '8px' }}/><Bar dataKey="value" fill="hsl(var(--chart-2))" radius={[0, 4, 4, 0]} /></BarChart></ResponsiveContainer></CardContent>
                 </div>
             </div>
         )}

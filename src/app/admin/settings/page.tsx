@@ -8,7 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Loader2, Mail, Database, Trash2, Save, AlertTriangle, Send, Info, ExternalLink, Download, Upload, FileJson, Package, Skull } from 'lucide-react';
+import { Loader2, Mail, Database, Trash2, Save, AlertTriangle, Send, Info, ExternalLink, Download, Upload, FileJson, Package, Skull, Truck } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { sendSmtpEmail, type SmtpConfig } from '@/app/actions';
@@ -61,6 +61,7 @@ export default function AdminSettingsPage() {
   // Global Parameters State
   const [defaultStock, setDefaultStock] = useState<number>(20);
   const [adminFee, setAdminFee] = useState<number>(10);
+  const [deliveryFee, setDeliveryFee] = useState<number>(2500);
 
   // Load Email Settings from Firestore
   const mailDocRef = useMemoFirebase(() => {
@@ -74,7 +75,7 @@ export default function AdminSettingsPage() {
     if (!firestore) return null;
     return doc(firestore, 'settings', 'inventory');
   }, [firestore]);
-  const { data: savedParams, isLoading: isLoadingParams } = useDoc<{ defaultStock: number, adminFee?: number }>(paramsDocRef);
+  const { data: savedParams, isLoading: isLoadingParams } = useDoc<{ defaultStock: number, adminFee?: number, deliveryFee?: number }>(paramsDocRef);
 
   useEffect(() => {
     if (savedMailSettings) {
@@ -92,6 +93,7 @@ export default function AdminSettingsPage() {
     if (savedParams) {
       setDefaultStock(savedParams.defaultStock ?? 20);
       setAdminFee(savedParams.adminFee ?? 10);
+      setDeliveryFee(savedParams.deliveryFee ?? 2500);
     }
   }, [savedParams]);
 
@@ -122,12 +124,12 @@ export default function AdminSettingsPage() {
     if (!firestore) return;
     
     setIsSavingParams(true);
-    const data = { defaultStock, adminFee };
+    const data = { defaultStock, adminFee, deliveryFee };
     try {
       await setDoc(doc(firestore, 'settings', 'inventory'), data, { merge: true });
       toast({
         title: "Parameter Disimpan",
-        description: "Nilai stok default dan persentase admin telah diperbarui.",
+        description: "Seluruh parameter operasional telah berhasil diperbarui.",
       });
     } catch (error: any) {
       errorEmitter.emit('permission-error', new FirestorePermissionError({
@@ -526,6 +528,28 @@ export default function AdminSettingsPage() {
                     </div>
                     <p className="text-[10px] text-muted-foreground">
                       Persentase biaya administrasi yang dipotong dari total penjualan kotor per mitra.
+                    </p>
+                  </div>
+
+                  <div className="space-y-2 p-4 border rounded-lg bg-muted/10 md:col-span-2">
+                    <Label htmlFor="delivery-fee" className="font-bold flex items-center gap-2 text-blue-600">
+                      <Truck className="h-4 w-4" />
+                      Biaya Ongkos Antar (Rp)
+                    </Label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 font-bold text-muted-foreground">Rp</span>
+                      <Input 
+                        id="delivery-fee" 
+                        type="number" 
+                        min="0"
+                        value={deliveryFee} 
+                        onChange={(e) => setDeliveryFee(Number(e.target.value))}
+                        placeholder="Contoh: 2500" 
+                        className="pl-10"
+                      />
+                    </div>
+                    <p className="text-[10px] text-muted-foreground">
+                      Biaya pengiriman tetap (flat) yang dikenakan untuk setiap satu kali pesanan.
                     </p>
                   </div>
                 </div>
