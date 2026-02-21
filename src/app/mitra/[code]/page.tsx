@@ -147,7 +147,7 @@ export default function MitraOrderPage() {
     const bruto = filteredOrders.reduce((acc, order) => 
       acc + order.items.reduce((sum, item) => sum + (item.quantity * item.priceAtOrder), 0), 0
     );
-    const admin = bruto * 0.05;
+    const admin = bruto * 0.10;
     const netto = bruto - admin;
     return { bruto, admin, netto };
   }, [filteredOrders]);
@@ -253,7 +253,7 @@ export default function MitraOrderPage() {
     let y = 10;
     const itemsToPrint = order.items;
     const bruto = itemsToPrint.reduce((sum, item) => sum + (item.priceAtOrder * item.quantity), 0);
-    const admin = bruto * 0.05;
+    const admin = bruto * 0.10;
     const netto = bruto - admin;
 
     docPdf.setFontSize(12);
@@ -364,7 +364,7 @@ export default function MitraOrderPage() {
             <Accordion type="single" collapsible className="w-full space-y-4">
               {filteredOrders.map((order) => {
                 const orderBruto = order.items.reduce((sum, item) => sum + (item.quantity * item.priceAtOrder), 0);
-                const orderAdmin = orderBruto * 0.05;
+                const orderAdmin = orderBruto * 0.10;
                 const orderNetto = orderBruto - orderAdmin;
                 const vStatus = order.vendorStatuses?.[code] || { status: 'Dipesan', statusHistory: [] };
                 const flow = STATUS_FLOWS[order.paymentMethod];

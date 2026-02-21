@@ -87,7 +87,7 @@ type SummaryItem = {
     subLabel?: string;
     totalOrders: number;
     totalAmount: number; // Item Sales only
-    adminFee: number;    // 5% of totalAmount
+    adminFee: number;    // 10% of totalAmount
     netToVendor: number; // totalAmount - adminFee
     totalDeliveryFee: number; // Ongkir based on filter/group
     items: { name: string, quantity: number, sku: string, price: number, vendor: string }[];
@@ -358,7 +358,7 @@ export default function AdminSummaryPage() {
     });
 
     return Object.entries(summaryMap).map(([key, data]) => {
-        const adminFee = data.totalAmount * 0.05;
+        const adminFee = data.totalAmount * 0.10;
         const statusesArr = Array.from(data.statuses);
         return {
             key,
@@ -458,7 +458,7 @@ export default function AdminSummaryPage() {
       filteredSummary.forEach(s => {
         s.items.forEach(item => {
           const v = item.vendor;
-          const val = item.quantity * item.price * 0.95;
+          const val = item.quantity * item.price * 0.90;
           map[v] = (map[v] || 0) + val;
         });
       });
@@ -596,7 +596,7 @@ export default function AdminSummaryPage() {
         'Info': summary.subLabel || '',
         'Status': summary.status || summary.statuses?.join(', '),
         'Total Produk (Bruto)': summary.totalAmount,
-        'Admin (5%)': summary.adminFee,
+        'Admin (10%)': summary.adminFee,
         'Bayar ke Mitra (Netto)': summary.netToVendor,
         'Ongkir': (groupBy === 'orderId' && rowSpans[summary.key] > 0) ? 2500 : (groupBy !== 'orderId' ? summary.totalDeliveryFee : 0),
         'Rincian Item': summary.items.map(i => `${i.name} [${i.sku}] (${i.quantity} porsi x ${formatPrice(i.price)})`).join('\r\n'),
@@ -614,7 +614,7 @@ export default function AdminSummaryPage() {
       'Info': '',
       'Status': '',
       'Total Produk (Bruto)': actualGrandTotals.amount,
-      'Admin (5%)': actualGrandTotals.admin,
+      'Admin (10%)': actualGrandTotals.admin,
       'Bayar ke Mitra (Netto)': actualGrandTotals.net,
       'Ongkir': actualGrandTotals.ongkir,
       'Rincian Item': '',
@@ -735,7 +735,7 @@ export default function AdminSummaryPage() {
             groupBy === 'orderId' ? "Mitra" : "Group", 
             "Status", 
             "Produk", 
-            "Admin (5%)", 
+            "Admin (10%)", 
             "Bayar ke Mitra", 
             "Ongkir", 
             "Rincian Item",
@@ -1074,7 +1074,7 @@ export default function AdminSummaryPage() {
                                 </TableHead>
                                 <TableHead className="text-right cursor-pointer hover:bg-muted/50 transition-colors" onClick={() => handleSort('adminFee')}>
                                     <div className="flex items-center justify-end gap-1">
-                                    Admin {getSortIcon('adminFee')}
+                                    Admin (10%) {getSortIcon('adminFee')}
                                     </div>
                                 </TableHead>
                                 <TableHead className="text-right cursor-pointer hover:bg-muted/50 transition-colors" onClick={() => handleSort('netToVendor')}>
@@ -1256,7 +1256,7 @@ export default function AdminSummaryPage() {
                                                 <div className="space-y-2">
                                                     {Object.entries(groupItemsByVendor(summary.items)).map(([vCode, vItems]) => {
                                                         const subtotalMitra = vItems.reduce((sum, i) => sum + (i.price * i.quantity), 0);
-                                                        const netMitra = subtotalMitra * 0.95;
+                                                        const netMitra = subtotalMitra * 0.90;
                                                         return (
                                                             <div key={vCode} className="space-y-1.5 bg-muted/20 p-2 rounded-lg border border-primary/5">
                                                                 <div className="flex justify-between items-center bg-primary/10 px-2 py-1 rounded-md mb-1">
@@ -1424,7 +1424,7 @@ export default function AdminSummaryPage() {
                                 <BarChart3 className="h-5 w-5 text-primary" />
                                 Omzet Bersih per Mitra (Netto)
                             </CardTitle>
-                            <CardDescription>Pendapatan yang diterima mitra setelah dipotong admin 5%.</CardDescription>
+                            <CardDescription>Pendapatan yang diterima mitra setelah dipotong admin 10%.</CardDescription>
                         </CardHeader>
                         <CardContent className="h-[400px]">
                             <ResponsiveContainer width="100%" height="100%">
