@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useMemo, useRef, useEffect } from 'react';
@@ -29,6 +30,11 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
+
+interface Category {
+  id: string;
+  name: string;
+}
 
 type SortConfig = {
   key: keyof Product | null;
@@ -79,6 +85,13 @@ export default function AdminMenuPage() {
   }, [firestore]);
   const { data: vendors, isLoading: isVendorsLoading } = useCollection<Vendor>(vendorsQuery);
 
+  // Fetch Master Categories
+  const dbCategoriesQuery = useMemoFirebase(() => {
+    if (!firestore) return null;
+    return collection(firestore, 'categories');
+  }, [firestore]);
+  const { data: dbCategories, isLoading: isCategoriesLoading } = useCollection<Category>(dbCategoriesQuery);
+
   // Fetch Inventory Settings for Reset
   const invDocRef = useMemoFirebase(() => {
     if (!firestore) return null;
@@ -91,7 +104,7 @@ export default function AdminMenuPage() {
     setCurrentPage(1);
   }, [searchTerm, nameFilter, categoryFilter, vendorFilter]);
 
-  // Unique values for dropdown filters
+  // Unique values for dropdown filters (still useful for filtering existing items)
   const uniqueNames = useMemo(() => {
     if (!menuItems) return [];
     return Array.from(new Set(menuItems.map(i => i.name))).sort();
@@ -386,7 +399,7 @@ export default function AdminMenuPage() {
     setCurrentPage(1);
   };
 
-  if (isLoading || isVendorsLoading) {
+  if (isLoading || isVendorsLoading || isCategoriesLoading) {
     return <div className="flex h-full items-center justify-center p-24"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
   }
 
@@ -455,12 +468,13 @@ export default function AdminMenuPage() {
                           <SelectValue placeholder="Pilih Kategori" />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="Nasi & Lauk">Nasi & Lauk</SelectItem>
-                          <SelectItem value="Mie & Soto">Mie & Soto</SelectItem>
-                          <SelectItem value="Pempek">Pempek</SelectItem>
-                          <SelectItem value="Jajanan Asin">Jajanan Asin</SelectItem>
-                          <SelectItem value="Jajanan Manis">Jajanan Manis</SelectItem>
-                          <SelectItem value="Bubur & Puding">Bubur & Puding</SelectItem>
+                          {dbCategories && dbCategories.length > 0 ? (
+                            dbCategories.map(cat => (
+                              <SelectItem key={cat.id} value={cat.name}>{cat.name}</SelectItem>
+                            ))
+                          ) : (
+                            <SelectItem value="none" disabled>Belum ada kategori di Master Kategori</SelectItem>
+                          )}
                         </SelectContent>
                       </Select>
                     </div>
@@ -541,17 +555,18 @@ export default function AdminMenuPage() {
                     </div>
                     <div className="grid gap-2">
                       <Label htmlFor="category">Kategori</Label>
-                      <Select name="category" defaultValue="Nasi & Lauk" required>
+                      <Select name="category" required>
                         <SelectTrigger>
                           <SelectValue placeholder="Pilih Kategori" />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="Nasi & Lauk">Nasi & Lauk</SelectItem>
-                          <SelectItem value="Mie & Soto">Mie & Soto</SelectItem>
-                          <SelectItem value="Pempek">Pempek</SelectItem>
-                          <SelectItem value="Jajanan Asin">Jajanan Asin</SelectItem>
-                          <SelectItem value="Jajanan Manis">Jajanan Manis</SelectItem>
-                          <SelectItem value="Bubur & Puding">Bubur & Puding</SelectItem>
+                          {dbCategories && dbCategories.length > 0 ? (
+                            dbCategories.map(cat => (
+                              <SelectItem key={cat.id} value={cat.name}>{cat.name}</SelectItem>
+                            ))
+                          ) : (
+                            <SelectItem value="none" disabled>Belum ada kategori</SelectItem>
+                          )}
                         </SelectContent>
                       </Select>
                     </div>
@@ -783,12 +798,13 @@ export default function AdminMenuPage() {
                                         <SelectValue placeholder="Pilih Kategori" />
                                       </SelectTrigger>
                                       <SelectContent>
-                                        <SelectItem value="Nasi & Lauk">Nasi & Lauk</SelectItem>
-                                        <SelectItem value="Mie & Soto">Mie & Soto</SelectItem>
-                                        <SelectItem value="Pempek">Pempek</SelectItem>
-                                        <SelectItem value="Jajanan Asin">Jajanan Asin</SelectItem>
-                                        <SelectItem value="Jajanan Manis">Jajanan Manis</SelectItem>
-                                        <SelectItem value="Bubur & Puding">Bubur & Puding</SelectItem>
+                                        {dbCategories && dbCategories.length > 0 ? (
+                                          dbCategories.map(cat => (
+                                            <SelectItem key={cat.id} value={cat.name}>{cat.name}</SelectItem>
+                                          ))
+                                        ) : (
+                                          <SelectItem value="none" disabled>Belum ada kategori</SelectItem>
+                                        )}
                                       </SelectContent>
                                     </Select>
                                   </div>

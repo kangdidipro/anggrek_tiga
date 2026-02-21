@@ -33,6 +33,17 @@
       },
       "required": ["id", "name", "code"]
     },
+    "Category": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Category",
+      "type": "object",
+      "description": "Represents a product category.",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" }
+      },
+      "required": ["id", "name"]
+    },
     "Customer": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "title": "Customer",
@@ -96,6 +107,10 @@
     "/vendors/{vendorId}": {
       "schema": { "$ref": "#/backend/entities/Vendor" },
       "description": "Stores UMKM partner details."
+    },
+    "/categories/{categoryId}": {
+      "schema": { "$ref": "#/backend/entities/Category" },
+      "description": "Stores menu categories."
     },
     "/customers/{userId}": {
       "schema": { "$ref": "#/backend/entities/Customer" },

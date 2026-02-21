@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useAdmin } from '@/hooks/use-admin';
@@ -6,12 +7,13 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/co
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
-import { Menu, Soup, Home, UtensilsCrossed, ListOrdered, LayoutDashboard, UserRound, Users, Settings, Database, LogOut } from 'lucide-react';
+import { Menu, Soup, Home, UtensilsCrossed, ListOrdered, LayoutDashboard, UserRound, Users, Settings, Database, LogOut, Tags } from 'lucide-react';
 import { useState } from 'react';
 
 const navItems = [
   { href: '/', label: 'Halaman Depan', icon: Home },
   { href: '/admin/menu', label: 'Atur Menu', icon: UtensilsCrossed },
+  { href: '/admin/categories', label: 'Master Kategori', icon: Tags },
   { href: '/admin/orders', label: 'List Order', icon: ListOrdered },
   { href: '/admin/summary', label: 'Rekap Harian', icon: LayoutDashboard },
   { href: '/admin/customers', label: 'Data Pelanggan', icon: UserRound },

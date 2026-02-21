@@ -1,3 +1,4 @@
+
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -5,7 +6,7 @@ service cloud.firestore {
     /**
      * APPLICATION SECURITY FILOSOPHY:
      * 1. Ownership Model: Most data (Customers, Orders, OrderItems) is strictly partitioned by the user's UID.
-     * 2. Public Catalog: Products and Vendors are publicly readable to allow all users to browse.
+     * 2. Public Catalog: Products, Vendors, and Categories are publicly readable to allow all users to browse.
      * 3. Admin Override: A dedicated /admin_roles collection identifies users with elevated privileges.
      */
 
@@ -44,6 +45,15 @@ service cloud.firestore {
      * @path /vendors/{vendorId}
      */
     match /vendors/{vendorId} {
+      allow read: if true;
+      allow write: if isAdmin() || isSignedIn();
+    }
+
+    /**
+     * @description Publicly readable list of categories.
+     * @path /categories/{categoryId}
+     */
+    match /categories/{categoryId} {
       allow read: if true;
       allow write: if isAdmin() || isSignedIn();
     }
