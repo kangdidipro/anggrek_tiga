@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useMemo, useRef, useEffect } from 'react';
@@ -7,7 +6,7 @@ import { collection, doc, deleteDoc, setDoc, writeBatch, updateDoc } from 'fireb
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Loader2, Plus, Pencil, Trash2, RefreshCcw, Search, X, FileUp, ArrowUpDown, ArrowUp, ArrowDown, RotateCcw, ChevronLeft, ChevronRight, PackageOpen, Tags, Image as ImageIcon } from 'lucide-react';
+import { Loader2, Plus, Pencil, Trash2, RefreshCcw, Search, X, FileUp, ArrowUpDown, ArrowUp, ArrowDown, RotateCcw, ChevronLeft, ChevronRight, PackageOpen, Tags, Image as ImageIcon, ImageOff } from 'lucide-react';
 import { formatPrice } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
@@ -268,6 +267,7 @@ export default function AdminMenuPage() {
     const formData = new FormData(e.currentTarget);
     const stockValue = Number(formData.get('stock'));
     
+    // Ensure isActive is boolean, not undefined
     const isActiveValue = isEditing ? (isEditing.isActive !== false) : true;
 
     const productData: Product = {
@@ -580,7 +580,7 @@ export default function AdminMenuPage() {
                       <ImageIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                       <Input id="imageUrl" name="imageUrl" placeholder="https://image-url.com/foto.jpg" className="pl-10" />
                     </div>
-                    <p className="text-[10px] text-muted-foreground italic">Kosongkan jika ingin menggunakan gambar default.</p>
+                    <p className="text-[10px] text-muted-foreground italic">Kosongkan jika ingin menampilkan teks "Foto tidak tersedia".</p>
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div className="grid gap-2">
@@ -784,9 +784,13 @@ export default function AdminMenuPage() {
                     </TableCell>
                     <TableCell className="font-medium">
                       <div className="flex items-center gap-2">
-                        {item.imageUrl && (
+                        {item.imageUrl ? (
                           <div className="h-8 w-8 rounded overflow-hidden bg-muted flex-shrink-0">
                             <img src={item.imageUrl} alt={item.name} className="h-full w-full object-cover" />
+                          </div>
+                        ) : (
+                          <div className="h-8 w-8 rounded bg-muted flex items-center justify-center flex-shrink-0">
+                            <ImageOff className="h-3 w-3 text-muted-foreground opacity-50" />
                           </div>
                         )}
                         {item.name}

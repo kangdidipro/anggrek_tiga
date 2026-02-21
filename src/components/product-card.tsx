@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -7,11 +6,10 @@ import { Card, CardContent, CardFooter, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { formatPrice } from '@/lib/utils';
 import { useCart } from '@/hooks/use-cart';
-import { Plus, Minus, PackageX, Store, AlertCircle } from 'lucide-react';
+import { Plus, Minus, PackageX, Store, AlertCircle, ImageOff } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import Image from 'next/image';
-import placeholderData from '@/lib/placeholder-images.json';
 
 type ProductCardProps = {
   product: Product;
@@ -46,25 +44,29 @@ export default function ProductCard({ product, vendorName, isVendorActive = true
   const isAvailable = isVendorActive && isProductActive;
   const isDisabled = !isAvailable || isOutOfStock;
 
-  const defaultPlaceholder = placeholderData.placeholderImages.find(img => img.id === 'default-takjil');
-  const displayImage = product.imageUrl || defaultPlaceholder?.imageUrl || `https://picsum.photos/seed/${product.id}/600/400`;
-
   return (
     <Card className={cn(
       "flex flex-col h-full overflow-hidden transition-all duration-300 hover:shadow-xl hover:-translate-y-1",
       isDisabled ? 'opacity-75 grayscale-[0.5]' : ''
     )}>
-      <div className="relative aspect-[4/3] w-full bg-muted overflow-hidden">
-        <Image
-          src={displayImage}
-          alt={product.name}
-          fill
-          className="object-cover transition-transform duration-500 hover:scale-110"
-          sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 25vw"
-          data-ai-hint="food takjil"
-        />
+      <div className="relative aspect-[4/3] w-full bg-muted overflow-hidden flex items-center justify-center">
+        {product.imageUrl ? (
+          <Image
+            src={product.imageUrl}
+            alt={product.name}
+            fill
+            className="object-cover transition-transform duration-500 hover:scale-110"
+            sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 25vw"
+          />
+        ) : (
+          <div className="flex flex-col items-center gap-2 text-muted-foreground/60">
+            <ImageOff className="h-10 w-10 stroke-[1.5]" />
+            <span className="text-[10px] font-bold uppercase tracking-widest text-center px-4">Foto tidak tersedia</span>
+          </div>
+        )}
+        
         {!isAvailable && (
-          <div className="absolute inset-0 bg-black/40 flex items-center justify-center p-4 text-center">
+          <div className="absolute inset-0 bg-black/40 flex items-center justify-center p-4 text-center z-10">
             <Badge variant="destructive" className="text-[10px] font-bold uppercase tracking-wider">
               Tidak Tersedia
             </Badge>
@@ -103,9 +105,14 @@ export default function ProductCard({ product, vendorName, isVendorActive = true
         <div className="mt-auto">
           <div className="flex items-center justify-between">
             <p className="text-lg font-bold text-primary">{formatPrice(product.price)}</p>
-            {isAvailable && (
-              <Badge variant={isOutOfStock ? "destructive" : currentStock <= 5 ? "secondary" : "outline"} className="text-[10px] px-1.5 py-0 h-5">
-                {isOutOfStock ? "Habis" : `Stok: ${currentStock}`}
+            {isAvailable && !isOutOfStock && (
+              <Badge variant={currentStock <= 5 ? "secondary" : "outline"} className="text-[10px] px-1.5 py-0 h-5">
+                Stok: {currentStock}
+              </Badge>
+            )}
+            {isAvailable && isOutOfStock && (
+              <Badge variant="destructive" className="text-[10px] px-1.5 py-0 h-5">
+                Habis
               </Badge>
             )}
           </div>
