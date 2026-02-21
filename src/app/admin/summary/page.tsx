@@ -680,7 +680,7 @@ export default function AdminSummaryPage() {
                     styles: { fillColor: [240, 240, 240], fontStyle: 'bold', fontSize: 8 } 
                 },
                 { 
-                    content: `PROFIL & ALAMAT: ${profileText}\n📍 ${summary.addresses.join(', ')}`, 
+                    content: `PROFIL & ALAMAT: ${profileText}\nALAMAT: ${summary.addresses.join(', ')}`, 
                     colSpan: 5, 
                     styles: { fillColor: [240, 240, 240], fontSize: 7 } 
                 }
