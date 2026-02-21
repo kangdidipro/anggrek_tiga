@@ -14,7 +14,8 @@
         "sku": { "type": "string" },
         "vendor": { "type": "string" },
         "stock": { "type": "number" },
-        "isActive": { "type": "boolean" }
+        "isActive": { "type": "boolean" },
+        "imageUrl": { "type": "string" }
       },
       "required": ["id", "name", "price", "sku", "vendor"]
     },

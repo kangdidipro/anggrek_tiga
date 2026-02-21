@@ -10,6 +10,8 @@ import { useCart } from '@/hooks/use-cart';
 import { Plus, Minus, PackageX, Store, AlertCircle } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
+import Image from 'next/image';
+import placeholderData from '@/lib/placeholder-images.json';
 
 type ProductCardProps = {
   product: Product;
@@ -22,7 +24,6 @@ export default function ProductCard({ product, vendorName, isVendorActive = true
   const quantity = getItemQuantity(product.id);
   const [mounted, setMounted] = useState(false);
 
-  // Pastikan stok memiliki nilai default 20 jika undefined, dan tidak negatif untuk tampilan
   const dbStock = product.stock ?? 20;
   const currentStock = Math.max(0, dbStock);
   const isProductActive = product.isActive !== false;
@@ -45,11 +46,32 @@ export default function ProductCard({ product, vendorName, isVendorActive = true
   const isAvailable = isVendorActive && isProductActive;
   const isDisabled = !isAvailable || isOutOfStock;
 
+  const defaultPlaceholder = placeholderData.placeholderImages.find(img => img.id === 'default-takjil');
+  const displayImage = product.imageUrl || defaultPlaceholder?.imageUrl || `https://picsum.photos/seed/${product.id}/600/400`;
+
   return (
     <Card className={cn(
       "flex flex-col h-full overflow-hidden transition-all duration-300 hover:shadow-xl hover:-translate-y-1",
       isDisabled ? 'opacity-75 grayscale-[0.5]' : ''
     )}>
+      <div className="relative aspect-[4/3] w-full bg-muted overflow-hidden">
+        <Image
+          src={displayImage}
+          alt={product.name}
+          fill
+          className="object-cover transition-transform duration-500 hover:scale-110"
+          sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 25vw"
+          data-ai-hint="food takjil"
+        />
+        {!isAvailable && (
+          <div className="absolute inset-0 bg-black/40 flex items-center justify-center p-4 text-center">
+            <Badge variant="destructive" className="text-[10px] font-bold uppercase tracking-wider">
+              Tidak Tersedia
+            </Badge>
+          </div>
+        )}
+      </div>
+
       <CardContent className="p-4 flex-1 flex flex-col">
         <div className="flex justify-between text-[10px] text-muted-foreground mb-2 uppercase font-mono tracking-tighter">
           <span>ID: {product.id}</span>

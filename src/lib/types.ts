@@ -8,6 +8,7 @@ export type Product = {
   vendor: string;
   stock: number;
   isActive?: boolean;
+  imageUrl?: string;
 };
 
 export type Vendor = {

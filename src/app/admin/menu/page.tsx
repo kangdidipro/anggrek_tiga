@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useMemo, useRef, useEffect } from 'react';
@@ -6,7 +7,7 @@ import { collection, doc, deleteDoc, setDoc, writeBatch, updateDoc } from 'fireb
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Loader2, Plus, Pencil, Trash2, RefreshCcw, Search, X, FileUp, ArrowUpDown, ArrowUp, ArrowDown, RotateCcw, ChevronLeft, ChevronRight, PackageOpen, Tags } from 'lucide-react';
+import { Loader2, Plus, Pencil, Trash2, RefreshCcw, Search, X, FileUp, ArrowUpDown, ArrowUp, ArrowDown, RotateCcw, ChevronLeft, ChevronRight, PackageOpen, Tags, Image as ImageIcon } from 'lucide-react';
 import { formatPrice } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
@@ -54,66 +55,54 @@ export default function AdminMenuPage() {
   const [isUpdatingBulk, setIsUpdatingBulk] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   
-  // Form Control State for Dialogs
   const [selectedCategory, setSelectedCategory] = useState<string>('');
   const [selectedVendor, setSelectedVendor] = useState<string>('');
 
-  // Selection State
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
-  // Search and Filter States
   const [searchTerm, setSearchTerm] = useState('');
   const [nameFilter, setNameFilter] = useState('all');
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [vendorFilter, setVendorFilter] = useState('all');
 
-  // Sorting State
   const [sortConfig, setSortConfig] = useState<SortConfig>({ key: 'category', direction: 'asc' });
 
-  // Pagination State
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
 
-  // Fetch Menu Items
   const menuItemsQuery = useMemoFirebase(() => {
     if (!firestore) return null;
     return collection(firestore, 'menuItems');
   }, [firestore]);
   const { data: menuItems, isLoading } = useCollection<Product>(menuItemsQuery);
 
-  // Fetch Vendors for Lookup
   const vendorsQuery = useMemoFirebase(() => {
     if (!firestore) return null;
     return collection(firestore, 'vendors');
   }, [firestore]);
   const { data: vendors, isLoading: isVendorsLoading } = useCollection<Vendor>(vendorsQuery);
 
-  // Fetch Master Categories
   const dbCategoriesQuery = useMemoFirebase(() => {
     if (!firestore) return null;
     return collection(firestore, 'categories');
   }, [firestore]);
   const { data: dbCategories, isLoading: isCategoriesLoading } = useCollection<Category>(dbCategoriesQuery);
 
-  // Fetch Inventory Settings for Reset
   const invDocRef = useMemoFirebase(() => {
     if (!firestore) return null;
     return doc(firestore, 'settings', 'inventory');
   }, [firestore]);
   const { data: inventorySettings } = useDoc<{ defaultStock: number }>(invDocRef);
 
-  // Reset pagination when filters change
   useEffect(() => {
     setCurrentPage(1);
   }, [searchTerm, nameFilter, categoryFilter, vendorFilter]);
 
-  // Unique values for dropdown filters
   const uniqueNames = useMemo(() => {
     if (!menuItems) return [];
     return Array.from(new Set(menuItems.map(i => i.name))).sort();
   }, [menuItems]);
 
-  // COMBINED CATEGORIES: Master DB Categories + any orphan categories in products
   const filterCategories = useMemo(() => {
     const dbSet = new Set(dbCategories?.map(c => c.name.trim()) || []);
     const itemSet = new Set(menuItems?.map(i => i.category.trim()) || []);
@@ -125,7 +114,6 @@ export default function AdminMenuPage() {
     return vendors.map(v => v.code).sort();
   }, [vendors]);
 
-  // Reset Form State when Dialog opens
   useEffect(() => {
     if (isAdding) {
       setSelectedCategory('');
@@ -136,7 +124,6 @@ export default function AdminMenuPage() {
     }
   }, [isAdding, isEditing]);
 
-  // Handle Sort Toggle
   const handleSort = (key: keyof Product) => {
     let direction: 'asc' | 'desc' = 'asc';
     if (sortConfig.key === key && sortConfig.direction === 'asc') {
@@ -150,7 +137,6 @@ export default function AdminMenuPage() {
     return sortConfig.direction === 'asc' ? <ArrowUp className="ml-2 h-4 w-4" /> : <ArrowDown className="ml-2 h-4 w-4" />;
   };
 
-  // Filtered and Sorted Menu Items Logic
   const filteredMenuItems = useMemo(() => {
     if (!menuItems) return [];
     
@@ -183,7 +169,6 @@ export default function AdminMenuPage() {
     return filtered;
   }, [menuItems, searchTerm, nameFilter, categoryFilter, vendorFilter, sortConfig]);
 
-  // Paginated data
   const paginatedItems = useMemo(() => {
     const start = (currentPage - 1) * pageSize;
     return filteredMenuItems.slice(start, start + pageSize);
@@ -191,7 +176,6 @@ export default function AdminMenuPage() {
 
   const totalPages = Math.ceil(filteredMenuItems.length / pageSize);
 
-  // Selection Logic
   const toggleSelectAll = () => {
     if (selectedIds.size === paginatedItems.length) {
       setSelectedIds(new Set());
@@ -284,8 +268,7 @@ export default function AdminMenuPage() {
     const formData = new FormData(e.currentTarget);
     const stockValue = Number(formData.get('stock'));
     
-    // Ensure isActive is always a boolean to prevent Firebase "unsupported field value: undefined" error
-    const isActiveValue = isEditing ? (isEditing.isActive ?? true) : true;
+    const isActiveValue = isEditing ? (isEditing.isActive !== false) : true;
 
     const productData: Product = {
       id: isEditing?.id || (Math.floor(Math.random() * 10000) + 1000).toString(),
@@ -296,6 +279,7 @@ export default function AdminMenuPage() {
       vendor: selectedVendor,
       stock: Math.max(0, stockValue),
       isActive: isActiveValue,
+      imageUrl: (formData.get('imageUrl')?.toString() || '').trim(),
     };
 
     if (!productData.name || isNaN(productData.price) || !productData.sku || !productData.category || !productData.vendor) {
@@ -407,6 +391,7 @@ export default function AdminMenuPage() {
           const category = row['Kategori'] || row['Category'] || 'Nasi & Lauk';
           const stock = Number(row['Stok'] || row['Stock'] || 20);
           const vendor = row['Mitra'] || row['Vendor'] || (sku.includes('-') ? sku.split('-')[0] : '');
+          const imageUrl = row['Foto'] || row['Image'] || row['URL Foto'] || '';
 
           if (name && price && sku) {
             const id = (Math.floor(Math.random() * 100000) + 10000).toString();
@@ -419,6 +404,7 @@ export default function AdminMenuPage() {
               vendor: String(vendor).trim(),
               stock: Math.max(0, stock),
               isActive: true,
+              imageUrl: String(imageUrl).trim(),
             };
             batch.set(doc(firestore, 'menuItems', id), productData);
             importedCount++;
@@ -587,6 +573,14 @@ export default function AdminMenuPage() {
                   <div className="grid gap-2">
                     <Label htmlFor="name">Nama Menu *</Label>
                     <Input id="name" name="name" placeholder="Contoh: Nasi Bakar" required />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="imageUrl">URL Foto Produk</Label>
+                    <div className="relative">
+                      <ImageIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                      <Input id="imageUrl" name="imageUrl" placeholder="https://image-url.com/foto.jpg" className="pl-10" />
+                    </div>
+                    <p className="text-[10px] text-muted-foreground italic">Kosongkan jika ingin menggunakan gambar default.</p>
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div className="grid gap-2">
@@ -788,7 +782,16 @@ export default function AdminMenuPage() {
                     <TableCell className="text-xs text-muted-foreground font-mono">
                       {(currentPage - 1) * pageSize + index + 1}
                     </TableCell>
-                    <TableCell className="font-medium">{item.name}</TableCell>
+                    <TableCell className="font-medium">
+                      <div className="flex items-center gap-2">
+                        {item.imageUrl && (
+                          <div className="h-8 w-8 rounded overflow-hidden bg-muted flex-shrink-0">
+                            <img src={item.imageUrl} alt={item.name} className="h-full w-full object-cover" />
+                          </div>
+                        )}
+                        {item.name}
+                      </div>
+                    </TableCell>
                     <TableCell>{item.category}</TableCell>
                     <TableCell className="font-mono text-xs font-bold">{item.vendor}</TableCell>
                     <TableCell>{item.sku}</TableCell>
@@ -825,6 +828,13 @@ export default function AdminMenuPage() {
                                 <div className="grid gap-2">
                                   <Label htmlFor="edit-name">Nama Menu *</Label>
                                   <Input id="edit-name" name="name" defaultValue={item.name} required />
+                                </div>
+                                <div className="grid gap-2">
+                                  <Label htmlFor="edit-imageUrl">URL Foto Produk</Label>
+                                  <div className="relative">
+                                    <ImageIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                                    <Input id="edit-imageUrl" name="imageUrl" defaultValue={item.imageUrl} placeholder="https://image-url.com/foto.jpg" className="pl-10" />
+                                  </div>
                                 </div>
                                 <div className="grid grid-cols-2 gap-4">
                                   <div className="grid gap-2">
