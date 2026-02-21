@@ -49,32 +49,33 @@ export default function ProductCard({ product, vendorName, isVendorActive = true
       "flex flex-col h-full overflow-hidden transition-all duration-300 hover:shadow-xl hover:-translate-y-1",
       isDisabled ? 'opacity-75 grayscale-[0.5]' : ''
     )}>
-      <div className="relative aspect-[4/3] w-full bg-muted overflow-hidden flex items-center justify-center">
-        {product.imageUrl ? (
-          <Image
-            src={product.imageUrl}
-            alt={product.name}
-            fill
-            className="object-cover transition-transform duration-500 hover:scale-110"
-            sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 25vw"
-          />
-        ) : (
-          <div className="flex flex-col items-center gap-2 text-muted-foreground/60">
-            <ImageOff className="h-10 w-10 stroke-[1.5]" />
-            <span className="text-[10px] font-bold uppercase tracking-widest text-center px-4">Foto tidak tersedia</span>
-          </div>
-        )}
-        
-        {!isAvailable && (
-          <div className="absolute inset-0 bg-black/40 flex items-center justify-center p-4 text-center z-10">
-            <Badge variant="destructive" className="text-[10px] font-bold uppercase tracking-wider">
-              Tidak Tersedia
-            </Badge>
-          </div>
-        )}
-      </div>
-
       <CardContent className="p-4 flex-1 flex flex-col">
+        {/* Foto produk kini berada di dalam CardContent */}
+        <div className="relative aspect-[4/3] w-full bg-muted overflow-hidden flex items-center justify-center rounded-md mb-4 border border-primary/5">
+          {product.imageUrl ? (
+            <Image
+              src={product.imageUrl}
+              alt={product.name}
+              fill
+              className="object-cover transition-transform duration-500 hover:scale-110"
+              sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 25vw"
+            />
+          ) : (
+            <div className="flex flex-col items-center gap-2 text-muted-foreground/60">
+              <ImageOff className="h-10 w-10 stroke-[1.5]" />
+              <span className="text-[10px] font-bold uppercase tracking-widest text-center px-4">Foto tidak tersedia</span>
+            </div>
+          )}
+          
+          {!isAvailable && (
+            <div className="absolute inset-0 bg-black/40 flex items-center justify-center p-4 text-center z-10">
+              <Badge variant="destructive" className="text-[10px] font-bold uppercase tracking-wider">
+                Tidak Tersedia
+              </Badge>
+            </div>
+          )}
+        </div>
+
         <div className="flex justify-between text-[10px] text-muted-foreground mb-2 uppercase font-mono tracking-tighter">
           <span>ID: {product.id}</span>
           <span>SKU: {product.sku}</span>
