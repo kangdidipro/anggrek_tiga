@@ -288,9 +288,19 @@ export default function MitraOrderPage() {
     });
     docPdf.text("-".repeat(40), centerPos, y, { align: 'center' });
     y += 6;
+    docPdf.setFont("helvetica", "bold");
     docPdf.setFontSize(10);
     docPdf.text("NETTO DITERIMA:", 5, y);
     docPdf.text(`${formatPrice(netto)}`, 75, y, { align: 'right' });
+    docPdf.setFont("helvetica", "normal");
+    
+    // Add delivery address for mitra as well just in case
+    y += 10;
+    docPdf.setFontSize(8);
+    docPdf.text("Alamat Pengiriman:", 5, y);
+    const splitAddress = docPdf.splitTextToSize(order.deliveryAddress || "-", 70);
+    docPdf.text(splitAddress, 5, y + 4);
+    
     docPdf.save(`slip_${order.id}_${code}.pdf`);
   };
 

@@ -96,7 +96,7 @@ export default function OrderForm({ cartItems, total, deliveryFee, setSheetOpen 
       const pdf = new jsPDF({
         orientation: 'portrait',
         unit: 'mm',
-        format: [80, 250]
+        format: [80, 350] // Taller for emails too
       });
 
       const centerPos = 40;
@@ -161,9 +161,17 @@ export default function OrderForm({ cartItems, total, deliveryFee, setSheetOpen 
       pdf.text(`${formatPrice(deliveryFee)}`, 75, y, { align: 'right' });
       y += 6;
       
+      pdf.setFont("helvetica", "bold");
       pdf.setFontSize(10);
-      pdf.text("TOTAL BAYAR:", 5, y);
+      pdf.text("TOTAL TAGIHAN:", 5, y);
       pdf.text(`${formatPrice(total)}`, 75, y, { align: 'right' });
+      pdf.setFont("helvetica", "normal");
+      
+      y += 10;
+      pdf.setFontSize(8);
+      pdf.text("Alamat Pengiriman:", 5, y);
+      const splitAddress = pdf.splitTextToSize(values.address || "-", 70);
+      pdf.text(splitAddress, 5, y + 4);
       
       const pdfBase64 = pdf.output('datauristring');
       const trackingLink = `${window.location.origin}/orders`;
@@ -225,7 +233,6 @@ export default function OrderForm({ cartItems, total, deliveryFee, setSheetOpen 
       const timeStr = format(now, 'HHmm');
       const randomSuffix = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
       
-      // Simplified order ID generation to avoid expensive collectionGroup queries and missing indices
       const orderId = `${dateStr}-TJK-${timeStr}-${randomSuffix}`;
 
       const batch = writeBatch(firestore);

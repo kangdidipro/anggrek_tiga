@@ -351,10 +351,11 @@ export default function AdminOrdersPage() {
   };
 
   const handlePrintReceipt = async (order: Order, vendorCode?: string) => {
+    // Increased height to 350mm to ensure content is not cut off
     const docPdf = new jsPDF({
       orientation: 'portrait',
       unit: 'mm',
-      format: [80, 250]
+      format: [80, 350]
     });
 
     const centerPos = 40;
@@ -434,20 +435,22 @@ export default function AdminOrdersPage() {
     y += 6;
     
     if (!vendorCode) {
-      docPdf.text(`Ongkir (Flat):`, 5, y);
+      docPdf.text(`Ongkos Antar (Flat):`, 5, y);
       docPdf.text(`${formatPrice(calculatedDeliveryFee)}`, 75, y, { align: 'right' });
       y += 6;
     }
     
+    docPdf.setFont("helvetica", "bold");
     docPdf.setFontSize(10);
-    docPdf.text(vendorCode ? "SUBTOTAL MITRA:" : "TOTAL BAYAR:", 5, y);
+    docPdf.text(vendorCode ? "SUBTOTAL MITRA:" : "TOTAL TAGIHAN:", 5, y);
     docPdf.text(`${formatPrice(totalToPrint)}`, 75, y, { align: 'right' });
+    docPdf.setFont("helvetica", "normal");
     
     y += 10;
     
     docPdf.setFontSize(8);
     docPdf.text("Alamat Pengiriman:", 5, y);
-    const splitAddress = docPdf.splitTextToSize(order.deliveryAddress, 70);
+    const splitAddress = docPdf.splitTextToSize(order.deliveryAddress || "-", 70);
     docPdf.text(splitAddress, 5, y + 4);
     
     y += (splitAddress.length * 4) + 10;

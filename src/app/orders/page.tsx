@@ -174,7 +174,7 @@ export default function OrdersPage() {
             const docPdf = new jsPDF({
                 orientation: 'portrait',
                 unit: 'mm',
-                format: [80, 250]
+                format: [80, 350] // Sufficient height for long orders
             });
 
             const centerPos = 40;
@@ -236,14 +236,16 @@ export default function OrdersPage() {
             docPdf.text(`${formatPrice(calculatedDeliveryFee)}`, 75, y, { align: 'right' });
             y += 6;
             
+            docPdf.setFont("helvetica", "bold");
             docPdf.setFontSize(10);
-            docPdf.text("TOTAL BAYAR:", 5, y);
+            docPdf.text("TOTAL TAGIHAN:", 5, y);
             docPdf.text(`${formatPrice(order.totalAmount)}`, 75, y, { align: 'right' });
+            docPdf.setFont("helvetica", "normal");
             
             y += 10;
             docPdf.setFontSize(8);
             docPdf.text("Alamat Pengiriman:", 5, y);
-            const splitAddress = docPdf.splitTextToSize(order.deliveryAddress, 70);
+            const splitAddress = docPdf.splitTextToSize(order.deliveryAddress || "-", 70);
             docPdf.text(splitAddress, 5, y + 4);
             
             y += (splitAddress.length * 4) + 10;
