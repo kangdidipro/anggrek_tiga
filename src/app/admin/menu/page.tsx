@@ -104,7 +104,7 @@ export default function AdminMenuPage() {
     setCurrentPage(1);
   }, [searchTerm, nameFilter, categoryFilter, vendorFilter]);
 
-  // Unique values for dropdown filters (still useful for filtering existing items)
+  // Unique values for dropdown filters - Only show categories that HAVE products
   const uniqueNames = useMemo(() => {
     if (!menuItems) return [];
     return Array.from(new Set(menuItems.map(i => i.name))).sort();
@@ -112,7 +112,7 @@ export default function AdminMenuPage() {
 
   const uniqueCategories = useMemo(() => {
     if (!menuItems) return [];
-    return Array.from(new Set(menuItems.map(i => i.category))).sort();
+    return Array.from(new Set(menuItems.map(i => i.category))).filter(Boolean).sort();
   }, [menuItems]);
 
   const uniqueVendors = useMemo(() => {
@@ -289,7 +289,7 @@ export default function AdminMenuPage() {
       await updateDoc(doc(firestore, 'menuItems', id), { isActive });
       toast({
         title: "Status Diperbarui",
-        description: `Menu kini dalam status ${isActive ? 'Tersedia' : 'Tidak Tersedia'}.`,
+        description: `Menu kini dalam status ${isActive ? 'Aktif' : 'Tidak Tersedia'}.`,
       });
     } catch (error) {
       toast({ variant: "destructive", title: "Gagal", description: "Gagal memperbarui status menu." });

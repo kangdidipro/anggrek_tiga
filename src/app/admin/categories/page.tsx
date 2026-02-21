@@ -7,12 +7,13 @@ import { collection, doc, deleteDoc, setDoc, writeBatch } from 'firebase/firesto
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Loader2, Plus, Pencil, Trash2, Search, Tag, RefreshCcw } from 'lucide-react';
+import { Loader2, Plus, Pencil, Trash2, Search, Tag, RefreshCcw, Eraser } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { products as initialProducts } from '@/lib/products';
+import type { Product } from '@/lib/types';
 
 interface Category {
   id: string;
@@ -34,6 +35,22 @@ export default function AdminCategoriesPage() {
   }, [firestore]);
   const { data: categories, isLoading } = useCollection<Category>(categoriesQuery);
 
+  // Fetch Menu Items to calculate usage
+  const menuItemsQuery = useMemoFirebase(() => {
+    if (!firestore) return null;
+    return collection(firestore, 'menuItems');
+  }, [firestore]);
+  const { data: menuItems, isLoading: isItemsLoading } = useCollection<Product>(menuItemsQuery);
+
+  // Calculate usage per category
+  const categoryUsage = useMemo(() => {
+    const counts: Record<string, number> = {};
+    menuItems?.forEach(item => {
+      counts[item.category] = (counts[item.category] || 0) + 1;
+    });
+    return counts;
+  }, [menuItems]);
+
   const filteredCategories = useMemo(() => {
     if (!categories) return [];
     return categories.filter(c => 
@@ -48,6 +65,34 @@ export default function AdminCategoriesPage() {
       toast({ title: "Berhasil", description: "Kategori telah dihapus." });
     } catch (error) {
       toast({ variant: "destructive", title: "Gagal", description: "Tidak dapat menghapus kategori." });
+    }
+  };
+
+  const handleClearUnused = async () => {
+    if (!firestore || !categories) return;
+    setIsSeeding(true);
+    try {
+      const batch = writeBatch(firestore);
+      let removedCount = 0;
+      
+      categories.forEach(cat => {
+        const count = categoryUsage[cat.name] || 0;
+        if (count === 0) {
+          batch.delete(doc(firestore, 'categories', cat.id));
+          removedCount++;
+        }
+      });
+
+      if (removedCount > 0) {
+        await batch.commit();
+        toast({ title: "Berhasil", description: `${removedCount} kategori kosong telah dihapus.` });
+      } else {
+        toast({ title: "Info", description: "Tidak ada kategori kosong untuk dihapus." });
+      }
+    } catch (error) {
+      toast({ variant: "destructive", title: "Gagal", description: "Gagal membersihkan kategori." });
+    } finally {
+      setIsSeeding(false);
     }
   };
 
@@ -95,7 +140,7 @@ export default function AdminCategoriesPage() {
     }
   };
 
-  if (isLoading) {
+  if (isLoading || isItemsLoading) {
     return <div className="flex h-full items-center justify-center p-24"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
   }
 
@@ -106,7 +151,17 @@ export default function AdminCategoriesPage() {
           <h1 className="text-3xl font-bold tracking-tight font-headline">Master Kategori</h1>
           <p className="text-muted-foreground">Kelola daftar kategori menu takjil.</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={handleClearUnused} 
+            disabled={isSeeding || !categories?.length}
+            className="border-destructive/20 text-destructive hover:bg-destructive/5"
+          >
+            {isSeeding ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Eraser className="mr-2 h-4 w-4" />}
+            Bersihkan yang Kosong
+          </Button>
           {(!categories || categories.length === 0) && (
             <Button variant="outline" size="sm" onClick={handleSeedCategories} disabled={isSeeding}>
               {isSeeding ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCcw className="mr-2 h-4 w-4" />}
@@ -141,7 +196,7 @@ export default function AdminCategoriesPage() {
       </div>
 
       <div className="relative max-w-sm">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+        <Tag className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
         <Input
           placeholder="Cari kategori..."
           value={searchTerm}
@@ -157,59 +212,68 @@ export default function AdminCategoriesPage() {
               <TableRow>
                 <TableHead className="w-[60px]">No.</TableHead>
                 <TableHead>Nama Kategori</TableHead>
+                <TableHead className="text-center">Jumlah Menu</TableHead>
                 <TableHead className="text-right">Aksi</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {filteredCategories.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={3} className="text-center py-12 text-muted-foreground">
+                  <TableCell colSpan={4} className="text-center py-12 text-muted-foreground">
                     Belum ada kategori. {(!categories || categories.length === 0) && "Klik 'Ambil dari Menu' untuk memulai."}
                   </TableCell>
                 </TableRow>
               ) : (
-                filteredCategories.map((category, index) => (
-                  <TableRow key={category.id}>
-                    <TableCell className="text-muted-foreground font-mono text-xs">{index + 1}</TableCell>
-                    <TableCell className="font-medium">
-                      <div className="flex items-center gap-2">
-                        <Tag className="h-4 w-4 text-primary/70" />
-                        {category.name}
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex justify-end gap-2">
-                        <Dialog open={isEditing?.id === category.id} onOpenChange={(open) => !open && setIsEditing(null)}>
-                          <DialogTrigger asChild>
-                            <Button variant="ghost" size="icon" onClick={() => setIsEditing(category)}>
-                              <Pencil className="h-4 w-4" />
-                            </Button>
-                          </DialogTrigger>
-                          <DialogContent className="sm:max-w-[425px]">
-                            <DialogHeader>
-                              <DialogTitle>Edit Kategori</DialogTitle>
-                              <DialogDescription>Ubah nama kategori.</DialogDescription>
-                            </DialogHeader>
-                            <form onSubmit={handleSave} className="space-y-4">
-                              <div className="grid gap-4 py-4">
-                                <div className="grid gap-2">
-                                  <Label htmlFor="edit-name">Nama Kategori</Label>
-                                  <Input id="edit-name" name="name" defaultValue={category.name} required />
+                filteredCategories.map((category, index) => {
+                  const itemCount = categoryUsage[category.name] || 0;
+                  return (
+                    <TableRow key={category.id}>
+                      <TableCell className="text-muted-foreground font-mono text-xs">{index + 1}</TableCell>
+                      <TableCell className="font-medium">
+                        <div className="flex items-center gap-2">
+                          <Tag className="h-4 w-4 text-primary/70" />
+                          {category.name}
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <span className={`inline-flex items-center justify-center min-w-[2rem] px-2 py-0.5 rounded-full text-xs font-bold ${itemCount > 0 ? 'bg-primary/10 text-primary' : 'bg-destructive/10 text-destructive'}`}>
+                          {itemCount}
+                        </span>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex justify-end gap-2">
+                          <Dialog open={isEditing?.id === category.id} onOpenChange={(open) => !open && setIsEditing(null)}>
+                            <DialogTrigger asChild>
+                              <Button variant="ghost" size="icon" onClick={() => setIsEditing(category)}>
+                                <Pencil className="h-4 w-4" />
+                              </Button>
+                            </DialogTrigger>
+                            <DialogContent className="sm:max-w-[425px]">
+                              <DialogHeader>
+                                <DialogTitle>Edit Kategori</DialogTitle>
+                                <DialogDescription>Ubah nama kategori.</DialogDescription>
+                              </DialogHeader>
+                              <form onSubmit={handleSave} className="space-y-4">
+                                <div className="grid gap-4 py-4">
+                                  <div className="grid gap-2">
+                                    <Label htmlFor="edit-name">Nama Kategori</Label>
+                                    <Input id="edit-name" name="name" defaultValue={category.name} required />
+                                  </div>
                                 </div>
-                              </div>
-                              <DialogFooter>
-                                <Button type="submit" className="w-full">Simpan Perubahan</Button>
-                              </DialogFooter>
-                            </form>
-                          </DialogContent>
-                        </Dialog>
-                        <Button variant="ghost" size="icon" className="text-destructive" onClick={() => handleDelete(category.id)}>
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))
+                                <DialogFooter>
+                                  <Button type="submit" className="w-full">Simpan Perubahan</Button>
+                                </DialogFooter>
+                              </form>
+                            </DialogContent>
+                          </Dialog>
+                          <Button variant="ghost" size="icon" className="text-destructive" onClick={() => handleDelete(category.id)}>
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })
               )}
             </TableBody>
           </Table>
