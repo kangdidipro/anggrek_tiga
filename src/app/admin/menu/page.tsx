@@ -6,7 +6,7 @@ import { collection, doc, deleteDoc, setDoc, writeBatch, updateDoc } from 'fireb
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Loader2, Plus, Pencil, Trash2, RefreshCcw, Search, X, FileUp, ArrowUpDown, ArrowUp, ArrowDown, RotateCcw, ChevronLeft, ChevronRight, PackageOpen, Tags, Image as ImageIcon, ImageOff, Info } from 'lucide-react';
+import { Loader2, Plus, Pencil, Trash2, RefreshCcw, Search, X, FileUp, ArrowUpDown, ArrowUp, ArrowDown, RotateCcw, ChevronLeft, ChevronRight, PackageOpen, Tags, Image as ImageIcon, ImageOff, Info, Upload } from 'lucide-react';
 import { formatPrice } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
@@ -57,6 +57,7 @@ export default function AdminMenuPage() {
   
   const [selectedCategory, setSelectedCategory] = useState<string>('');
   const [selectedVendor, setSelectedVendor] = useState<string>('');
+  const [previewUrl, setPreviewUrl] = useState<string>('');
 
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
@@ -118,9 +119,11 @@ export default function AdminMenuPage() {
     if (isAdding) {
       setSelectedCategory('');
       setSelectedVendor('');
+      setPreviewUrl('');
     } else if (isEditing) {
       setSelectedCategory(isEditing.category);
       setSelectedVendor(isEditing.vendor);
+      setPreviewUrl(isEditing.imageUrl || '');
     }
   }, [isAdding, isEditing]);
 
@@ -261,6 +264,26 @@ export default function AdminMenuPage() {
     }
   };
 
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 800000) {
+      toast({
+        variant: "destructive",
+        title: "File Terlalu Besar",
+        description: "Maksimal ukuran foto adalah 800KB untuk performa terbaik.",
+      });
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setPreviewUrl(reader.result as string);
+    };
+    reader.readAsDataURL(file);
+  };
+
   const handleSave = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!firestore) return;
@@ -268,7 +291,6 @@ export default function AdminMenuPage() {
     const formData = new FormData(e.currentTarget);
     const stockValue = Number(formData.get('stock'));
     
-    // Ensure isActive is boolean, not undefined
     const isActiveValue = isEditing ? (isEditing.isActive !== false) : true;
 
     const productData: Product = {
@@ -280,7 +302,7 @@ export default function AdminMenuPage() {
       vendor: selectedVendor,
       stock: Math.max(0, stockValue),
       isActive: isActiveValue,
-      imageUrl: (formData.get('imageUrl')?.toString() || '').trim(),
+      imageUrl: previewUrl.trim(),
     };
 
     if (!productData.name || isNaN(productData.price) || !productData.sku || !productData.category || !productData.vendor) {
@@ -616,12 +638,49 @@ export default function AdminMenuPage() {
                     <Input id="name" name="name" placeholder="Contoh: Nasi Bakar" required />
                   </div>
                   <div className="grid gap-2">
-                    <Label htmlFor="imageUrl">URL Foto Produk</Label>
-                    <div className="relative">
-                      <ImageIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                      <Input id="imageUrl" name="imageUrl" placeholder="https://image-url.com/foto.jpg" className="pl-10" />
+                    <Label>Foto Produk</Label>
+                    <div className="flex flex-col gap-3">
+                      <div className="relative h-40 w-full rounded-md border-2 border-dashed border-muted-foreground/25 bg-muted/50 flex flex-col items-center justify-center overflow-hidden transition-colors hover:bg-muted">
+                        {previewUrl ? (
+                          <>
+                            <img src={previewUrl} alt="Preview" className="h-full w-full object-contain" />
+                            <Button 
+                              type="button" 
+                              variant="destructive" 
+                              size="icon" 
+                              className="absolute top-2 right-2 h-8 w-8"
+                              onClick={() => setPreviewUrl('')}
+                            >
+                              <X className="h-4 w-4" />
+                            </Button>
+                          </>
+                        ) : (
+                          <div className="flex flex-col items-center gap-2 text-muted-foreground text-center px-4">
+                            <ImageIcon className="h-10 w-10 opacity-50" />
+                            <div className="space-y-1">
+                              <p className="text-xs font-bold">Klik untuk Upload Foto</p>
+                              <p className="text-[10px]">Ukuran disarankan maks. 800KB</p>
+                            </div>
+                          </div>
+                        )}
+                        <input
+                          type="file"
+                          accept="image/*"
+                          className="absolute inset-0 opacity-0 cursor-pointer"
+                          onChange={handleFileChange}
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label htmlFor="url-input" className="text-[10px] text-muted-foreground uppercase font-bold">Atau Masukkan URL:</Label>
+                        <Input 
+                          id="url-input"
+                          placeholder="https://example.com/image.jpg" 
+                          value={previewUrl.startsWith('data:') ? '' : previewUrl}
+                          onChange={(e) => setPreviewUrl(e.target.value)}
+                          className="h-8 text-xs"
+                        />
+                      </div>
                     </div>
-                    <p className="text-[10px] text-muted-foreground italic">Kosongkan jika ingin menampilkan teks "Foto tidak tersedia".</p>
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div className="grid gap-2">
@@ -875,10 +934,48 @@ export default function AdminMenuPage() {
                                   <Input id="edit-name" name="name" defaultValue={item.name} required />
                                 </div>
                                 <div className="grid gap-2">
-                                  <Label htmlFor="edit-imageUrl">URL Foto Produk</Label>
-                                  <div className="relative">
-                                    <ImageIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                                    <Input id="edit-imageUrl" name="imageUrl" defaultValue={item.imageUrl} placeholder="https://image-url.com/foto.jpg" className="pl-10" />
+                                  <Label>Foto Produk</Label>
+                                  <div className="flex flex-col gap-3">
+                                    <div className="relative h-40 w-full rounded-md border-2 border-dashed border-muted-foreground/25 bg-muted/50 flex flex-col items-center justify-center overflow-hidden transition-colors hover:bg-muted">
+                                      {previewUrl ? (
+                                        <>
+                                          <img src={previewUrl} alt="Preview" className="h-full w-full object-contain" />
+                                          <Button 
+                                            type="button" 
+                                            variant="destructive" 
+                                            size="icon" 
+                                            className="absolute top-2 right-2 h-8 w-8"
+                                            onClick={() => setPreviewUrl('')}
+                                          >
+                                            <X className="h-4 w-4" />
+                                          </Button>
+                                        </>
+                                      ) : (
+                                        <div className="flex flex-col items-center gap-2 text-muted-foreground text-center px-4">
+                                          <ImageIcon className="h-10 w-10 opacity-50" />
+                                          <div className="space-y-1">
+                                            <p className="text-xs font-bold">Klik untuk Upload Foto</p>
+                                            <p className="text-[10px]">Ukuran disarankan maks. 800KB</p>
+                                          </div>
+                                        </div>
+                                      )}
+                                      <input
+                                        type="file"
+                                        accept="image/*"
+                                        className="absolute inset-0 opacity-0 cursor-pointer"
+                                        onChange={handleFileChange}
+                                      />
+                                    </div>
+                                    <div className="space-y-1">
+                                      <Label htmlFor="edit-url-input" className="text-[10px] text-muted-foreground uppercase font-bold">Atau Masukkan URL:</Label>
+                                      <Input 
+                                        id="edit-url-input"
+                                        placeholder="https://example.com/image.jpg" 
+                                        value={previewUrl.startsWith('data:') ? '' : previewUrl}
+                                        onChange={(e) => setPreviewUrl(e.target.value)}
+                                        className="h-8 text-xs"
+                                      />
+                                    </div>
                                   </div>
                                 </div>
                                 <div className="grid grid-cols-2 gap-4">
