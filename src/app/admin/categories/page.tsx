@@ -3,15 +3,16 @@
 
 import { useState, useMemo } from 'react';
 import { useFirestore, useCollection, useMemoFirebase } from '@/firebase';
-import { collection, doc, deleteDoc, setDoc } from 'firebase/firestore';
+import { collection, doc, deleteDoc, setDoc, writeBatch } from 'firebase/firestore';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Loader2, Plus, Pencil, Trash2, Search, Tag } from 'lucide-react';
+import { Loader2, Plus, Pencil, Trash2, Search, Tag, RefreshCcw } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { products as initialProducts } from '@/lib/products';
 
 interface Category {
   id: string;
@@ -23,6 +24,7 @@ export default function AdminCategoriesPage() {
   const { toast } = useToast();
   const [isEditing, setIsEditing] = useState<Category | null>(null);
   const [isAdding, setIsAdding] = useState(false);
+  const [isSeeding, setIsSeeding] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
 
   // Fetch Categories
@@ -54,9 +56,11 @@ export default function AdminCategoriesPage() {
     if (!firestore) return;
 
     const formData = new FormData(e.currentTarget);
+    const categoryName = formData.get('name') as string;
+    
     const categoryData: Category = {
       id: isEditing?.id || (Math.floor(Math.random() * 1000) + 100).toString(),
-      name: formData.get('name') as string,
+      name: categoryName,
     };
 
     try {
@@ -66,6 +70,28 @@ export default function AdminCategoriesPage() {
       setIsAdding(false);
     } catch (error) {
       toast({ variant: "destructive", title: "Gagal", description: "Tidak dapat menyimpan kategori." });
+    }
+  };
+
+  const handleSeedCategories = async () => {
+    if (!firestore) return;
+    setIsSeeding(true);
+    try {
+      const uniqueCategories = Array.from(new Set(initialProducts.map(p => p.category)));
+      const batch = writeBatch(firestore);
+      
+      uniqueCategories.forEach((catName, index) => {
+        const id = (index + 101).toString();
+        const catRef = doc(firestore, 'categories', id);
+        batch.set(catRef, { id, name: catName });
+      });
+
+      await batch.commit();
+      toast({ title: "Berhasil", description: `${uniqueCategories.length} kategori default telah ditambahkan.` });
+    } catch (error) {
+      toast({ variant: "destructive", title: "Gagal", description: "Gagal memproses kategori default." });
+    } finally {
+      setIsSeeding(false);
     }
   };
 
@@ -80,30 +106,38 @@ export default function AdminCategoriesPage() {
           <h1 className="text-3xl font-bold tracking-tight font-headline">Master Kategori</h1>
           <p className="text-muted-foreground">Kelola daftar kategori menu takjil.</p>
         </div>
-        <Dialog open={isAdding} onOpenChange={setIsAdding}>
-          <DialogTrigger asChild>
-            <Button size="sm">
-              <Plus className="mr-2 h-4 w-4" /> Tambah Kategori
+        <div className="flex gap-2">
+          {(!categories || categories.length === 0) && (
+            <Button variant="outline" size="sm" onClick={handleSeedCategories} disabled={isSeeding}>
+              {isSeeding ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCcw className="mr-2 h-4 w-4" />}
+              Ambil dari Menu
             </Button>
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-[425px]">
-            <DialogHeader>
-              <DialogTitle>Tambah Kategori Baru</DialogTitle>
-              <DialogDescription>Masukkan nama kategori baru.</DialogDescription>
-            </DialogHeader>
-            <form onSubmit={handleSave} className="space-y-4">
-              <div className="grid gap-4 py-4">
-                <div className="grid gap-2">
-                  <Label htmlFor="name">Nama Kategori</Label>
-                  <Input id="name" name="name" placeholder="Contoh: Nasi & Lauk" required />
+          )}
+          <Dialog open={isAdding} onOpenChange={setIsAdding}>
+            <DialogTrigger asChild>
+              <Button size="sm">
+                <Plus className="mr-2 h-4 w-4" /> Tambah Kategori
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-[425px]">
+              <DialogHeader>
+                <DialogTitle>Tambah Kategori Baru</DialogTitle>
+                <DialogDescription>Masukkan nama kategori baru.</DialogDescription>
+              </DialogHeader>
+              <form onSubmit={handleSave} className="space-y-4">
+                <div className="grid gap-4 py-4">
+                  <div className="grid gap-2">
+                    <Label htmlFor="name">Nama Kategori</Label>
+                    <Input id="name" name="name" placeholder="Contoh: Nasi & Lauk" required />
+                  </div>
                 </div>
-              </div>
-              <DialogFooter>
-                <Button type="submit" className="w-full">Simpan Kategori</Button>
-              </DialogFooter>
-            </form>
-          </DialogContent>
-        </Dialog>
+                <DialogFooter>
+                  <Button type="submit" className="w-full">Simpan Kategori</Button>
+                </DialogFooter>
+              </form>
+            </DialogContent>
+          </Dialog>
+        </div>
       </div>
 
       <div className="relative max-w-sm">
@@ -130,7 +164,7 @@ export default function AdminCategoriesPage() {
               {filteredCategories.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={3} className="text-center py-12 text-muted-foreground">
-                    Belum ada kategori.
+                    Belum ada kategori. {(!categories || categories.length === 0) && "Klik 'Ambil dari Menu' untuk memulai."}
                   </TableCell>
                 </TableRow>
               ) : (
