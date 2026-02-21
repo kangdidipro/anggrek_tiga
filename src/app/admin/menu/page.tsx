@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useMemo, useRef, useEffect } from 'react';
@@ -7,7 +6,7 @@ import { collection, doc, deleteDoc, setDoc, writeBatch, updateDoc } from 'fireb
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Loader2, Plus, Pencil, Trash2, RefreshCcw, Search, X, FileUp, ArrowUpDown, ArrowUp, ArrowDown, RotateCcw, ChevronLeft, ChevronRight, PackageOpen } from 'lucide-react';
+import { Loader2, Plus, Pencil, Trash2, RefreshCcw, Search, X, FileUp, ArrowUpDown, ArrowUp, ArrowDown, RotateCcw, ChevronLeft, ChevronRight, PackageOpen, Tags } from 'lucide-react';
 import { formatPrice } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
@@ -45,6 +44,9 @@ export default function AdminMenuPage() {
   const [isResetting, setIsResetting] = useState(false);
   const [isExcelImporting, setIsExcelImporting] = useState(false);
   const [isBulkDeleting, setIsBulkDeleting] = useState(false);
+  const [isBulkUpdatingCategory, setIsBulkUpdatingCategory] = useState(false);
+  const [newBulkCategory, setNewBulkCategory] = useState('');
+  const [isUpdatingBulk, setIsUpdatingBulk] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   
   // Selection State
@@ -212,6 +214,31 @@ export default function AdminMenuPage() {
       toast({ variant: 'destructive', title: 'Gagal', description: 'Terjadi kesalahan saat menghapus data.' });
     } finally {
       setIsBulkDeleting(false);
+    }
+  };
+
+  const handleBulkUpdateCategory = async () => {
+    if (!firestore || selectedIds.size === 0 || !newBulkCategory) return;
+    setIsUpdatingBulk(true);
+    
+    const batch = writeBatch(firestore);
+    selectedIds.forEach(id => {
+      batch.update(doc(firestore, 'menuItems', id), { category: newBulkCategory });
+    });
+
+    try {
+      await batch.commit();
+      toast({
+        title: "Update Berhasil",
+        description: `${selectedIds.size} menu telah dipindahkan ke kategori: ${newBulkCategory}`,
+      });
+      setSelectedIds(new Set());
+      setIsBulkUpdatingCategory(false);
+      setNewBulkCategory('');
+    } catch (error) {
+      toast({ variant: 'destructive', title: 'Gagal', description: 'Terjadi kesalahan saat memperbarui kategori.' });
+    } finally {
+      setIsUpdatingBulk(false);
     }
   };
 
@@ -407,29 +434,71 @@ export default function AdminMenuPage() {
           </AlertDialog>
 
           {selectedIds.size > 0 && (
-            <AlertDialog>
-              <AlertDialogTrigger asChild>
-                <Button variant="destructive" size="sm">
-                  <Trash2 className="mr-2 h-4 w-4" />
-                  Hapus Terpilih ({selectedIds.size})
-                </Button>
-              </AlertDialogTrigger>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>Hapus {selectedIds.size} Menu?</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    Apakah Anda yakin ingin menghapus {selectedIds.size} menu yang dipilih? Tindakan ini permanen.
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>Batal</AlertDialogCancel>
-                  <AlertDialogAction onClick={handleBulkDelete} className="bg-destructive hover:bg-destructive/90">
-                    {isBulkDeleting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-                    Hapus Sekarang
-                  </AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
+            <div className="flex gap-2">
+              <Dialog open={isBulkUpdatingCategory} onOpenChange={setIsBulkUpdatingCategory}>
+                <DialogTrigger asChild>
+                  <Button variant="outline" size="sm" className="border-primary text-primary hover:bg-primary/5">
+                    <Tags className="mr-2 h-4 w-4" />
+                    Ubah Kategori ({selectedIds.size})
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="sm:max-w-[400px]">
+                  <DialogHeader>
+                    <DialogTitle>Ubah Kategori Masal</DialogTitle>
+                    <DialogDescription>Pilih kategori baru untuk {selectedIds.size} menu yang dipilih.</DialogDescription>
+                  </DialogHeader>
+                  <div className="grid gap-4 py-4">
+                    <div className="grid gap-2">
+                      <Label htmlFor="bulk-category">Pilih Kategori Baru</Label>
+                      <Select value={newBulkCategory} onValueChange={setNewBulkCategory}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Pilih Kategori" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="Nasi & Lauk">Nasi & Lauk</SelectItem>
+                          <SelectItem value="Mie & Soto">Mie & Soto</SelectItem>
+                          <SelectItem value="Pempek">Pempek</SelectItem>
+                          <SelectItem value="Jajanan Asin">Jajanan Asin</SelectItem>
+                          <SelectItem value="Jajanan Manis">Jajanan Manis</SelectItem>
+                          <SelectItem value="Bubur & Puding">Bubur & Puding</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                  <DialogFooter>
+                    <Button variant="ghost" onClick={() => setIsBulkUpdatingCategory(false)}>Batal</Button>
+                    <Button onClick={handleBulkUpdateCategory} disabled={!newBulkCategory || isUpdatingBulk}>
+                      {isUpdatingBulk ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                      Update Sekarang
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button variant="destructive" size="sm">
+                    <Trash2 className="mr-2 h-4 w-4" />
+                    Hapus Terpilih ({selectedIds.size})
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Hapus {selectedIds.size} Menu?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      Apakah Anda yakin ingin menghapus {selectedIds.size} menu yang dipilih? Tindakan ini permanen.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Batal</AlertDialogCancel>
+                    <AlertDialogAction onClick={handleBulkDelete} className="bg-destructive hover:bg-destructive/90">
+                      {isBulkDeleting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                      Hapus Sekarang
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            </div>
           )}
 
           {(!menuItems || menuItems.length === 0) && (
