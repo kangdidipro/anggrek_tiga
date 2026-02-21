@@ -284,6 +284,9 @@ export default function AdminMenuPage() {
     const formData = new FormData(e.currentTarget);
     const stockValue = Number(formData.get('stock'));
     
+    // Ensure isActive is always a boolean to prevent Firebase "unsupported field value: undefined" error
+    const isActiveValue = isEditing ? (isEditing.isActive ?? true) : true;
+
     const productData: Product = {
       id: isEditing?.id || (Math.floor(Math.random() * 10000) + 1000).toString(),
       name: (formData.get('name')?.toString() || '').trim(),
@@ -292,7 +295,7 @@ export default function AdminMenuPage() {
       category: selectedCategory.trim(),
       vendor: selectedVendor,
       stock: Math.max(0, stockValue),
-      isActive: isEditing ? isEditing.isActive : true,
+      isActive: isActiveValue,
     };
 
     if (!productData.name || isNaN(productData.price) || !productData.sku || !productData.category || !productData.vendor) {
