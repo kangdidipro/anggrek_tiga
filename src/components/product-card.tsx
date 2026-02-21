@@ -42,7 +42,8 @@ export default function ProductCard({ product, vendorName, isVendorActive = true
   };
 
   const isOutOfStock = currentStock <= 0;
-  const isDisabled = !isVendorActive || !isProductActive || isOutOfStock;
+  const isAvailable = isVendorActive && isProductActive;
+  const isDisabled = !isAvailable || isOutOfStock;
 
   return (
     <Card className={cn(
@@ -80,14 +81,16 @@ export default function ProductCard({ product, vendorName, isVendorActive = true
         <div className="mt-auto">
           <div className="flex items-center justify-between">
             <p className="text-lg font-bold text-primary">{formatPrice(product.price)}</p>
-            <Badge variant={isOutOfStock ? "destructive" : currentStock <= 5 ? "secondary" : "outline"} className="text-[10px] px-1.5 py-0 h-5">
-              {isOutOfStock ? "Habis" : `Stok: ${currentStock}`}
-            </Badge>
+            {isAvailable && (
+              <Badge variant={isOutOfStock ? "destructive" : currentStock <= 5 ? "secondary" : "outline"} className="text-[10px] px-1.5 py-0 h-5">
+                {isOutOfStock ? "Habis" : `Stok: ${currentStock}`}
+              </Badge>
+            )}
           </div>
         </div>
       </CardContent>
       <CardFooter className="p-4 pt-0">
-        {!isVendorActive || !isProductActive ? (
+        {!isAvailable ? (
           <Button className="w-full font-bold" variant="outline" disabled>
             Tidak Tersedia
           </Button>
