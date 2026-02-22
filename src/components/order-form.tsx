@@ -20,7 +20,7 @@ import jsPDF from 'jspdf';
 import { formatPrice, getVendorFromSku } from '@/lib/utils';
 import { format, addDays } from 'date-fns';
 import { id } from 'date-fns/locale';
-import { sendSmtpEmail, type SmtpConfig } from '@/app/actions';
+import { sendSmtpEmail, sendWhatsAppWebhook, type SmtpConfig } from '@/app/actions';
 
 const formSchema = z.object({
   name: z.string().min(2, { message: 'Nama harus diisi minimal 2 karakter.' }),
@@ -124,7 +124,7 @@ export default function OrderForm({ cartItems, total, deliveryFee, setSheetOpen 
       pdf.text(`Tgl Order: ${format(new Date(), 'dd/MM/yyyy HH:mm')}`, 5, y);
       y += 4;
       pdf.setFontSize(8);
-      pdf.text(`Tgl Kirim: ${format(deliveryDate, 'eeee, d MMM yyyy', { locale: id })}`, 5, y);
+      pdf.text(`Tgl Kirim: ${format(deliveryDate, 'eeee, d MMMM yyyy', { locale: id })}`, 5, y);
       y += 4;
       pdf.text(`Pemesan: ${values.name}`, 5, y);
       y += 4;
@@ -169,7 +169,7 @@ export default function OrderForm({ cartItems, total, deliveryFee, setSheetOpen 
       
       y += 10;
       pdf.setFontSize(8);
-      pdf.text("Alamat Pengiriman:", 5, y);
+      pdf.text("ALAMAT PENGIRIMAN:", 5, y);
       const splitAddress = pdf.splitTextToSize(values.address || "-", 70);
       pdf.text(splitAddress, 5, y + 4);
       
@@ -238,6 +238,11 @@ export default function OrderForm({ cartItems, total, deliveryFee, setSheetOpen 
       const batch = writeBatch(firestore);
       const timestamp = now.toISOString();
       
+      // Fetch settings for Webhook
+      const settingsSnap = await getDoc(doc(firestore, 'settings', 'inventory'));
+      const settingsData = settingsSnap.data() || {};
+      const webhookUrl = settingsData.whatsappWebhookUrl;
+
       const jakartaHour = parseInt(new Intl.DateTimeFormat('en-GB', {
         hour: 'numeric',
         hour12: false,
@@ -245,6 +250,7 @@ export default function OrderForm({ cartItems, total, deliveryFee, setSheetOpen 
       }).format(now));
       const isAfterCutoff = jakartaHour >= 16;
       const finalDeliveryDate = addDays(now, isAfterCutoff ? 2 : 1).toISOString();
+      const formattedDeliveryDate = format(addDays(now, isAfterCutoff ? 2 : 1), 'eeee, d MMMM yyyy', { locale: id });
 
       const uniqueVendors = Array.from(new Set(cartItems.map(item => item.product.vendor || getVendorFromSku(item.product.sku))));
       const vendorStatuses: Record<string, any> = {};
@@ -300,6 +306,25 @@ export default function OrderForm({ cartItems, total, deliveryFee, setSheetOpen 
       });
 
       await batch.commit();
+
+      // Trigger WhatsApp Webhook if configured
+      if (webhookUrl) {
+        sendWhatsAppWebhook(webhookUrl, {
+          orderId,
+          customerName: values.name,
+          customerPhone: values.phone,
+          customerEmail: values.email,
+          totalAmount: total,
+          paymentMethod: values.paymentMethod,
+          address: values.address,
+          deliveryDate: formattedDeliveryDate,
+          items: cartItems.map(i => ({
+            name: i.product.name,
+            qty: i.quantity,
+            price: i.product.price
+          }))
+        });
+      }
 
       if (values.email) {
           sendEmailReceipt(values.email, values, orderId);

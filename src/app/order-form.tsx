@@ -19,7 +19,7 @@ import { useRouter } from 'next/navigation';
 import jsPDF from 'jspdf';
 import { formatPrice } from '@/lib/utils';
 import { format } from 'date-fns';
-import { sendSmtpEmail, type SmtpConfig } from '@/app/actions';
+import { sendSmtpEmail, sendWhatsAppWebhook, type SmtpConfig } from '@/app/actions';
 
 const formSchema = z.object({
   name: z.string().min(2, { message: 'Nama harus diisi minimal 2 karakter.' }),
@@ -128,9 +128,15 @@ export default function OrderForm({ cartItems, total, deliveryFee, setSheetOpen 
       y += 6;
       
       pdf.setFontSize(10);
-      pdf.text("TOTAL:", 5, y);
+      pdf.text("TOTAL TAGIHAN:", 5, y);
       pdf.text(`${formatPrice(total)}`, 75, y, { align: 'right' });
       
+      y += 10;
+      pdf.setFontSize(8);
+      pdf.text("ALAMAT PENGIRIMAN:", 5, y);
+      const splitAddress = pdf.splitTextToSize(values.address || "-", 70);
+      pdf.text(splitAddress, 5, y + 4);
+
       const pdfBase64 = pdf.output('datauristring');
       const trackingLink = `${window.location.origin}/orders`;
 
@@ -187,11 +193,25 @@ export default function OrderForm({ cartItems, total, deliveryFee, setSheetOpen 
       const timeStr = format(now, 'HHmm');
       const randomSuffix = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
       
-      // ID Generation that works without complex collectionGroup queries
       const orderId = `${dateStr}-TJK-${timeStr}-${randomSuffix}`;
 
       const batch = writeBatch(firestore);
       const timestamp = now.toISOString();
+
+      // Fetch settings for Webhook and delivery date logic
+      const settingsSnap = await getDoc(doc(firestore, 'settings', 'inventory'));
+      const settingsData = settingsSnap.data() || {};
+      const webhookUrl = settingsData.whatsappWebhookUrl;
+
+      // Delivery Date Logic
+      const jakartaHour = parseInt(new Intl.DateTimeFormat('en-GB', {
+        hour: 'numeric',
+        hour12: false,
+        timeZone: 'Asia/Jakarta'
+      }).format(now));
+      const isAfterCutoff = jakartaHour >= 16;
+      const daysToAdd = isAfterCutoff ? 2 : 1;
+      const deliveryDate = format(addDays(now, daysToAdd), 'eeee, d MMMM yyyy', { locale: id });
 
       // Save/Update Customer Profile
       const customerRef = doc(firestore, 'customers', user.uid);
@@ -213,10 +233,6 @@ export default function OrderForm({ cartItems, total, deliveryFee, setSheetOpen 
           totalAmount: total,
           deliveryFee: deliveryFee,
           paymentMethod: values.paymentMethod,
-          status: 'Dipesan',
-          statusHistory: [
-            { status: 'Dipesan', timestamp: timestamp }
-          ],
           deliveryAddress: values.address,
       };
       batch.set(orderRef, newOrder);
@@ -242,8 +258,28 @@ export default function OrderForm({ cartItems, total, deliveryFee, setSheetOpen 
 
       await batch.commit();
 
+      // Send Email if provided
       if (values.email) {
           sendEmailReceipt(values.email, values, orderId);
+      }
+
+      // Trigger WhatsApp Webhook if configured
+      if (webhookUrl) {
+        sendWhatsAppWebhook(webhookUrl, {
+          orderId,
+          customerName: values.name,
+          customerPhone: values.phone,
+          customerEmail: values.email,
+          totalAmount: total,
+          paymentMethod: values.paymentMethod,
+          address: values.address,
+          deliveryDate: deliveryDate,
+          items: cartItems.map(i => ({
+            name: i.product.name,
+            qty: i.quantity,
+            price: i.product.price
+          }))
+        });
       }
 
       toast({
@@ -266,6 +302,12 @@ export default function OrderForm({ cartItems, total, deliveryFee, setSheetOpen 
     } finally {
       setIsSubmitting(false);
     }
+  }
+
+  function addDays(date: Date, days: number): Date {
+    const result = new Date(date);
+    result.setDate(result.getDate() + days);
+    return result;
   }
 
   if (isUserLoading) {

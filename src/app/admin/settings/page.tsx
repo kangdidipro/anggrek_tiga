@@ -5,10 +5,10 @@ import { useFirestore, errorEmitter, FirestorePermissionError, useDoc, useMemoFi
 import { collection, getDocs, writeBatch, query, collectionGroup, doc, setDoc } from 'firebase/firestore';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/tabs'; // Using path aliases if possible, but fallback to relative
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Loader2, Mail, Database, Trash2, Save, AlertTriangle, Send, Info, ExternalLink, Download, Upload, FileJson, Package, Skull, Truck } from 'lucide-react';
+import { Loader2, Mail, Database, Trash2, Save, AlertTriangle, Send, Info, ExternalLink, Download, Upload, FileJson, Package, Skull, Truck, MessageSquare } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { sendSmtpEmail, type SmtpConfig } from '@/app/actions';
@@ -21,9 +21,9 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import Link from 'next/link';
+import { Tabs as TabsUI, TabsContent as TabsContentUI, TabsList as TabsListUI, TabsTrigger as TabsTriggerUI } from '@/components/ui/tabs';
 
 const TABLES = [
   { id: 'menuItems', label: 'Menu Takjil', description: 'Daftar makanan & minuman yang dijual.' },
@@ -62,6 +62,7 @@ export default function AdminSettingsPage() {
   const [defaultStock, setDefaultStock] = useState<number>(20);
   const [adminFee, setAdminFee] = useState<number>(10);
   const [deliveryFee, setDeliveryFee] = useState<number>(2500);
+  const [whatsappWebhookUrl, setWhatsappWebhookUrl] = useState<string>('');
 
   // Load Email Settings from Firestore
   const mailDocRef = useMemoFirebase(() => {
@@ -75,7 +76,7 @@ export default function AdminSettingsPage() {
     if (!firestore) return null;
     return doc(firestore, 'settings', 'inventory');
   }, [firestore]);
-  const { data: savedParams, isLoading: isLoadingParams } = useDoc<{ defaultStock: number, adminFee?: number, deliveryFee?: number }>(paramsDocRef);
+  const { data: savedParams, isLoading: isLoadingParams } = useDoc<{ defaultStock: number, adminFee?: number, deliveryFee?: number, whatsappWebhookUrl?: string }>(paramsDocRef);
 
   useEffect(() => {
     if (savedMailSettings) {
@@ -94,6 +95,7 @@ export default function AdminSettingsPage() {
       setDefaultStock(savedParams.defaultStock ?? 20);
       setAdminFee(savedParams.adminFee ?? 10);
       setDeliveryFee(savedParams.deliveryFee ?? 2500);
+      setWhatsappWebhookUrl(savedParams.whatsappWebhookUrl || '');
     }
   }, [savedParams]);
 
@@ -124,7 +126,7 @@ export default function AdminSettingsPage() {
     if (!firestore) return;
     
     setIsSavingParams(true);
-    const data = { defaultStock, adminFee, deliveryFee };
+    const data = { defaultStock, adminFee, deliveryFee, whatsappWebhookUrl };
     try {
       await setDoc(doc(firestore, 'settings', 'inventory'), data, { merge: true });
       toast({
@@ -362,27 +364,27 @@ export default function AdminSettingsPage() {
         <p className="text-muted-foreground">Kelola konfigurasi pengiriman email, parameter operasional, dan pemeliharaan data.</p>
       </div>
 
-      <Tabs defaultValue="params" className="w-full">
-        <TabsList className="grid w-full grid-cols-4 max-w-xl">
-          <TabsTrigger value="params" className="flex items-center gap-2">
+      <TabsUI defaultValue="params" className="w-full">
+        <TabsListUI className="grid w-full grid-cols-4 max-w-xl">
+          <TabsTriggerUI value="params" className="flex items-center gap-2">
             <Package className="h-4 w-4" />
             Set Parameter
-          </TabsTrigger>
-          <TabsTrigger value="mail" className="flex items-center gap-2">
+          </TabsTriggerUI>
+          <TabsTriggerUI value="mail" className="flex items-center gap-2">
             <Mail className="h-4 w-4" />
             Mail Server
-          </TabsTrigger>
-          <TabsTrigger value="backup" className="flex items-center gap-2">
+          </TabsTriggerUI>
+          <TabsTriggerUI value="backup" className="flex items-center gap-2">
             <FileJson className="h-4 w-4" />
             Backup
-          </TabsTrigger>
-          <TabsTrigger value="data" className="flex items-center gap-2">
+          </TabsTriggerUI>
+          <TabsTriggerUI value="data" className="flex items-center gap-2">
             <Database className="h-4 w-4" />
             Maintenance
-          </TabsTrigger>
-        </TabsList>
+          </TabsTriggerUI>
+        </TabsListUI>
 
-        <TabsContent value="params" className="space-y-4 pt-4">
+        <TabsContentUI value="params" className="space-y-4 pt-4">
           <Card>
             <CardHeader>
               <CardTitle>Parameter Operasional</CardTitle>
@@ -399,14 +401,13 @@ export default function AdminSettingsPage() {
                       Angka Stok Default
                     </Label>
                     <div className="relative">
-                      <input 
+                      <Input 
                         id="default-stock" 
                         type="number" 
                         min="0"
                         value={defaultStock} 
                         onChange={(e) => setDefaultStock(Number(e.target.value))}
                         placeholder="Contoh: 20"
-                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-base ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 md:text-sm"
                       />
                     </div>
                     <p className="text-[10px] text-muted-foreground">
@@ -420,15 +421,15 @@ export default function AdminSettingsPage() {
                       Potongan Admin (%)
                     </Label>
                     <div className="relative">
-                      <input 
+                      <Input 
                         id="admin-fee" 
                         type="number" 
-                        min="0"
+                        min="0" 
                         max="100"
                         value={adminFee} 
                         onChange={(e) => setAdminFee(Number(e.target.value))}
-                        placeholder="Contoh: 10" 
-                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-base ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 md:text-sm pr-8"
+                        placeholder="Contoh: 10"
+                        className="pr-8"
                       />
                       <span className="absolute right-3 top-1/2 -translate-y-1/2 font-bold text-muted-foreground">%</span>
                     </div>
@@ -437,25 +438,42 @@ export default function AdminSettingsPage() {
                     </p>
                   </div>
 
-                  <div className="space-y-2 p-4 border rounded-lg bg-muted/10 md:col-span-2">
+                  <div className="space-y-2 p-4 border rounded-lg bg-muted/10">
                     <Label htmlFor="delivery-fee" className="font-bold flex items-center gap-2 text-blue-600">
                       <Truck className="h-4 w-4" />
                       Biaya Ongkos Antar (Rp)
                     </Label>
                     <div className="relative">
-                      <span className="absolute left-3 top-1/2 -translate-y-1/2 font-bold text-muted-foreground">Rp</span>
-                      <input 
+                      <Input 
                         id="delivery-fee" 
                         type="number" 
                         min="0"
                         value={deliveryFee} 
                         onChange={(e) => setDeliveryFee(Number(e.target.value))}
-                        placeholder="Contoh: 2500" 
-                        className="flex h-10 w-full rounded-md border border-input bg-background px-10 py-2 text-base ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 md:text-sm"
+                        placeholder="Contoh: 2500"
+                        className="pl-10"
                       />
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 font-bold text-muted-foreground">Rp</span>
                     </div>
                     <p className="text-[10px] text-muted-foreground">
                       Biaya pengiriman tetap (flat) yang dikenakan untuk setiap satu kali pesanan.
+                    </p>
+                  </div>
+
+                  <div className="space-y-2 p-4 border rounded-lg bg-muted/10">
+                    <Label htmlFor="wa-webhook" className="font-bold flex items-center gap-2 text-green-600">
+                      <MessageSquare className="h-4 w-4" />
+                      WhatsApp Webhook URL
+                    </Label>
+                    <Input 
+                      id="wa-webhook" 
+                      type="url"
+                      value={whatsappWebhookUrl} 
+                      onChange={(e) => setWhatsappWebhookUrl(e.target.value)}
+                      placeholder="https://hook.make.com/..."
+                    />
+                    <p className="text-[10px] text-muted-foreground">
+                      URL untuk mengirim notifikasi pesanan otomatis ke WhatsApp pelanggan.
                     </p>
                   </div>
                 </div>
@@ -467,9 +485,9 @@ export default function AdminSettingsPage() {
               </form>
             </CardContent>
           </Card>
-        </TabsContent>
+        </TabsContentUI>
 
-        <TabsContent value="mail" className="space-y-4 pt-4">
+        <TabsContentUI value="mail" className="space-y-4 pt-4">
           <Alert className="bg-primary/5 border-primary/20">
             <Info className="h-4 w-4 text-primary" />
             <AlertTitle className="font-bold flex items-center gap-2">
@@ -564,9 +582,9 @@ export default function AdminSettingsPage() {
               </form>
             </CardContent>
           </Card>
-        </TabsContent>
+        </TabsContentUI>
 
-        <TabsContent value="backup" className="space-y-4 pt-4">
+        <TabsContentUI value="backup" className="space-y-4 pt-4">
           <Card>
             <CardHeader>
               <CardTitle>Ekspor &amp; Impor Data (JSON)</CardTitle>
@@ -618,9 +636,9 @@ export default function AdminSettingsPage() {
               </div>
             </CardContent>
           </Card>
-        </TabsContent>
+        </TabsContentUI>
 
-        <TabsContent value="data" className="space-y-4 pt-4">
+        <TabsContentUI value="data" className="space-y-4 pt-4">
           <Card className="border-destructive/20">
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-destructive">
@@ -668,8 +686,8 @@ export default function AdminSettingsPage() {
               </div>
             </CardContent>
           </Card>
-        </TabsContent>
-      </Tabs>
+        </TabsContentUI>
+      </TabsUI>
 
       {/* Security Confirmation Dialog */}
       <AlertDialog open={!!actionTarget} onOpenChange={(open) => !open && setActionTarget(null)}>

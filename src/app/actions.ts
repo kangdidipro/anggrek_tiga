@@ -103,6 +103,32 @@ export async function sendSmtpEmail(config: SmtpConfig, options: MailOptions) {
   }
 }
 
+/**
+ * Sends order data to a WhatsApp Webhook.
+ */
+export async function sendWhatsAppWebhook(url: string, payload: any) {
+  if (!url) return { success: false, error: 'Webhook URL not configured' };
+  
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    });
+    
+    if (!response.ok) {
+      throw new Error(`Webhook failed with status: ${response.status}`);
+    }
+    
+    return { success: true };
+  } catch (error: any) {
+    console.error('WhatsApp Webhook Error:', error);
+    return { success: false, error: error.message };
+  }
+}
+
 export async function submitOrder(payload: OrderPayload) {
   try {
     orderSchema.parse(payload);
