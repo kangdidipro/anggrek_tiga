@@ -96,7 +96,7 @@ export default function OrderForm({ cartItems, total, deliveryFee, setSheetOpen 
       const pdf = new jsPDF({
         orientation: 'portrait',
         unit: 'mm',
-        format: [80, 350]
+        format: [80, 250]
       });
 
       const centerPos = 40;
@@ -314,7 +314,7 @@ export default function OrderForm({ cartItems, total, deliveryFee, setSheetOpen 
 
         sendWhatsAppWebhook(webhookUrl, {
           to: cleanPhone,
-          text: formattedMsg, // Using 'text' as required by provider
+          text: formattedMsg, 
           orderId,
           customerName: values.name,
           customerPhone: cleanPhone,
