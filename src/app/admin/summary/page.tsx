@@ -5,14 +5,14 @@ import { useFirestore, useUser, useCollection, useMemoFirebase, errorEmitter, Fi
 import { collectionGroup, getDocs, query, collection, writeBatch, doc, updateDoc, arrayUnion } from 'firebase/firestore';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Loader2, FileDown, CalendarIcon, FileText, Mail, Search, LayoutGrid, ArrowUpDown, ArrowUp, ArrowDown, Filter, Trash2, Phone, User, ChevronLeft, ChevronRight, Send, X, BarChart3, PieChart as PieChartIcon, Table as TableIcon, Package, Truck, Share2, MapPin, Clock } from 'lucide-react';
+import { Loader2, FileDown, CalendarIcon, FileText, Mail, Search, LayoutGrid, ArrowUpDown, ArrowUp, ArrowDown, Filter, Trash2, Phone, User, ChevronLeft, ChevronRight, Send, X, BarChart3, PieChart as PieChartIcon, Table as TableIcon, Package, Truck, Share2, MapPin, Clock, TrendingUp } from 'lucide-react';
 import { formatPrice, getVendorFromSku } from '@/lib/utils';
 import * as XLSX from 'xlsx';
 import { saveAs } from 'file-saver';
 import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
-import { format, parseISO } from 'date-fns';
+import { format, parseISO, subDays, startOfDay, endOfDay } from 'date-fns';
 import { id } from 'date-fns/locale';
 import { useToast } from '@/hooks/use-toast';
 import jsPDF from 'jspdf';
@@ -37,6 +37,8 @@ import {
   Pie,
   Cell,
   ResponsiveContainer,
+  AreaChart,
+  Area,
 } from 'recharts';
 import {
   AlertDialog,
@@ -140,6 +142,7 @@ export default function AdminSummaryPage() {
   const [groupBy, setGroupBy] = useState<'orderId' | 'vendor' | 'sku'>('orderId');
   const [sortConfig, setSortConfig] = useState<SortConfig>({ key: 'label', direction: 'asc' });
   const [viewMode, setViewMode] = useState<'table' | 'chart'>('table');
+  const [trendRange, setTrendRange] = useState<'7' | '30' | '90' | '365'>('7');
   const { toast } = useToast();
 
   const [selectedOrderIds, setSelectedOrderIds] = useState<Set<string>>(new Set());
@@ -457,6 +460,38 @@ export default function AdminSummaryPage() {
         totalPcs
     };
   }, [filteredSummary, orders, globalDeliveryFee]);
+
+  const trendData = useMemo(() => {
+    const days = parseInt(trendRange);
+    const now = new Date();
+    const startDate = startOfDay(subDays(now, days));
+
+    const dateMap: Record<string, number> = {};
+    
+    // Initialize map with all dates in range to avoid gaps
+    for (let i = 0; i <= days; i++) {
+      const d = subDays(now, i);
+      dateMap[format(d, 'yyyy-MM-dd')] = 0;
+    }
+
+    orders.forEach(order => {
+      const orderDate = new Date(order.orderDateTime);
+      if (orderDate >= startDate) {
+        const dateKey = format(orderDate, 'yyyy-MM-dd');
+        if (dateMap[dateKey] !== undefined) {
+          dateMap[dateKey] += order.totalAmount;
+        }
+      }
+    });
+
+    return Object.entries(dateMap)
+      .map(([dateStr, amount]) => ({
+        date: dateStr,
+        formattedDate: format(parseISO(dateStr), 'dd MMM', { locale: id }),
+        amount
+      }))
+      .sort((a, b) => a.date.localeCompare(b.date));
+  }, [orders, trendRange]);
 
   const chartDataMitra = useMemo(() => {
     const map: Record<string, number> = {};
@@ -1100,6 +1135,75 @@ export default function AdminSummaryPage() {
             </>
         ) : (
             <div className="space-y-6">
+                {/* Trend Harian Section */}
+                <Card>
+                  <CardHeader className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+                    <div>
+                      <CardTitle className="text-lg flex items-center gap-2">
+                        <TrendingUp className="h-5 w-5 text-primary" />
+                        Trend Penjualan Harian
+                      </CardTitle>
+                      <CardDescription>Grafik total omzet bruto harian dari seluruh pesanan.</CardDescription>
+                    </div>
+                    <div className="flex gap-1 bg-muted p-1 rounded-md">
+                      {[
+                        { label: '7 Hari', value: '7' },
+                        { label: '30 Hari', value: '30' },
+                        { label: '90 Hari', value: '90' },
+                        { label: '1 Tahun', value: '365' },
+                      ].map((range) => (
+                        <Button 
+                          key={range.value}
+                          variant={trendRange === range.value ? 'default' : 'ghost'}
+                          size="sm"
+                          className="h-7 text-[10px] px-3 font-bold"
+                          onClick={() => setTrendRange(range.value as any)}
+                        >
+                          {range.label}
+                        </Button>
+                      ))}
+                    </div>
+                  </CardHeader>
+                  <CardContent className="h-[300px]">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <AreaChart data={trendData}>
+                        <defs>
+                          <linearGradient id="colorAmount" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.3}/>
+                            <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0}/>
+                          </linearGradient>
+                        </defs>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
+                        <XAxis 
+                          dataKey="formattedDate" 
+                          fontSize={10} 
+                          tickLine={false} 
+                          axisLine={false}
+                          interval={trendRange === '365' ? 60 : trendRange === '90' ? 15 : 0}
+                        />
+                        <YAxis 
+                          fontSize={10} 
+                          tickLine={false} 
+                          axisLine={false} 
+                          tickFormatter={(value) => `Rp ${value/1000}k`} 
+                        />
+                        <RechartsTooltip 
+                          formatter={(value: any) => [formatPrice(value), 'Total Penjualan']}
+                          contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
+                        />
+                        <Area 
+                          type="monotone" 
+                          dataKey="amount" 
+                          stroke="hsl(var(--primary))" 
+                          fillOpacity={1} 
+                          fill="url(#colorAmount)" 
+                          strokeWidth={2}
+                        />
+                      </AreaChart>
+                    </ResponsiveContainer>
+                  </CardContent>
+                </Card>
+
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <Card className="bg-primary/5 border-primary/20 shadow-sm overflow-hidden relative"><div className="absolute right-4 top-4 text-primary/10"><Package className="h-12 w-12" /></div><CardHeader className="pb-2"><CardDescription className="text-xs font-bold text-primary/70 uppercase tracking-wider">Jumlah Item Terjual ({date ? format(date, 'd MMM yyyy', { locale: id }) : 'Semua'})</CardDescription><CardTitle className="text-3xl md:text-4xl font-bold text-primary">{actualGrandTotals.totalPcs.toLocaleString('id-ID')} <span className="text-sm font-medium text-muted-foreground">Pcs</span></CardTitle></CardHeader></Card>
                     <Card className="bg-green-500/5 border-green-500/20 shadow-sm overflow-hidden relative"><div className="absolute right-4 top-4 text-green-500/10"><TableIcon className="h-12 w-12" /></div><CardHeader className="pb-2"><CardDescription className="text-xs font-bold text-green-600 uppercase tracking-wider">Total Omzet Penjualan (Bruto)</CardDescription><CardTitle className="text-3xl md:text-4xl font-bold text-green-600">{formatPrice(actualGrandTotals.amount)}</CardTitle></CardHeader></Card>
