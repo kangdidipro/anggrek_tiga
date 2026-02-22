@@ -64,6 +64,7 @@ export default function AdminSettingsPage() {
   const [deliveryFee, setDeliveryFee] = useState<number>(2500);
   const [whatsappWebhookUrl, setWhatsappWebhookUrl] = useState<string>('');
   const [whatsappApiToken, setWhatsappApiToken] = useState<string>('');
+  const [testPhone, setTestPhone] = useState<string>('6281234567890');
 
   const mailDocRef = useMemoFirebase(() => {
     if (!firestore) return null;
@@ -203,10 +204,16 @@ export default function AdminSettingsPage() {
       return;
     }
 
+    if (!testPhone || testPhone.length < 10) {
+      toast({ variant: "destructive", title: "Nomor Tidak Valid", description: "Masukkan nomor HP tujuan tes yang benar (format: 628...)." });
+      return;
+    }
+
     setIsTestingWebhook(true);
+    const cleanPhone = testPhone.replace(/[^0-9]/g, '');
     const dummyPayload = {
-      to: "6281234567890", 
-      text: "Halo! Ini adalah pesan percobaan dari sistem TakjilKu.",
+      to: cleanPhone, 
+      text: "Halo! Ini adalah pesan percobaan dari sistem TakjilKu untuk memastikan koneksi WhatsApp API sudah aktif.",
       orderId: "TEST-123",
       customerName: "Tes Admin",
       totalAmount: 25000
@@ -509,15 +516,6 @@ export default function AdminSettingsPage() {
                         placeholder="https://wasenderapi.com/api/send-message"
                         className={cn("flex-1", isInvalidWaUrl && "border-destructive ring-destructive")}
                       />
-                      <Button 
-                        type="button" 
-                        variant="secondary" 
-                        size="icon" 
-                        onClick={handleTestWebhook} 
-                        disabled={isTestingWebhook || !whatsappWebhookUrl}
-                      >
-                        {isTestingWebhook ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
-                      </Button>
                     </div>
                     
                     {isInvalidWaUrl && (
@@ -539,6 +537,29 @@ export default function AdminSettingsPage() {
                         placeholder="Masukkan API Key dari Wasender"
                         className="h-8 text-xs"
                       />
+                    </div>
+
+                    <div className="mt-4 pt-4 border-t border-dashed">
+                      <Label className="text-[10px] font-bold uppercase text-muted-foreground">Nomor HP Tes Pengiriman</Label>
+                      <div className="flex gap-2 mt-1">
+                        <Input 
+                          value={testPhone} 
+                          onChange={(e) => setTestPhone(e.target.value)}
+                          placeholder="6281..."
+                          className="h-8 text-xs flex-1"
+                        />
+                        <Button 
+                          type="button" 
+                          variant="secondary" 
+                          size="sm" 
+                          className="h-8 text-[10px] font-bold"
+                          onClick={handleTestWebhook} 
+                          disabled={isTestingWebhook || !whatsappWebhookUrl}
+                        >
+                          {isTestingWebhook ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <Play className="h-3 w-3 mr-1" />}
+                          TEST KIRIM
+                        </Button>
+                      </div>
                     </div>
 
                     <div className="bg-orange-500/10 p-2 rounded flex gap-2 border border-orange-500/20 mt-2">
