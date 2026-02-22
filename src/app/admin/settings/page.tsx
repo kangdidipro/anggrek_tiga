@@ -486,7 +486,7 @@ export default function AdminSettingsPage() {
                   <div className="space-y-2 p-4 border rounded-lg bg-muted/10">
                     <Label htmlFor="wa-webhook" className="font-bold flex items-center gap-2 text-green-600">
                       <MessageSquare className="h-4 w-4" />
-                      WhatsApp Webhook/API URL
+                      WhatsApp API URL (Kirim Pesan)
                     </Label>
                     <div className="flex gap-2">
                       <Input 
@@ -494,7 +494,7 @@ export default function AdminSettingsPage() {
                         type="url"
                         value={whatsappWebhookUrl} 
                         onChange={(e) => setWhatsappWebhookUrl(e.target.value)}
-                        placeholder="https://hook.make.com/... atau URL API"
+                        placeholder="https://wasender.id/api/v1/send"
                         className="flex-1"
                       />
                       <Button 
@@ -507,6 +507,7 @@ export default function AdminSettingsPage() {
                         {isTestingWebhook ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
                       </Button>
                     </div>
+                    <p className="text-[10px] text-muted-foreground italic">Masukkan URL API dari Provider WhatsApp Anda untuk mengirim notifikasi pesanan.</p>
                     
                     <div className="mt-3 space-y-2">
                       <Label htmlFor="wa-token" className="font-bold flex items-center gap-2 text-green-600 text-xs uppercase">
@@ -517,7 +518,7 @@ export default function AdminSettingsPage() {
                         type="password"
                         value={whatsappApiToken} 
                         onChange={(e) => setWhatsappApiToken(e.target.value)}
-                        placeholder="Masukkan API Key / Token Wasender"
+                        placeholder="Masukkan API Key / Token Provider"
                         className="h-8 text-xs"
                       />
                     </div>
@@ -543,10 +544,10 @@ export default function AdminSettingsPage() {
                 
                 <Alert className="bg-orange-50 border-orange-200 mt-4">
                   <Info className="h-4 w-4 text-orange-600" />
-                  <AlertTitle className="text-xs font-bold text-orange-800 uppercase">Penting untuk WasenderAPI!</AlertTitle>
+                  <AlertTitle className="text-xs font-bold text-orange-800 uppercase">Penting untuk Provider WhatsApp!</AlertTitle>
                   <AlertDescription className="text-[11px] text-orange-700 leading-relaxed">
-                    Jika Anda menggunakan WasenderAPI, pastikan URL di atas adalah endpoint <strong>Send Message</strong>. 
-                    Sedangkan URL <u>https://takjilku.netlify.app/api/webhook</u> harus Anda masukkan ke kolom <strong>"Destination for POST requests"</strong> di dashboard Wasender Anda agar sinkronisasi berjalan dua arah.
+                    Agar sinkronisasi berjalan, masukkan URL receiver berikut ke kolom <strong>"Destination for POST requests"</strong> atau <strong>"Webhook URL"</strong> di dashboard provider Anda:<br/>
+                    <code className="bg-white/50 px-1 font-bold">https://takjilku.netlify.app/webhook</code>
                   </AlertDescription>
                 </Alert>
 
