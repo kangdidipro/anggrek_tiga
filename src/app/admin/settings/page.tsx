@@ -196,29 +196,25 @@ export default function AdminSettingsPage() {
 
     setIsTestingWebhook(true);
     const dummyPayload = {
-      orderId: "TEST-WEBHOOK-123",
+      to: "6281234567890", // Standard field for Gateways
+      message: "Halo! Ini adalah pesan percobaan dari sistem TakjilKu.",
+      orderId: "TEST-123",
       customerName: "Tes Admin",
-      customerPhone: "081234567890",
-      customerEmail: "test@example.com",
-      totalAmount: 25000,
-      paymentMethod: "QRIS",
-      address: "Alamat Percobaan Webhook",
-      deliveryDate: "Jumat, 21 Februari 2026",
-      items: [{ name: "Item Percobaan", qty: 1, price: 25000 }]
+      totalAmount: 25000
     };
 
     try {
       const result = await sendWhatsAppWebhook(whatsappWebhookUrl, dummyPayload, whatsappApiToken);
       if (result.success) {
-        toast({ title: "Webhook Berhasil Terkirim ✅", description: "Permintaan POST berhasil diterima oleh URL tersebut." });
+        toast({ title: "Berhasil Terkirim ✅", description: "Request berhasil diterima oleh API Provider Anda." });
       } else {
         throw new Error(result.error);
       }
     } catch (error: any) {
       toast({ 
         variant: "destructive", 
-        title: "Webhook Gagal", 
-        description: `Error: ${error.message}. Periksa kembali apakah URL yang Anda masukkan adalah URL API Pengiriman (bukan dashboard).` 
+        title: "Gagal", 
+        description: `Error: ${error.message}. Pastikan URL dan API Key benar.` 
       });
     } finally {
       setIsTestingWebhook(false);
@@ -498,7 +494,7 @@ export default function AdminSettingsPage() {
                         type="url"
                         value={whatsappWebhookUrl} 
                         onChange={(e) => setWhatsappWebhookUrl(e.target.value)}
-                        placeholder="https://wasenderapi.com/api/v1/messages"
+                        placeholder="https://wasenderapi.com/api/send-message"
                         className="flex-1"
                       />
                       <Button 
@@ -511,39 +507,42 @@ export default function AdminSettingsPage() {
                         {isTestingWebhook ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
                       </Button>
                     </div>
-                    <div className="bg-orange-500/10 p-2 rounded flex gap-2 border border-orange-500/20 mt-1">
-                      <AlertCircle className="h-3 w-3 text-orange-600 shrink-0 mt-0.5" />
-                      <p className="text-[9px] text-orange-700 leading-tight">
-                        <strong>Penting!</strong> Jangan masukkan URL dashboard Wasender yang berakhiran <code>/webhook</code> di sini. Itu akan menyebabkan error 404. Masukkan URL API pengiriman pesan resmi dari provider Anda.
-                      </p>
-                    </div>
                     
                     <div className="mt-3 space-y-2">
                       <Label htmlFor="wa-token" className="font-bold flex items-center gap-2 text-green-600 text-xs uppercase">
-                        <Key className="h-3 w-3" /> API Token / Header Authorization
+                        <Key className="h-3 w-3" /> API Key (Dari Session WA 🔑)
                       </Label>
                       <Input 
                         id="wa-token" 
                         type="password"
                         value={whatsappApiToken} 
                         onChange={(e) => setWhatsappApiToken(e.target.value)}
-                        placeholder="Masukkan API Key / Token Provider"
+                        placeholder="Masukkan API Key dari Wasender"
                         className="h-8 text-xs"
                       />
+                    </div>
+
+                    <div className="bg-orange-500/10 p-2 rounded flex gap-2 border border-orange-500/20 mt-2">
+                      <AlertCircle className="h-3 w-3 text-orange-600 shrink-0 mt-0.5" />
+                      <p className="text-[9px] text-orange-700 leading-tight">
+                        <strong>Tips:</strong> Klik ikon kunci (🔑) di halaman session Wasender Anda untuk mendapatkan API Key. Masukkan URL <code>https://wasenderapi.com/api/send-message</code> untuk pengiriman langsung.
+                      </p>
                     </div>
 
                     <Collapsible open={showPayload} onOpenChange={setShowPayload} className="mt-2">
                       <CollapsibleTrigger asChild>
                         <Button variant="ghost" size="sm" className="h-6 text-[9px] font-bold uppercase gap-1 px-0">
-                          <Code className="h-3 w-3" /> {showPayload ? 'Sembunyikan' : 'Lihat'} Struktur Payload
+                          <Code className="h-3 w-3" /> {showPayload ? 'Sembunyikan' : 'Lihat'} Payload Gateway
                         </Button>
                       </CollapsibleTrigger>
                       <CollapsibleContent className="mt-2">
                         <div className="bg-slate-950 text-slate-50 p-3 rounded-md font-mono text-[10px] overflow-auto max-h-40">
                           <pre>{JSON.stringify({
-                            orderId: "...", customerName: "...", customerPhone: "...", 
-                            totalAmount: 0, paymentMethod: "...", address: "...", 
-                            deliveryDate: "...", items: [{ name: "...", qty: 1, price: 0 }]
+                            to: "628...",
+                            message: "Halo [Nama]...",
+                            api_key: "...",
+                            orderId: "...",
+                            customerName: "..."
                           }, null, 2)}</pre>
                         </div>
                       </CollapsibleContent>
@@ -553,15 +552,14 @@ export default function AdminSettingsPage() {
                 
                 <Alert className="bg-orange-50 border-orange-200 mt-4">
                   <Globe className="h-4 w-4 text-orange-600" />
-                  <AlertTitle className="text-xs font-bold text-orange-800 uppercase">Panduan Sinkronisasi WasenderAPI</AlertTitle>
+                  <AlertTitle className="text-xs font-bold text-orange-800 uppercase">Sinkronisasi WasenderAPI (Receiver)</AlertTitle>
                   <AlertDescription className="text-[11px] text-orange-700 leading-relaxed space-y-2">
-                    <p>Agar integrasi berjalan lancar, ikuti langkah berikut:</p>
+                    <p>Agar aplikasi bisa menerima status pesan terupdate (Diterima/Dibaca):</p>
                     <ol className="list-decimal pl-4 space-y-1">
                       <li>Di dashboard Wasender, cari menu <strong>Webhook Configuration</strong>.</li>
                       <li>Tempel URL ini ke kolom <strong>"Destination for POST requests"</strong>:<br/>
                         <code className="bg-white/50 px-1 font-bold">https://takjilku.netlify.app/webhook</code>
                       </li>
-                      <li>Di kolom <strong>WhatsApp API URL</strong> di atas, masukkan URL pengiriman pesan (API Send) milik Anda. Jangan tertukar!</li>
                     </ol>
                   </AlertDescription>
                 </Alert>

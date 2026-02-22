@@ -308,12 +308,17 @@ export default function OrderForm({ cartItems, total, deliveryFee, setSheetOpen 
 
       await batch.commit();
 
+      // Send WhatsApp Notification via Gateway (WasenderAPI)
       if (webhookUrl) {
+        const cleanPhone = values.phone.replace(/[^0-9]/g, '');
+        const formattedMsg = `*PESANAN TAKJILKU BERHASIL!* 🌙\n\nHalo *${values.name}*,\nTerima kasih telah memesan takjil UMKM Anggrek 3.\n\n*ID Pesanan:* #${orderId}\n*Total Bayar:* ${formatPrice(total)}\n*Metode:* ${values.paymentMethod}\n*Jadwal Antar:* ${formattedDeliveryDate}\n\n*Alamat:* ${values.address}\n\n_Pesanan Anda sedang kami proses._ 🙏`;
+
         sendWhatsAppWebhook(webhookUrl, {
+          to: cleanPhone,
+          message: formattedMsg,
           orderId,
           customerName: values.name,
-          customerPhone: values.phone,
-          customerEmail: values.email,
+          customerPhone: cleanPhone,
           totalAmount: total,
           paymentMethod: values.paymentMethod,
           address: values.address,

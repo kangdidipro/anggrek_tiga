@@ -96,7 +96,7 @@ export async function sendSmtpEmail(config: SmtpConfig, options: MailOptions) {
 
 /**
  * Sends order data to a WhatsApp Webhook/API.
- * Support for API Token headers added for direct integration with Wasender/Gateway APIs.
+ * Support for API Token headers and common gateway payloads added.
  */
 export async function sendWhatsAppWebhook(url: string, payload: any, token?: string) {
   if (!url) return { success: false, error: 'Webhook URL not configured' };
@@ -106,20 +106,30 @@ export async function sendWhatsAppWebhook(url: string, payload: any, token?: str
       'Content-Type': 'application/json',
     };
 
-    // If token is provided, add common authorization headers
+    // If token is provided, add common authorization headers for Wasender/Gateway APIs
     if (token) {
+      // Standard for many APIs
       headers['Authorization'] = token.startsWith('Bearer ') ? token : `Bearer ${token}`;
-      headers['X-API-Key'] = token; // Support for some providers that use this header
+      // Common for Wasender clones
+      headers['X-API-Key'] = token; 
+      headers['api-key'] = token;
     }
     
     const response = await fetch(url, {
       method: 'POST',
       headers,
-      body: JSON.stringify(payload),
+      body: JSON.stringify({
+        ...payload,
+        // Ensure standard fields for WA Gateways like Wasender
+        to: payload.to || payload.customerPhone?.replace(/[^0-9]/g, ''),
+        api_key: token // Some providers want it in the body too
+      }),
     });
     
     if (!response.ok) {
-      throw new Error(`Webhook failed with status: ${response.status}`);
+      const errorText = await response.text();
+      console.error(`Webhook Error Response (${response.status}):`, errorText);
+      throw new Error(`Webhook failed with status: ${response.status}. ${errorText.substring(0, 100)}`);
     }
     
     return { success: true };
