@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
@@ -7,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Loader2, Mail, Database, Trash2, Save, AlertTriangle, Send, Info, ExternalLink, Download, Upload, FileJson, Package, Skull, Truck, MessageSquare, Code, Play } from 'lucide-react';
+import { Loader2, Mail, Database, Trash2, Save, AlertTriangle, Send, Info, ExternalLink, Download, Upload, FileJson, Package, Skull, Truck, MessageSquare, Code, Play, Key } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { sendSmtpEmail, sendWhatsAppWebhook, type SmtpConfig } from '@/app/actions';
@@ -47,11 +48,9 @@ export default function AdminSettingsPage() {
   const [showPayload, setShowPayload] = useState(false);
   const restoreFileInputRef = useRef<HTMLInputElement>(null);
 
-  // Maintenance States
   const [confirmInput, setConfirmInput] = useState('');
   const [actionTarget, setActionTarget] = useState<{ id: string, label: string } | null>(null);
 
-  // Email Server Settings State
   const [smtpSettings, setSmtpSettings] = useState<SmtpConfig>({
     host: 'smtp.gmail.com',
     port: '587',
@@ -60,25 +59,29 @@ export default function AdminSettingsPage() {
     from: '',
   });
 
-  // Global Parameters State
   const [defaultStock, setDefaultStock] = useState<number>(20);
   const [adminFee, setAdminFee] = useState<number>(10);
   const [deliveryFee, setDeliveryFee] = useState<number>(2500);
   const [whatsappWebhookUrl, setWhatsappWebhookUrl] = useState<string>('');
+  const [whatsappApiToken, setWhatsappApiToken] = useState<string>('');
 
-  // Load Email Settings from Firestore
   const mailDocRef = useMemoFirebase(() => {
     if (!firestore) return null;
     return doc(firestore, 'settings', 'mail');
   }, [firestore]);
   const { data: savedMailSettings, isLoading: isLoadingMail } = useDoc<SmtpConfig>(mailDocRef);
 
-  // Load Inventory/Params Settings from Firestore
   const paramsDocRef = useMemoFirebase(() => {
     if (!firestore) return null;
     return doc(firestore, 'settings', 'inventory');
   }, [firestore]);
-  const { data: savedParams, isLoading: isLoadingParams } = useDoc<{ defaultStock: number, adminFee?: number, deliveryFee?: number, whatsappWebhookUrl?: string }>(paramsDocRef);
+  const { data: savedParams, isLoading: isLoadingParams } = useDoc<{ 
+    defaultStock: number, 
+    adminFee?: number, 
+    deliveryFee?: number, 
+    whatsappWebhookUrl?: string,
+    whatsappApiToken?: string 
+  }>(paramsDocRef);
 
   useEffect(() => {
     if (savedMailSettings) {
@@ -98,6 +101,7 @@ export default function AdminSettingsPage() {
       setAdminFee(savedParams.adminFee ?? 10);
       setDeliveryFee(savedParams.deliveryFee ?? 2500);
       setWhatsappWebhookUrl(savedParams.whatsappWebhookUrl || '');
+      setWhatsappApiToken(savedParams.whatsappApiToken || '');
     }
   }, [savedParams]);
 
@@ -128,7 +132,7 @@ export default function AdminSettingsPage() {
     if (!firestore) return;
     
     setIsSavingParams(true);
-    const data = { defaultStock, adminFee, deliveryFee, whatsappWebhookUrl };
+    const data = { defaultStock, adminFee, deliveryFee, whatsappWebhookUrl, whatsappApiToken };
     try {
       await setDoc(doc(firestore, 'settings', 'inventory'), data, { merge: true });
       toast({
@@ -174,7 +178,6 @@ export default function AdminSettingsPage() {
         throw new Error(result.error);
       }
     } catch (error: any) {
-      console.error("Test Email error:", error);
       toast({
         variant: "destructive",
         title: "Test Gagal",
@@ -205,9 +208,9 @@ export default function AdminSettingsPage() {
     };
 
     try {
-      const result = await sendWhatsAppWebhook(whatsappWebhookUrl, dummyPayload);
+      const result = await sendWhatsAppWebhook(whatsappWebhookUrl, dummyPayload, whatsappApiToken);
       if (result.success) {
-        toast({ title: "Webhook Berhasil Terkirim ✅", description: "Silakan cek dashboard provider Webhook Anda (Make/Zapier)." });
+        toast({ title: "Webhook Berhasil Terkirim ✅", description: "Silakan cek dashboard provider Webhook Anda." });
       } else {
         throw new Error(result.error);
       }
@@ -270,7 +273,6 @@ export default function AdminSettingsPage() {
       
       toast({ title: "Backup Berhasil", description: "Seluruh data sistem telah dicadangkan ke file JSON." });
     } catch (err: any) {
-      console.error("Backup error:", err);
       toast({ variant: "destructive", title: "Backup Gagal", description: err.message });
     } finally {
       setIsBackingUp(false);
@@ -333,7 +335,6 @@ export default function AdminSettingsPage() {
         await batch.commit();
         toast({ title: "Restore Berhasil", description: "Data sistem telah dipulihkan dari file backup." });
       } catch (err: any) {
-        console.error("Restore error:", err);
         toast({ variant: "destructive", title: "Restore Gagal", description: "Format file tidak valid atau terjadi kesalahan database." });
       } finally {
         setIsRestoring(false);
@@ -379,7 +380,6 @@ export default function AdminSettingsPage() {
         description: `Seluruh data pada ${actionTarget.label} telah dihapus selamanya.`,
       });
     } catch (error: any) {
-      console.error(`Error clearing ${actionTarget.label}:`, error);
       toast({ variant: 'destructive', title: 'Gagal', description: 'Terjadi kesalahan hak akses saat menghapus data.' });
     } finally {
       setIsDeleting(false);
@@ -435,19 +435,14 @@ export default function AdminSettingsPage() {
                       <Package className="h-4 w-4 text-primary" />
                       Angka Stok Default
                     </Label>
-                    <div className="relative">
-                      <Input 
-                        id="default-stock" 
-                        type="number" 
-                        min="0"
-                        value={defaultStock} 
-                        onChange={(e) => setDefaultStock(Number(e.target.value))}
-                        placeholder="Contoh: 20"
-                      />
-                    </div>
-                    <p className="text-[10px] text-muted-foreground">
-                      Digunakan saat melakukan "Reset Stok" di halaman Manajemen Menu.
-                    </p>
+                    <Input 
+                      id="default-stock" 
+                      type="number" 
+                      min="0"
+                      value={defaultStock} 
+                      onChange={(e) => setDefaultStock(Number(e.target.value))}
+                    />
+                    <p className="text-[10px] text-muted-foreground">Digunakan saat melakukan "Reset Stok" di halaman Menu.</p>
                   </div>
 
                   <div className="space-y-2 p-4 border rounded-lg bg-muted/10">
@@ -459,18 +454,14 @@ export default function AdminSettingsPage() {
                       <Input 
                         id="admin-fee" 
                         type="number" 
-                        min="0" 
-                        max="100"
+                        min="0" max="100"
                         value={adminFee} 
                         onChange={(e) => setAdminFee(Number(e.target.value))}
-                        placeholder="Contoh: 10"
                         className="pr-8"
                       />
                       <span className="absolute right-3 top-1/2 -translate-y-1/2 font-bold text-muted-foreground">%</span>
                     </div>
-                    <p className="text-[10px] text-muted-foreground">
-                      Persentase biaya administrasi yang dipotong dari total penjualan kotor per mitra.
-                    </p>
+                    <p className="text-[10px] text-muted-foreground">Potongan biaya administrasi per mitra.</p>
                   </div>
 
                   <div className="space-y-2 p-4 border rounded-lg bg-muted/10">
@@ -482,23 +473,20 @@ export default function AdminSettingsPage() {
                       <Input 
                         id="delivery-fee" 
                         type="number" 
-                        min="0" 
+                        min="0"
                         value={deliveryFee} 
                         onChange={(e) => setDeliveryFee(Number(e.target.value))}
-                        placeholder="Contoh: 2500"
                         className="pl-10"
                       />
                       <span className="absolute left-3 top-1/2 -translate-y-1/2 font-bold text-muted-foreground">Rp</span>
                     </div>
-                    <p className="text-[10px] text-muted-foreground">
-                      Biaya pengiriman tetap (flat) yang dikenakan untuk setiap satu kali pesanan.
-                    </p>
+                    <p className="text-[10px] text-muted-foreground">Biaya pengiriman tetap per pesanan.</p>
                   </div>
 
                   <div className="space-y-2 p-4 border rounded-lg bg-muted/10">
                     <Label htmlFor="wa-webhook" className="font-bold flex items-center gap-2 text-green-600">
                       <MessageSquare className="h-4 w-4" />
-                      WhatsApp Webhook URL
+                      WhatsApp Webhook/API URL
                     </Label>
                     <div className="flex gap-2">
                       <Input 
@@ -506,7 +494,7 @@ export default function AdminSettingsPage() {
                         type="url"
                         value={whatsappWebhookUrl} 
                         onChange={(e) => setWhatsappWebhookUrl(e.target.value)}
-                        placeholder="https://hook.make.com/..."
+                        placeholder="https://hook.make.com/... atau URL API"
                         className="flex-1"
                       />
                       <Button 
@@ -515,33 +503,37 @@ export default function AdminSettingsPage() {
                         size="icon" 
                         onClick={handleTestWebhook} 
                         disabled={isTestingWebhook || !whatsappWebhookUrl}
-                        title="Kirim Tes Payload ke Webhook"
                       >
                         {isTestingWebhook ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
                       </Button>
                     </div>
-                    <p className="text-[10px] text-muted-foreground">
-                      URL untuk mengirim notifikasi pesanan otomatis ke WhatsApp pelanggan.
-                    </p>
                     
+                    <div className="mt-3 space-y-2">
+                      <Label htmlFor="wa-token" className="font-bold flex items-center gap-2 text-green-600 text-xs uppercase">
+                        <Key className="h-3 w-3" /> API Token / Header Authorization
+                      </Label>
+                      <Input 
+                        id="wa-token" 
+                        type="password"
+                        value={whatsappApiToken} 
+                        onChange={(e) => setWhatsappApiToken(e.target.value)}
+                        placeholder="Masukkan API Key / Token Wasender"
+                        className="h-8 text-xs"
+                      />
+                    </div>
+
                     <Collapsible open={showPayload} onOpenChange={setShowPayload} className="mt-2">
                       <CollapsibleTrigger asChild>
                         <Button variant="ghost" size="sm" className="h-6 text-[9px] font-bold uppercase gap-1 px-0">
-                          <Code className="h-3 w-3" /> {showPayload ? 'Sembunyikan' : 'Lihat'} Struktur JSON (Payload)
+                          <Code className="h-3 w-3" /> {showPayload ? 'Sembunyikan' : 'Lihat'} Struktur Payload
                         </Button>
                       </CollapsibleTrigger>
                       <CollapsibleContent className="mt-2">
                         <div className="bg-slate-950 text-slate-50 p-3 rounded-md font-mono text-[10px] overflow-auto max-h-40">
                           <pre>{JSON.stringify({
-                            orderId: "20240320-TJK-...",
-                            customerName: "John Doe",
-                            customerPhone: "0812...",
-                            customerEmail: "john@...",
-                            totalAmount: 150000,
-                            paymentMethod: "QRIS",
-                            address: "Jl. Mawar No. 123",
-                            deliveryDate: "Kamis, 21 Mar 2024",
-                            items: [{ name: "...", qty: 1, price: 0 }]
+                            orderId: "...", customerName: "...", customerPhone: "...", 
+                            totalAmount: 0, paymentMethod: "...", address: "...", 
+                            deliveryDate: "...", items: [{ name: "...", qty: 1, price: 0 }]
                           }, null, 2)}</pre>
                         </div>
                       </CollapsibleContent>
@@ -549,6 +541,15 @@ export default function AdminSettingsPage() {
                   </div>
                 </div>
                 
+                <Alert className="bg-orange-50 border-orange-200 mt-4">
+                  <Info className="h-4 w-4 text-orange-600" />
+                  <AlertTitle className="text-xs font-bold text-orange-800 uppercase">Penting untuk WasenderAPI!</AlertTitle>
+                  <AlertDescription className="text-[11px] text-orange-700 leading-relaxed">
+                    Jika Anda menggunakan WasenderAPI, pastikan URL di atas adalah endpoint <strong>Send Message</strong>. 
+                    Sedangkan URL <u>https://takjilku.netlify.app/api/webhook</u> harus Anda masukkan ke kolom <strong>"Destination for POST requests"</strong> di dashboard Wasender Anda agar sinkronisasi berjalan dua arah.
+                  </AlertDescription>
+                </Alert>
+
                 <Button type="submit" disabled={isSavingParams} className="w-full md:w-auto px-12">
                   {isSavingParams ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
                   Simpan Semua Parameter
@@ -561,94 +562,26 @@ export default function AdminSettingsPage() {
         <TabsContentUI value="mail" className="space-y-4 pt-4">
           <Alert className="bg-primary/5 border-primary/20">
             <Info className="h-4 w-4 text-primary" />
-            <AlertTitle className="font-bold flex items-center gap-2">
-              Panduan Penting Gmail SMTP
-            </AlertTitle>
+            <AlertTitle className="font-bold">Panduan Gmail SMTP</AlertTitle>
             <AlertDescription className="text-sm space-y-2">
-              <p>Pengaturan ini <strong>TIDAK</strong> berada di menu Settings Gmail, melainkan di halaman <strong>Akun Google</strong> Anda:</p>
-              <ol className="list-decimal pl-5 space-y-2">
-                <li>Buka <Link href="https://myaccount.google.com/security" target="_blank" className="font-bold underline inline-flex items-center gap-1">Keamanan Akun Google <ExternalLink className="h-3 w-3" /></Link>.</li>
-                <li>Aktifkan <strong>Verifikasi 2 Langkah</strong> (Wajib).</li>
-                <li>Cari menu <strong>&quot;App Passwords&quot;</strong> melalui kotak pencarian di bagian atas halaman Akun Google.</li>
-                <li>Buat password baru (beri nama &quot;TakjilKu&quot;), lalu gunakan kode <strong>16 digit</strong> yang muncul sebagai Password di form bawah ini.</li>
-              </ol>
+              <p>Gunakan <strong>App Password</strong> 16 digit dari Akun Google Anda, bukan password email utama.</p>
             </AlertDescription>
           </Alert>
 
           <Card>
-            <CardHeader>
-              <CardTitle>Konfigurasi SMTP</CardTitle>
-              <CardDescription>
-                Atur server SMTP untuk mengirimkan struk PDF secara otomatis.
-              </CardDescription>
-            </CardHeader>
+            <CardHeader><CardTitle>Konfigurasi SMTP</CardTitle></CardHeader>
             <CardContent>
               <form onSubmit={handleSaveEmailSettings} className="space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="smtp-host">SMTP Host</Label>
-                    <Input 
-                      id="smtp-host" 
-                      value={smtpSettings.host} 
-                      onChange={(e) => setSmtpSettings({...smtpSettings, host: e.target.value})}
-                      placeholder="e.g. smtp.gmail.com" 
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="smtp-port">Port</Label>
-                    <Input 
-                      id="smtp-port" 
-                      value={smtpSettings.port} 
-                      onChange={(e) => setSmtpSettings({...smtpSettings, port: e.target.value})}
-                      placeholder="e.g. 587 atau 465" 
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="smtp-user">Username / Email</Label>
-                    <Input 
-                      id="smtp-user" 
-                      value={smtpSettings.user} 
-                      onChange={(e) => setSmtpSettings({...smtpSettings, user: e.target.value})}
-                      placeholder="email@gmail.com" 
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="smtp-pass">Password / App Password</Label>
-                    <Input 
-                      id="smtp-pass" 
-                      type="password" 
-                      value={smtpSettings.pass} 
-                      onChange={(e) => setSmtpSettings({...smtpSettings, pass: e.target.value})}
-                      placeholder="Gunakan kode 16 digit App Password" 
-                    />
-                  </div>
-                  <div className="space-y-2 md:col-span-2">
-                    <Label htmlFor="smtp-from">Email Pengirim (From Display Name)</Label>
-                    <Input 
-                      id="smtp-from" 
-                      value={smtpSettings.from} 
-                      onChange={(e) => setSmtpSettings({...smtpSettings, from: e.target.value})}
-                      placeholder="Isi Nama Toko (Contoh: TakjilKu)" 
-                    />
-                    <p className="text-[10px] text-muted-foreground italic">
-                      Tips: Isi dengan nama toko Anda. Sistem akan otomatis menyertakan email utama Anda di belakang nama tersebut.
-                    </p>
-                  </div>
+                  <div className="space-y-2"><Label>SMTP Host</Label><Input value={smtpSettings.host} onChange={(e) => setSmtpSettings({...smtpSettings, host: e.target.value})} /></div>
+                  <div className="space-y-2"><Label>Port</Label><Input value={smtpSettings.port} onChange={(e) => setSmtpSettings({...smtpSettings, port: e.target.value})} /></div>
+                  <div className="space-y-2"><Label>Username / Email</Label><Input value={smtpSettings.user} onChange={(e) => setSmtpSettings({...smtpSettings, user: e.target.value})} /></div>
+                  <div className="space-y-2"><Label>App Password</Label><Input type="password" value={smtpSettings.pass} onChange={(e) => setSmtpSettings({...smtpSettings, pass: e.target.value})} /></div>
+                  <div className="space-y-2 md:col-span-2"><Label>Email Pengirim (Name)</Label><Input value={smtpSettings.from} onChange={(e) => setSmtpSettings({...smtpSettings, from: e.target.value})} /></div>
                 </div>
                 <div className="flex justify-end gap-3 pt-4">
-                  <Button 
-                    type="button" 
-                    variant="outline" 
-                    onClick={handleTestEmail} 
-                    disabled={isTestingEmail || isSavingEmail}
-                  >
-                    {isTestingEmail ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
-                    Test Email
-                  </Button>
-                  <Button type="submit" disabled={isSavingEmail || isTestingEmail}>
-                    {isSavingEmail ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-                    Simpan Konfigurasi
-                  </Button>
+                  <Button type="button" variant="outline" onClick={handleTestEmail} disabled={isTestingEmail}><Send className="mr-2 h-4 w-4" /> Test Email</Button>
+                  <Button type="submit" disabled={isSavingEmail}><Save className="mr-2 h-4 w-4" /> Simpan</Button>
                 </div>
               </form>
             </CardContent>
@@ -657,53 +590,16 @@ export default function AdminSettingsPage() {
 
         <TabsContentUI value="backup" className="space-y-4 pt-4">
           <Card>
-            <CardHeader>
-              <CardTitle>Ekspor &amp; Impor Data (JSON)</CardTitle>
-              <CardDescription>
-                Cadangkan seluruh data sistem ke dalam file JSON atau pulihkan data.
-              </CardDescription>
-            </CardHeader>
+            <CardHeader><CardTitle>Ekspor &amp; Impor Data</CardTitle></CardHeader>
             <CardContent className="space-y-6">
-              <div className="flex flex-col md:flex-row items-start md:items-center justify-between p-4 border rounded-lg gap-4">
-                <div className="space-y-1">
-                  <h4 className="font-bold flex items-center gap-2">
-                    <Download className="h-4 w-4 text-primary" />
-                    Pencadangan Penuh
-                  </h4>
-                  <p className="text-sm text-muted-foreground">Unduh seluruh Menu, Mitra, Pelanggan, Pengaturan, dan Riwayat Pesanan.</p>
-                </div>
-                <Button onClick={handleBackup} disabled={isBackingUp} className="min-w-[150px]">
-                  {isBackingUp ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
-                  Unduh Backup
-                </Button>
+              <div className="flex justify-between items-center p-4 border rounded-lg">
+                <div className="space-y-1"><h4 className="font-bold">Pencadangan Penuh</h4><p className="text-sm text-muted-foreground">Unduh data ke JSON.</p></div>
+                <Button onClick={handleBackup} disabled={isBackingUp}><Download className="mr-2 h-4 w-4" /> Unduh</Button>
               </div>
-
-              <div className="flex flex-col md:flex-row items-start md:items-center justify-between p-4 border rounded-lg gap-4">
-                <div className="space-y-1">
-                  <h4 className="font-bold flex items-center gap-2">
-                    <Upload className="h-4 w-4 text-green-600" />
-                    Pemulihan Data
-                  </h4>
-                  <p className="text-sm text-muted-foreground">Unggah file backup JSON untuk memulihkan data.</p>
-                </div>
-                <div className="flex flex-col items-end gap-2">
-                  <input
-                    type="file"
-                    accept=".json"
-                    className="hidden"
-                    ref={restoreFileInputRef}
-                    onChange={handleRestore}
-                  />
-                  <Button 
-                    variant="outline" 
-                    onClick={() => restoreFileInputRef.current?.click()} 
-                    disabled={isRestoring}
-                    className="border-green-600 text-green-600 hover:bg-green-50 min-w-[150px]"
-                  >
-                    {isRestoring ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4" />}
-                    Unggah Backup
-                  </Button>
-                </div>
+              <div className="flex justify-between items-center p-4 border rounded-lg">
+                <div className="space-y-1"><h4 className="font-bold">Pemulihan Data</h4><p className="text-sm text-muted-foreground">Unggah file backup.</p></div>
+                <input type="file" accept=".json" className="hidden" ref={restoreFileInputRef} onChange={handleRestore} />
+                <Button variant="outline" onClick={() => restoreFileInputRef.current?.click()} disabled={isRestoring}><Upload className="mr-2 h-4 w-4" /> Unggah</Button>
               </div>
             </CardContent>
           </Card>
@@ -711,91 +607,29 @@ export default function AdminSettingsPage() {
 
         <TabsContentUI value="data" className="space-y-4 pt-4">
           <Card className="border-destructive/20">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-destructive">
-                <AlertTriangle className="h-5 w-5" />
-                Zona Berbahaya (Maintenance)
-              </CardTitle>
-              <CardDescription>
-                Kosongkan data tabel secara permanen. Tindakan ini memerlukan konfirmasi kata kunci.
-              </CardDescription>
-            </CardHeader>
+            <CardHeader><CardTitle className="text-destructive">Zona Berbahaya</CardTitle></CardHeader>
             <CardContent className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {TABLES.map((table) => (
-                  <div key={table.id} className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/30 transition-colors">
-                    <div className="space-y-0.5">
-                      <h4 className="text-sm font-bold">{table.label}</h4>
-                      <p className="text-xs text-muted-foreground">{table.description}</p>
-                    </div>
-                    {table.id !== 'settings' && (
-                      <Button 
-                        variant="outline" 
-                        size="sm" 
-                        className="text-destructive border-destructive/20 hover:bg-destructive/10"
-                        onClick={() => setActionTarget(table)}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    )}
+                {TABLES.map((table) => table.id !== 'settings' && (
+                  <div key={table.id} className="flex items-center justify-between p-4 border rounded-lg">
+                    <div className="space-y-0.5"><h4 className="text-sm font-bold">{table.label}</h4></div>
+                    <Button variant="outline" size="sm" className="text-destructive border-destructive/20" onClick={() => setActionTarget(table)}><Trash2 className="h-4 w-4" /></Button>
                   </div>
                 ))}
               </div>
-
-              <div className="pt-6 border-t">
-                <Button 
-                  variant="destructive" 
-                  className="w-full flex items-center gap-2 h-12 text-lg font-bold"
-                  onClick={() => setActionTarget({ id: 'ALL', label: 'SEMUA TABEL DATA (Kecuali Pengaturan)' })}
-                >
-                  <Skull className="h-5 w-5" />
-                  HAPUS SELURUH ISI DATABASE
-                </Button>
-                <p className="text-center text-[10px] text-muted-foreground mt-2 italic">
-                  *Tindakan ini akan mengosongkan Menu, Mitra, Pelanggan, dan Pesanan. Tabel Pengaturan Sistem diproteksi.
-                </p>
-              </div>
+              <Button variant="destructive" className="w-full mt-6" onClick={() => setActionTarget({ id: 'ALL', label: 'SEMUA TABEL DATA' })}><Skull className="h-5 w-5 mr-2" /> HAPUS SELURUH ISI DATABASE</Button>
             </CardContent>
           </Card>
         </TabsContentUI>
       </TabsUI>
 
-      {/* Security Confirmation Dialog */}
       <AlertDialog open={!!actionTarget} onOpenChange={(open) => !open && setActionTarget(null)}>
-        <AlertDialogContent className="border-destructive/50">
-          <AlertDialogHeader>
-            <AlertDialogTitle className="text-destructive flex items-center gap-2">
-              <AlertTriangle className="h-5 w-5" />
-              Konfirmasi Penghapusan Permanen
-            </AlertDialogTitle>
-            <AlertDialogDescription className="space-y-4" asChild>
-              <div className="space-y-4">
-                <p>
-                  Anda akan menghapus seluruh data pada <strong>{actionTarget?.label}</strong>. 
-                  Data yang sudah dihapus tidak dapat dikembalikan lagi.
-                </p>
-                <div className="p-3 bg-destructive/10 rounded-md border border-destructive/20 space-y-2">
-                  <Label className="text-destructive font-bold text-xs uppercase">Ketik "HAPUS" untuk melanjutkan:</Label>
-                  <Input 
-                    value={confirmInput} 
-                    onChange={(e) => setConfirmInput(e.target.value)} 
-                    placeholder="Ketik HAPUS di sini..."
-                    className="bg-background border-destructive/30 focus-visible:ring-destructive"
-                  />
-                </div>
-              </div>
-            </AlertDialogDescription>
-          </AlertDialogHeader>
+        <AlertDialogContent>
+          <AlertDialogHeader><AlertDialogTitle className="text-destructive">Konfirmasi Penghapusan</AlertDialogTitle><AlertDialogDescription>Ketik <strong>HAPUS</strong> untuk menghapus {actionTarget?.label}.</AlertDialogDescription></AlertDialogHeader>
+          <div className="p-4 pt-0"><Input value={confirmInput} onChange={(e) => setConfirmInput(e.target.value)} placeholder="Ketik HAPUS..." /></div>
           <AlertDialogFooter>
             <AlertDialogCancel onClick={() => { setConfirmInput(''); setActionTarget(null); }}>Batal</AlertDialogCancel>
-            <AlertDialogAction 
-              onClick={executeClear} 
-              disabled={confirmInput !== 'HAPUS' || isDeleting}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            >
-              {isDeleting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Ya, Hapus Sekarang
-            </AlertDialogAction>
+            <AlertDialogAction onClick={executeClear} disabled={confirmInput !== 'HAPUS' || isDeleting} className="bg-destructive">Ya, Hapus</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

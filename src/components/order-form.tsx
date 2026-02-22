@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useForm } from 'react-hook-form';
@@ -96,7 +97,7 @@ export default function OrderForm({ cartItems, total, deliveryFee, setSheetOpen 
       const pdf = new jsPDF({
         orientation: 'portrait',
         unit: 'mm',
-        format: [80, 350] // Taller for emails too
+        format: [80, 350]
       });
 
       const centerPos = 40;
@@ -238,10 +239,10 @@ export default function OrderForm({ cartItems, total, deliveryFee, setSheetOpen 
       const batch = writeBatch(firestore);
       const timestamp = now.toISOString();
       
-      // Fetch settings for Webhook
       const settingsSnap = await getDoc(doc(firestore, 'settings', 'inventory'));
       const settingsData = settingsSnap.data() || {};
       const webhookUrl = settingsData.whatsappWebhookUrl;
+      const apiToken = settingsData.whatsappApiToken;
 
       const jakartaHour = parseInt(new Intl.DateTimeFormat('en-GB', {
         hour: 'numeric',
@@ -307,7 +308,6 @@ export default function OrderForm({ cartItems, total, deliveryFee, setSheetOpen 
 
       await batch.commit();
 
-      // Trigger WhatsApp Webhook if configured
       if (webhookUrl) {
         sendWhatsAppWebhook(webhookUrl, {
           orderId,
@@ -323,7 +323,7 @@ export default function OrderForm({ cartItems, total, deliveryFee, setSheetOpen 
             qty: i.quantity,
             price: i.product.price
           }))
-        });
+        }, apiToken);
       }
 
       if (values.email) {

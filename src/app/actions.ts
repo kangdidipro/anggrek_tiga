@@ -1,3 +1,4 @@
+
 'use server';
 
 import { z } from 'zod';
@@ -55,30 +56,20 @@ export async function sendSmtpEmail(config: SmtpConfig, options: MailOptions) {
         user: config.user,
         pass: config.pass,
       },
-      // Increase timeout for slow connections
       connectionTimeout: 10000,
     });
 
-    /**
-     * CRITICAL for Gmail: The 'from' address email part MUST match the auth user
-     * to prevent "Message Rejected" (Error 69585).
-     * We'll construct a safe from header: "Name <auth_user@gmail.com>"
-     */
     let fromAddress = config.user;
     
     if (config.from) {
-      // If user provided something like "TakjilKu <test@email.com>" 
-      // or just "TakjilKu", extract the name part.
       let displayName = config.from;
       if (config.from.includes('<')) {
         displayName = config.from.split('<')[0].trim();
       }
       
-      // If displayName is not a raw email, wrap it in quotes
       if (displayName && !displayName.includes('@')) {
         fromAddress = `"${displayName}" <${config.user}>`;
       } else {
-        // Default to the auth user if the display name is messy
         fromAddress = config.user;
       }
     }
@@ -104,17 +95,26 @@ export async function sendSmtpEmail(config: SmtpConfig, options: MailOptions) {
 }
 
 /**
- * Sends order data to a WhatsApp Webhook.
+ * Sends order data to a WhatsApp Webhook/API.
+ * Support for API Token headers added for direct integration with Wasender/Gateway APIs.
  */
-export async function sendWhatsAppWebhook(url: string, payload: any) {
+export async function sendWhatsAppWebhook(url: string, payload: any, token?: string) {
   if (!url) return { success: false, error: 'Webhook URL not configured' };
   
   try {
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
+
+    // If token is provided, add common authorization headers
+    if (token) {
+      headers['Authorization'] = token.startsWith('Bearer ') ? token : `Bearer ${token}`;
+      headers['X-API-Key'] = token; // Support for some providers that use this header
+    }
+    
     const response = await fetch(url, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers,
       body: JSON.stringify(payload),
     });
     
