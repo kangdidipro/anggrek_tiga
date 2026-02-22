@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Loader2, Mail, Database, Trash2, Save, AlertTriangle, Send, Info, ExternalLink, Download, Upload, FileJson, Package, Skull, Truck, MessageSquare, Code, Play, Key, Globe, AlertCircle } from 'lucide-react';
+import { Loader2, Mail, Database, Trash2, Save, AlertTriangle, Send, Info, ExternalLink, Download, Upload, FileJson, Package, Skull, Truck, MessageSquare, Code, Play, Key, Globe, AlertCircle, XCircle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { sendSmtpEmail, sendWhatsAppWebhook, type SmtpConfig } from '@/app/actions';
@@ -25,6 +25,7 @@ import {
 import Link from 'next/link';
 import { Tabs as TabsUI, TabsContent as TabsContentUI, TabsList as TabsListUI, TabsTrigger as TabsTriggerUI } from '@/components/ui/tabs';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { cn } from '@/lib/utils';
 
 const TABLES = [
   { id: 'menuItems', label: 'Menu Takjil', description: 'Daftar makanan & minuman yang dijual.' },
@@ -194,9 +195,18 @@ export default function AdminSettingsPage() {
       return;
     }
 
+    if (whatsappWebhookUrl.includes('netlify.app')) {
+      toast({ 
+        variant: "destructive", 
+        title: "URL Salah!", 
+        description: "Anda memasukkan URL web sendiri. Gunakan URL API dari Wasender (misal: https://wasenderapi.com/api/send-message)." 
+      });
+      return;
+    }
+
     setIsTestingWebhook(true);
     const dummyPayload = {
-      to: "6281234567890", // Standard field for Gateways
+      to: "6281234567890", 
       message: "Halo! Ini adalah pesan percobaan dari sistem TakjilKu.",
       orderId: "TEST-123",
       customerName: "Tes Admin",
@@ -392,6 +402,8 @@ export default function AdminSettingsPage() {
     return <div className="flex h-full items-center justify-center p-24"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
   }
 
+  const isInvalidWaUrl = whatsappWebhookUrl.includes('netlify.app');
+
   return (
     <div className="space-y-6">
       <div>
@@ -486,7 +498,7 @@ export default function AdminSettingsPage() {
                   <div className="space-y-2 p-4 border rounded-lg bg-muted/10">
                     <Label htmlFor="wa-webhook" className="font-bold flex items-center gap-2 text-green-600">
                       <MessageSquare className="h-4 w-4" />
-                      WhatsApp API URL (Kirim Pesan)
+                      URL API PROVIDER (Tujuan Kirim Pesan)
                     </Label>
                     <div className="flex gap-2">
                       <Input 
@@ -495,7 +507,7 @@ export default function AdminSettingsPage() {
                         value={whatsappWebhookUrl} 
                         onChange={(e) => setWhatsappWebhookUrl(e.target.value)}
                         placeholder="https://wasenderapi.com/api/send-message"
-                        className="flex-1"
+                        className={cn("flex-1", isInvalidWaUrl && "border-destructive ring-destructive")}
                       />
                       <Button 
                         type="button" 
@@ -508,6 +520,13 @@ export default function AdminSettingsPage() {
                       </Button>
                     </div>
                     
+                    {isInvalidWaUrl && (
+                      <div className="flex items-center gap-1.5 text-destructive text-[10px] font-bold uppercase mt-1 animate-pulse">
+                        <XCircle className="h-3 w-3" />
+                        Salah URL! Gunakan URL Wasender, bukan web ini.
+                      </div>
+                    )}
+
                     <div className="mt-3 space-y-2">
                       <Label htmlFor="wa-token" className="font-bold flex items-center gap-2 text-green-600 text-xs uppercase">
                         <Key className="h-3 w-3" /> API Key (Dari Session WA 🔑)
@@ -524,9 +543,10 @@ export default function AdminSettingsPage() {
 
                     <div className="bg-orange-500/10 p-2 rounded flex gap-2 border border-orange-500/20 mt-2">
                       <AlertCircle className="h-3 w-3 text-orange-600 shrink-0 mt-0.5" />
-                      <p className="text-[9px] text-orange-700 leading-tight">
-                        <strong>Tips:</strong> Klik ikon kunci (🔑) di halaman session Wasender Anda untuk mendapatkan API Key. Masukkan URL <code>https://wasenderapi.com/api/send-message</code> untuk pengiriman langsung.
-                      </p>
+                      <div className="text-[9px] text-orange-700 leading-tight space-y-1">
+                        <p><strong>Tips:</strong> Klik ikon kunci (🔑) di dashboard Wasender untuk ambil API Key.</p>
+                        <p><strong>Penting:</strong> URL di atas adalah endpoint Provider untuk <u>mengirim</u> pesan.</p>
+                      </div>
                     </div>
 
                     <Collapsible open={showPayload} onOpenChange={setShowPayload} className="mt-2">
@@ -550,17 +570,19 @@ export default function AdminSettingsPage() {
                   </div>
                 </div>
                 
-                <Alert className="bg-orange-50 border-orange-200 mt-4">
+                <Alert className="bg-orange-50 border-orange-200 mt-4 shadow-sm">
                   <Globe className="h-4 w-4 text-orange-600" />
                   <AlertTitle className="text-xs font-bold text-orange-800 uppercase">Sinkronisasi WasenderAPI (Receiver)</AlertTitle>
                   <AlertDescription className="text-[11px] text-orange-700 leading-relaxed space-y-2">
                     <p>Agar aplikasi bisa menerima status pesan terupdate (Diterima/Dibaca):</p>
                     <ol className="list-decimal pl-4 space-y-1">
                       <li>Di dashboard Wasender, cari menu <strong>Webhook Configuration</strong>.</li>
-                      <li>Tempel URL ini ke kolom <strong>"Destination for POST requests"</strong>:<br/>
-                        <code className="bg-white/50 px-1 font-bold">https://takjilku.netlify.app/webhook</code>
-                      </li>
+                      <li>Tempel URL di bawah ini ke kolom <strong>"Destination for POST requests"</strong>:</li>
                     </ol>
+                    <div className="bg-white/80 p-2 rounded border border-orange-200 font-mono text-[10px] flex justify-between items-center group">
+                      <code>https://takjilku.netlify.app/webhook</code>
+                      <div className="opacity-0 group-hover:opacity-100 transition-opacity text-[8px] font-bold text-orange-500 uppercase">Salin alamat ini ke Wasender</div>
+                    </div>
                   </AlertDescription>
                 </Alert>
 

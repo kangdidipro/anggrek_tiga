@@ -101,6 +101,11 @@ export async function sendSmtpEmail(config: SmtpConfig, options: MailOptions) {
 export async function sendWhatsAppWebhook(url: string, payload: any, token?: string) {
   if (!url) return { success: false, error: 'Webhook URL not configured' };
   
+  // Security check: Ensure URL is not the app itself to avoid 404 loop
+  if (url.includes('takjilku.netlify.app') || url.includes('localhost')) {
+    return { success: false, error: 'URL salah! Gunakan URL API dari Wasender (bukan URL web sendiri).' };
+  }
+
   try {
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
@@ -108,9 +113,7 @@ export async function sendWhatsAppWebhook(url: string, payload: any, token?: str
 
     // If token is provided, add common authorization headers for Wasender/Gateway APIs
     if (token) {
-      // Standard for many APIs
       headers['Authorization'] = token.startsWith('Bearer ') ? token : `Bearer ${token}`;
-      // Common for Wasender clones
       headers['X-API-Key'] = token; 
       headers['api-key'] = token;
     }
@@ -122,7 +125,7 @@ export async function sendWhatsAppWebhook(url: string, payload: any, token?: str
         ...payload,
         // Ensure standard fields for WA Gateways like Wasender
         to: payload.to || payload.customerPhone?.replace(/[^0-9]/g, ''),
-        api_key: token // Some providers want it in the body too
+        api_key: token 
       }),
     });
     
