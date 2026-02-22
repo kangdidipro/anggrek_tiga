@@ -5,13 +5,12 @@ import { useFirestore, errorEmitter, FirestorePermissionError, useDoc, useMemoFi
 import { collection, getDocs, writeBatch, query, collectionGroup, doc, setDoc } from 'firebase/firestore';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/tabs'; // Using path aliases if possible, but fallback to relative
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Loader2, Mail, Database, Trash2, Save, AlertTriangle, Send, Info, ExternalLink, Download, Upload, FileJson, Package, Skull, Truck, MessageSquare } from 'lucide-react';
+import { Loader2, Mail, Database, Trash2, Save, AlertTriangle, Send, Info, ExternalLink, Download, Upload, FileJson, Package, Skull, Truck, MessageSquare, Code, Play } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { sendSmtpEmail, type SmtpConfig } from '@/app/actions';
+import { sendSmtpEmail, sendWhatsAppWebhook, type SmtpConfig } from '@/app/actions';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -24,6 +23,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import Link from 'next/link';
 import { Tabs as TabsUI, TabsContent as TabsContentUI, TabsList as TabsListUI, TabsTrigger as TabsTriggerUI } from '@/components/ui/tabs';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 
 const TABLES = [
   { id: 'menuItems', label: 'Menu Takjil', description: 'Daftar makanan & minuman yang dijual.' },
@@ -40,9 +40,11 @@ export default function AdminSettingsPage() {
   const [isDeleting, setIsDeleting] = useState(false);
   const [isSavingEmail, setIsSavingEmail] = useState(false);
   const [isTestingEmail, setIsTestingEmail] = useState(false);
+  const [isTestingWebhook, setIsTestingWebhook] = useState(false);
   const [isSavingParams, setIsSavingParams] = useState(false);
   const [isBackingUp, setIsBackingUp] = useState(false);
   const [isRestoring, setIsRestoring] = useState(false);
+  const [showPayload, setShowPayload] = useState(false);
   const restoreFileInputRef = useRef<HTMLInputElement>(null);
 
   // Maintenance States
@@ -180,6 +182,39 @@ export default function AdminSettingsPage() {
       });
     } finally {
       setIsTestingEmail(false);
+    }
+  };
+
+  const handleTestWebhook = async () => {
+    if (!whatsappWebhookUrl) {
+      toast({ variant: "destructive", title: "URL Kosong", description: "Masukkan URL Webhook terlebih dahulu." });
+      return;
+    }
+
+    setIsTestingWebhook(true);
+    const dummyPayload = {
+      orderId: "TEST-WEBHOOK-123",
+      customerName: "Tes Admin",
+      customerPhone: "081234567890",
+      customerEmail: "test@example.com",
+      totalAmount: 25000,
+      paymentMethod: "QRIS",
+      address: "Alamat Percobaan Webhook",
+      deliveryDate: "Jumat, 21 Februari 2026",
+      items: [{ name: "Item Percobaan", qty: 1, price: 25000 }]
+    };
+
+    try {
+      const result = await sendWhatsAppWebhook(whatsappWebhookUrl, dummyPayload);
+      if (result.success) {
+        toast({ title: "Webhook Berhasil Terkirim ✅", description: "Silakan cek dashboard provider Webhook Anda (Make/Zapier)." });
+      } else {
+        throw new Error(result.error);
+      }
+    } catch (error: any) {
+      toast({ variant: "destructive", title: "Webhook Gagal", description: error.message || "Terjadi kesalahan koneksi ke URL tersebut." });
+    } finally {
+      setIsTestingWebhook(false);
     }
   };
 
@@ -447,7 +482,7 @@ export default function AdminSettingsPage() {
                       <Input 
                         id="delivery-fee" 
                         type="number" 
-                        min="0"
+                        min="0" 
                         value={deliveryFee} 
                         onChange={(e) => setDeliveryFee(Number(e.target.value))}
                         placeholder="Contoh: 2500"
@@ -465,16 +500,52 @@ export default function AdminSettingsPage() {
                       <MessageSquare className="h-4 w-4" />
                       WhatsApp Webhook URL
                     </Label>
-                    <Input 
-                      id="wa-webhook" 
-                      type="url"
-                      value={whatsappWebhookUrl} 
-                      onChange={(e) => setWhatsappWebhookUrl(e.target.value)}
-                      placeholder="https://hook.make.com/..."
-                    />
+                    <div className="flex gap-2">
+                      <Input 
+                        id="wa-webhook" 
+                        type="url"
+                        value={whatsappWebhookUrl} 
+                        onChange={(e) => setWhatsappWebhookUrl(e.target.value)}
+                        placeholder="https://hook.make.com/..."
+                        className="flex-1"
+                      />
+                      <Button 
+                        type="button" 
+                        variant="secondary" 
+                        size="icon" 
+                        onClick={handleTestWebhook} 
+                        disabled={isTestingWebhook || !whatsappWebhookUrl}
+                        title="Kirim Tes Payload ke Webhook"
+                      >
+                        {isTestingWebhook ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
+                      </Button>
+                    </div>
                     <p className="text-[10px] text-muted-foreground">
                       URL untuk mengirim notifikasi pesanan otomatis ke WhatsApp pelanggan.
                     </p>
+                    
+                    <Collapsible open={showPayload} onOpenChange={setShowPayload} className="mt-2">
+                      <CollapsibleTrigger asChild>
+                        <Button variant="ghost" size="sm" className="h-6 text-[9px] font-bold uppercase gap-1 px-0">
+                          <Code className="h-3 w-3" /> {showPayload ? 'Sembunyikan' : 'Lihat'} Struktur JSON (Payload)
+                        </Button>
+                      </CollapsibleTrigger>
+                      <CollapsibleContent className="mt-2">
+                        <div className="bg-slate-950 text-slate-50 p-3 rounded-md font-mono text-[10px] overflow-auto max-h-40">
+                          <pre>{JSON.stringify({
+                            orderId: "20240320-TJK-...",
+                            customerName: "John Doe",
+                            customerPhone: "0812...",
+                            customerEmail: "john@...",
+                            totalAmount: 150000,
+                            paymentMethod: "QRIS",
+                            address: "Jl. Mawar No. 123",
+                            deliveryDate: "Kamis, 21 Mar 2024",
+                            items: [{ name: "...", qty: 1, price: 0 }]
+                          }, null, 2)}</pre>
+                        </div>
+                      </CollapsibleContent>
+                    </Collapsible>
                   </div>
                 </div>
                 
