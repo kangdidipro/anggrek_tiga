@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Loader2, Mail, Database, Trash2, Save, AlertTriangle, Send, Info, ExternalLink, Download, Upload, FileJson, Package, Skull, Truck, MessageSquare, Code, Play, Key, Globe, AlertCircle, XCircle } from 'lucide-react';
+import { Loader2, Mail, Database, Trash2, Save, AlertTriangle, Send, Info, ExternalLink, Download, Upload, FileJson, Package, Skull, Truck, MessageSquare, Code, Play, Key, Globe, AlertCircle, XCircle, Clock } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { sendSmtpEmail, sendWhatsAppWebhook, type SmtpConfig } from '@/app/actions';
@@ -206,7 +206,7 @@ export default function AdminSettingsPage() {
     setIsTestingWebhook(true);
     const dummyPayload = {
       to: "6281234567890", 
-      text: "Halo! Ini adalah pesan percobaan dari sistem TakjilKu.", // Use 'text' instead of 'message'
+      text: "Halo! Ini adalah pesan percobaan dari sistem TakjilKu.",
       orderId: "TEST-123",
       customerName: "Tes Admin",
       totalAmount: 25000
@@ -215,15 +215,16 @@ export default function AdminSettingsPage() {
     try {
       const result = await sendWhatsAppWebhook(whatsappWebhookUrl, dummyPayload, whatsappApiToken);
       if (result.success) {
-        toast({ title: "Berhasil Terkirim ✅", description: "Request berhasil diterima oleh API Provider Anda." });
+        toast({ title: "Berhasil Terkirim ✅", description: "Pesan percobaan berhasil diterima oleh API Provider." });
       } else {
         throw new Error(result.error);
       }
     } catch (error: any) {
+      const isRateLimit = error.message.includes("Trial") || error.message.includes("minute");
       toast({ 
         variant: "destructive", 
-        title: "Gagal", 
-        description: `Error: ${error.message}. Pastikan URL dan API Key benar.` 
+        title: isRateLimit ? "Tunggu Sebentar ⏳" : "Gagal", 
+        description: error.message
       });
     } finally {
       setIsTestingWebhook(false);
@@ -411,7 +412,7 @@ export default function AdminSettingsPage() {
       </div>
 
       <TabsUI defaultValue="params" className="w-full">
-        <TabsListUI className="grid w-full grid-cols-4 max-w-xl">
+        <TabsList className="grid w-full grid-cols-4 max-w-xl">
           <TabsTriggerUI value="params" className="flex items-center gap-2">
             <Package className="h-4 w-4" />
             Set Parameter
@@ -428,7 +429,7 @@ export default function AdminSettingsPage() {
             <Database className="h-4 w-4" />
             Maintenance
           </TabsTriggerUI>
-        </TabsListUI>
+        </TabsList>
 
         <TabsContentUI value="params" className="space-y-4 pt-4">
           <Card>
@@ -543,8 +544,8 @@ export default function AdminSettingsPage() {
                     <div className="bg-orange-500/10 p-2 rounded flex gap-2 border border-orange-500/20 mt-2">
                       <AlertCircle className="h-3 w-3 text-orange-600 shrink-0 mt-0.5" />
                       <div className="text-[9px] text-orange-700 leading-tight space-y-1">
+                        <p><strong>Penting:</strong> Akun Trial memiliki limit 1 pesan / menit.</p>
                         <p><strong>Tips:</strong> Klik ikon kunci (🔑) di dashboard Wasender untuk ambil API Key.</p>
-                        <p><strong>Penting:</strong> URL di atas adalah endpoint Provider untuk <u>mengirim</u> pesan.</p>
                       </div>
                     </div>
 
@@ -558,7 +559,7 @@ export default function AdminSettingsPage() {
                         <div className="bg-slate-950 text-slate-50 p-3 rounded-md font-mono text-[10px] overflow-auto max-h-40">
                           <pre>{JSON.stringify({
                             to: "628...",
-                            text: "Halo [Nama]...", // Updated key name
+                            text: "Halo [Nama]...", 
                             api_key: "...",
                             orderId: "...",
                             customerName: "..."

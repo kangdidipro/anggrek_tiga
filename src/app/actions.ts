@@ -96,10 +96,10 @@ export async function sendSmtpEmail(config: SmtpConfig, options: MailOptions) {
 /**
  * Sends order data to a WhatsApp Webhook/API.
  * Support for API Token headers and common gateway payloads added.
- * Updated to use 'text' field instead of 'message' to fix 422 errors.
+ * Updated to handle rate limits (429) gracefully.
  */
 export async function sendWhatsAppWebhook(url: string, payload: any, token?: string) {
-  if (!url) return { success: false, error: 'Webhook URL not configured' };
+  if (!url) return { success: false, error: 'Webhook URL tidak dikonfigurasi' };
   
   // Security check: Ensure URL is not the app itself to avoid 404 loop
   const currentDomain = process.env.NEXT_PUBLIC_VERCEL_URL || 'takjilku.netlify.app';
@@ -135,8 +135,21 @@ export async function sendWhatsAppWebhook(url: string, payload: any, token?: str
     
     if (!response.ok) {
       const errorText = await response.text();
-      console.error(`Webhook Error Response (${response.status}):`, errorText);
-      throw new Error(`Webhook failed with status: ${response.status}. ${errorText.substring(0, 100)}`);
+      let displayMsg = `Error ${response.status}`;
+      
+      try {
+        const json = JSON.parse(errorText);
+        displayMsg = json.message || displayMsg;
+      } catch (e) {
+        displayMsg = errorText.substring(0, 100) || displayMsg;
+      }
+
+      // Handle specific rate limit error for better UX
+      if (response.status === 429) {
+        displayMsg = "Limit tercapai (Akun Trial: Maks 1 pesan / menit). Silakan tunggu sebentar.";
+      }
+
+      throw new Error(displayMsg);
     }
     
     return { success: true };
