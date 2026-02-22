@@ -94,14 +94,13 @@ export async function sendSmtpEmail(config: SmtpConfig, options: MailOptions) {
 }
 
 /**
- * Sends order data to a WhatsApp Webhook/API.
- * Support for API Token headers and common gateway payloads added.
- * Updated to handle rate limits (429) gracefully.
+ * Sends order data to a WhatsApp Webhook/API (WasenderAPI).
+ * Format to JID automatically to avoid "valid WhatsApp JID" errors.
  */
 export async function sendWhatsAppWebhook(url: string, payload: any, token?: string) {
   if (!url) return { success: false, error: 'Webhook URL tidak dikonfigurasi' };
   
-  // Security check: Ensure URL is not the app itself to avoid 404 loop
+  // Security check: Avoid local loops
   const currentDomain = process.env.NEXT_PUBLIC_VERCEL_URL || 'takjilku.netlify.app';
   if (url.includes(currentDomain) || url.includes('localhost')) {
     return { success: false, error: 'URL salah! Gunakan URL API dari Wasender (bukan URL web sendiri).' };
@@ -112,18 +111,33 @@ export async function sendWhatsAppWebhook(url: string, payload: any, token?: str
       'Content-Type': 'application/json',
     };
 
-    // If token is provided, add common authorization headers for Wasender/Gateway APIs
     if (token) {
       headers['Authorization'] = token.startsWith('Bearer ') ? token : `Bearer ${token}`;
       headers['X-API-Key'] = token; 
       headers['api-key'] = token;
     }
     
-    // Prepare the payload for WasenderAPI (requires 'text' field)
+    // FORMATTING TO JID: Essential for WasenderAPI (Baileys based)
+    let rawTo = (payload.to || payload.customerPhone || '').toString().trim();
+    let formattedTo = rawTo;
+
+    if (rawTo && !rawTo.includes('@')) {
+      // Clean non-numeric characters
+      let clean = rawTo.replace(/[^0-9]/g, '');
+      // Auto-convert local Indonesian format (08... -> 628...)
+      if (clean.startsWith('0')) {
+        clean = '62' + clean.substring(1);
+      }
+      // Append JID suffix if it's strictly numeric
+      if (clean) {
+        formattedTo = `${clean}@s.whatsapp.net`;
+      }
+    }
+
     const finalPayload = {
       ...payload,
-      to: payload.to || payload.customerPhone?.replace(/[^0-9]/g, ''),
-      text: payload.text || payload.message, // Ensure 'text' is used
+      to: formattedTo,
+      text: payload.text || payload.message,
       api_key: token 
     };
 
@@ -144,7 +158,6 @@ export async function sendWhatsAppWebhook(url: string, payload: any, token?: str
         displayMsg = errorText.substring(0, 100) || displayMsg;
       }
 
-      // Handle specific rate limit error for better UX
       if (response.status === 429) {
         displayMsg = "Limit tercapai (Akun Trial: Maks 1 pesan / menit). Silakan tunggu sebentar.";
       }
