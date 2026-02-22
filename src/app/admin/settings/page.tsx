@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Loader2, Mail, Database, Trash2, Save, AlertTriangle, Send, Info, ExternalLink, Download, Upload, FileJson, Package, Skull, Truck, MessageSquare, Code, Play, Key, Globe } from 'lucide-react';
+import { Loader2, Mail, Database, Trash2, Save, AlertTriangle, Send, Info, ExternalLink, Download, Upload, FileJson, Package, Skull, Truck, MessageSquare, Code, Play, Key, Globe, AlertCircle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { sendSmtpEmail, sendWhatsAppWebhook, type SmtpConfig } from '@/app/actions';
@@ -215,7 +215,11 @@ export default function AdminSettingsPage() {
         throw new Error(result.error);
       }
     } catch (error: any) {
-      toast({ variant: "destructive", title: "Webhook Gagal", description: `Error: ${error.message}. Periksa kembali URL API Send Anda.` });
+      toast({ 
+        variant: "destructive", 
+        title: "Webhook Gagal", 
+        description: `Error: ${error.message}. Periksa kembali apakah URL yang Anda masukkan adalah URL API Pengiriman (bukan dashboard).` 
+      });
     } finally {
       setIsTestingWebhook(false);
     }
@@ -507,7 +511,12 @@ export default function AdminSettingsPage() {
                         {isTestingWebhook ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
                       </Button>
                     </div>
-                    <p className="text-[10px] text-muted-foreground italic">Masukkan URL <strong>API Send</strong> dari Provider untuk mengirim notifikasi.</p>
+                    <div className="bg-orange-500/10 p-2 rounded flex gap-2 border border-orange-500/20 mt-1">
+                      <AlertCircle className="h-3 w-3 text-orange-600 shrink-0 mt-0.5" />
+                      <p className="text-[9px] text-orange-700 leading-tight">
+                        <strong>Penting!</strong> Jangan masukkan URL dashboard Wasender yang berakhiran <code>/webhook</code> di sini. Itu akan menyebabkan error 404. Masukkan URL API pengiriman pesan resmi dari provider Anda.
+                      </p>
+                    </div>
                     
                     <div className="mt-3 space-y-2">
                       <Label htmlFor="wa-token" className="font-bold flex items-center gap-2 text-green-600 text-xs uppercase">
@@ -552,7 +561,7 @@ export default function AdminSettingsPage() {
                       <li>Tempel URL ini ke kolom <strong>"Destination for POST requests"</strong>:<br/>
                         <code className="bg-white/50 px-1 font-bold">https://takjilku.netlify.app/webhook</code>
                       </li>
-                      <li>Di kolom <strong>WhatsApp API URL</strong> di atas, masukkan URL pengiriman pesan (API Send) milik Anda.</li>
+                      <li>Di kolom <strong>WhatsApp API URL</strong> di atas, masukkan URL pengiriman pesan (API Send) milik Anda. Jangan tertukar!</li>
                     </ol>
                   </AlertDescription>
                 </Alert>
@@ -606,7 +615,7 @@ export default function AdminSettingsPage() {
               <div className="flex justify-between items-center p-4 border rounded-lg">
                 <div className="space-y-1"><h4 className="font-bold">Pemulihan Data</h4><p className="text-sm text-muted-foreground">Unggah file backup.</p></div>
                 <input type="file" accept=".json" className="hidden" ref={restoreFileInputRef} onChange={handleRestore} />
-                <Button variant="outline" onClick={() => restoreFileInputRef.current?.click()} disabled={isRestoring}><Upload className="mr-2 h-4 w-4" /> Unduh</Button>
+                <Button variant="outline" onClick={() => restoreFileInputRef.current?.click()} disabled={isRestoring}><Upload className="mr-2 h-4 w-4" /> Ambil File</Button>
               </div>
             </CardContent>
           </Card>
