@@ -412,7 +412,7 @@ export default function AdminSettingsPage() {
       </div>
 
       <TabsUI defaultValue="params" className="w-full">
-        <TabsList className="grid w-full grid-cols-4 max-w-xl">
+        <TabsListUI className="grid w-full grid-cols-4 max-w-xl">
           <TabsTriggerUI value="params" className="flex items-center gap-2">
             <Package className="h-4 w-4" />
             Set Parameter
@@ -429,7 +429,7 @@ export default function AdminSettingsPage() {
             <Database className="h-4 w-4" />
             Maintenance
           </TabsTriggerUI>
-        </TabsList>
+        </TabsListUI>
 
         <TabsContentUI value="params" className="space-y-4 pt-4">
           <Card>
