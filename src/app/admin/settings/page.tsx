@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Loader2, Mail, Database, Trash2, Save, AlertTriangle, Send, Info, ExternalLink, Download, Upload, FileJson, Package, Skull, Truck, MessageSquare, Code, Play, Key } from 'lucide-react';
+import { Loader2, Mail, Database, Trash2, Save, AlertTriangle, Send, Info, ExternalLink, Download, Upload, FileJson, Package, Skull, Truck, MessageSquare, Code, Play, Key, Globe } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { sendSmtpEmail, sendWhatsAppWebhook, type SmtpConfig } from '@/app/actions';
@@ -190,7 +190,7 @@ export default function AdminSettingsPage() {
 
   const handleTestWebhook = async () => {
     if (!whatsappWebhookUrl) {
-      toast({ variant: "destructive", title: "URL Kosong", description: "Masukkan URL Webhook terlebih dahulu." });
+      toast({ variant: "destructive", title: "URL Kosong", description: "Masukkan URL API Send terlebih dahulu." });
       return;
     }
 
@@ -210,12 +210,12 @@ export default function AdminSettingsPage() {
     try {
       const result = await sendWhatsAppWebhook(whatsappWebhookUrl, dummyPayload, whatsappApiToken);
       if (result.success) {
-        toast({ title: "Webhook Berhasil Terkirim ✅", description: "Silakan cek dashboard provider Webhook Anda." });
+        toast({ title: "Webhook Berhasil Terkirim ✅", description: "Permintaan POST berhasil diterima oleh URL tersebut." });
       } else {
         throw new Error(result.error);
       }
     } catch (error: any) {
-      toast({ variant: "destructive", title: "Webhook Gagal", description: error.message || "Terjadi kesalahan koneksi ke URL tersebut." });
+      toast({ variant: "destructive", title: "Webhook Gagal", description: `Error: ${error.message}. Periksa kembali URL API Send Anda.` });
     } finally {
       setIsTestingWebhook(false);
     }
@@ -494,7 +494,7 @@ export default function AdminSettingsPage() {
                         type="url"
                         value={whatsappWebhookUrl} 
                         onChange={(e) => setWhatsappWebhookUrl(e.target.value)}
-                        placeholder="https://wasender.id/api/v1/send"
+                        placeholder="https://wasenderapi.com/api/v1/messages"
                         className="flex-1"
                       />
                       <Button 
@@ -507,7 +507,7 @@ export default function AdminSettingsPage() {
                         {isTestingWebhook ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
                       </Button>
                     </div>
-                    <p className="text-[10px] text-muted-foreground italic">Masukkan URL API dari Provider WhatsApp Anda untuk mengirim notifikasi pesanan.</p>
+                    <p className="text-[10px] text-muted-foreground italic">Masukkan URL <strong>API Send</strong> dari Provider untuk mengirim notifikasi.</p>
                     
                     <div className="mt-3 space-y-2">
                       <Label htmlFor="wa-token" className="font-bold flex items-center gap-2 text-green-600 text-xs uppercase">
@@ -543,11 +543,17 @@ export default function AdminSettingsPage() {
                 </div>
                 
                 <Alert className="bg-orange-50 border-orange-200 mt-4">
-                  <Info className="h-4 w-4 text-orange-600" />
-                  <AlertTitle className="text-xs font-bold text-orange-800 uppercase">Penting untuk Provider WhatsApp!</AlertTitle>
-                  <AlertDescription className="text-[11px] text-orange-700 leading-relaxed">
-                    Agar sinkronisasi berjalan, masukkan URL receiver berikut ke kolom <strong>"Destination for POST requests"</strong> atau <strong>"Webhook URL"</strong> di dashboard provider Anda:<br/>
-                    <code className="bg-white/50 px-1 font-bold">https://takjilku.netlify.app/webhook</code>
+                  <Globe className="h-4 w-4 text-orange-600" />
+                  <AlertTitle className="text-xs font-bold text-orange-800 uppercase">Panduan Sinkronisasi WasenderAPI</AlertTitle>
+                  <AlertDescription className="text-[11px] text-orange-700 leading-relaxed space-y-2">
+                    <p>Agar integrasi berjalan lancar, ikuti langkah berikut:</p>
+                    <ol className="list-decimal pl-4 space-y-1">
+                      <li>Di dashboard Wasender, cari menu <strong>Webhook Configuration</strong>.</li>
+                      <li>Tempel URL ini ke kolom <strong>"Destination for POST requests"</strong>:<br/>
+                        <code className="bg-white/50 px-1 font-bold">https://takjilku.netlify.app/webhook</code>
+                      </li>
+                      <li>Di kolom <strong>WhatsApp API URL</strong> di atas, masukkan URL pengiriman pesan (API Send) milik Anda.</li>
+                    </ol>
                   </AlertDescription>
                 </Alert>
 
@@ -600,7 +606,7 @@ export default function AdminSettingsPage() {
               <div className="flex justify-between items-center p-4 border rounded-lg">
                 <div className="space-y-1"><h4 className="font-bold">Pemulihan Data</h4><p className="text-sm text-muted-foreground">Unggah file backup.</p></div>
                 <input type="file" accept=".json" className="hidden" ref={restoreFileInputRef} onChange={handleRestore} />
-                <Button variant="outline" onClick={() => restoreFileInputRef.current?.click()} disabled={isRestoring}><Upload className="mr-2 h-4 w-4" /> Unggah</Button>
+                <Button variant="outline" onClick={() => restoreFileInputRef.current?.click()} disabled={isRestoring}><Upload className="mr-2 h-4 w-4" /> Unduh</Button>
               </div>
             </CardContent>
           </Card>
