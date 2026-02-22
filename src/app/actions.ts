@@ -1,4 +1,3 @@
-
 'use server';
 
 import { z } from 'zod';
@@ -97,12 +96,14 @@ export async function sendSmtpEmail(config: SmtpConfig, options: MailOptions) {
 /**
  * Sends order data to a WhatsApp Webhook/API.
  * Support for API Token headers and common gateway payloads added.
+ * Updated to use 'text' field instead of 'message' to fix 422 errors.
  */
 export async function sendWhatsAppWebhook(url: string, payload: any, token?: string) {
   if (!url) return { success: false, error: 'Webhook URL not configured' };
   
   // Security check: Ensure URL is not the app itself to avoid 404 loop
-  if (url.includes('takjilku.netlify.app') || url.includes('localhost')) {
+  const currentDomain = process.env.NEXT_PUBLIC_VERCEL_URL || 'takjilku.netlify.app';
+  if (url.includes(currentDomain) || url.includes('localhost')) {
     return { success: false, error: 'URL salah! Gunakan URL API dari Wasender (bukan URL web sendiri).' };
   }
 
@@ -118,15 +119,18 @@ export async function sendWhatsAppWebhook(url: string, payload: any, token?: str
       headers['api-key'] = token;
     }
     
+    // Prepare the payload for WasenderAPI (requires 'text' field)
+    const finalPayload = {
+      ...payload,
+      to: payload.to || payload.customerPhone?.replace(/[^0-9]/g, ''),
+      text: payload.text || payload.message, // Ensure 'text' is used
+      api_key: token 
+    };
+
     const response = await fetch(url, {
       method: 'POST',
       headers,
-      body: JSON.stringify({
-        ...payload,
-        // Ensure standard fields for WA Gateways like Wasender
-        to: payload.to || payload.customerPhone?.replace(/[^0-9]/g, ''),
-        api_key: token 
-      }),
+      body: JSON.stringify(finalPayload),
     });
     
     if (!response.ok) {

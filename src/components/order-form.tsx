@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useForm } from 'react-hook-form';
@@ -158,7 +157,7 @@ export default function OrderForm({ cartItems, total, deliveryFee, setSheetOpen 
       
       pdf.text("-".repeat(40), centerPos, y, { align: 'center' });
       y += 6;
-      pdf.text("Ongkos Antar:", 5, y);
+      pdf.text("Ongkir Antar:", 5, y);
       pdf.text(`${formatPrice(deliveryFee)}`, 75, y, { align: 'right' });
       y += 6;
       
@@ -315,7 +314,7 @@ export default function OrderForm({ cartItems, total, deliveryFee, setSheetOpen 
 
         sendWhatsAppWebhook(webhookUrl, {
           to: cleanPhone,
-          message: formattedMsg,
+          text: formattedMsg, // Using 'text' as required by provider
           orderId,
           customerName: values.name,
           customerPhone: cleanPhone,

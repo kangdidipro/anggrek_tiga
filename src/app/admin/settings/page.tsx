@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
@@ -195,7 +194,7 @@ export default function AdminSettingsPage() {
       return;
     }
 
-    if (whatsappWebhookUrl.includes('netlify.app')) {
+    if (whatsappWebhookUrl.includes('takjilku.netlify.app')) {
       toast({ 
         variant: "destructive", 
         title: "URL Salah!", 
@@ -207,7 +206,7 @@ export default function AdminSettingsPage() {
     setIsTestingWebhook(true);
     const dummyPayload = {
       to: "6281234567890", 
-      message: "Halo! Ini adalah pesan percobaan dari sistem TakjilKu.",
+      text: "Halo! Ini adalah pesan percobaan dari sistem TakjilKu.", // Use 'text' instead of 'message'
       orderId: "TEST-123",
       customerName: "Tes Admin",
       totalAmount: 25000
@@ -402,7 +401,7 @@ export default function AdminSettingsPage() {
     return <div className="flex h-full items-center justify-center p-24"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
   }
 
-  const isInvalidWaUrl = whatsappWebhookUrl.includes('netlify.app');
+  const isInvalidWaUrl = whatsappWebhookUrl.includes('takjilku.netlify.app');
 
   return (
     <div className="space-y-6">
@@ -559,7 +558,7 @@ export default function AdminSettingsPage() {
                         <div className="bg-slate-950 text-slate-50 p-3 rounded-md font-mono text-[10px] overflow-auto max-h-40">
                           <pre>{JSON.stringify({
                             to: "628...",
-                            message: "Halo [Nama]...",
+                            text: "Halo [Nama]...", // Updated key name
                             api_key: "...",
                             orderId: "...",
                             customerName: "..."
