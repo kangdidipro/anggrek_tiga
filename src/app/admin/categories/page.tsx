@@ -5,7 +5,7 @@ import { useState, useMemo, useEffect } from 'react';
 import { useFirestore, useCollection, useMemoFirebase } from '@/firebase';
 import { collection, doc, deleteDoc, setDoc, writeBatch } from 'firebase/firestore';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Loader2, Plus, Pencil, Trash2, Search, Tag, RefreshCcw, Eraser, AlertCircle, CheckCircle2, CheckSquare, Layers } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
@@ -22,18 +22,18 @@ interface Category {
   id: string;
   name: string;
   group?: string;
+  groupId?: string;
+}
+
+interface MenuItemGroup {
+  id: string;
+  name: string;
 }
 
 interface DisplayCategory extends Category {
   isFromDb: boolean;
   itemCount: number;
 }
-
-const CATEGORY_GROUPS = [
-  { value: 'Makanan Utama/Berat', description: 'Nasi goreng, ayam geprek, mie, dll.' },
-  { value: 'Minuman & Es Krim', description: 'Kopi, jus, bubble tea, es teh.' },
-  { value: 'Snack/Camilan', description: 'Makanan ringan.' },
-];
 
 export default function AdminCategoriesPage() {
   const firestore = useFirestore();
@@ -44,7 +44,14 @@ export default function AdminCategoriesPage() {
   const [isBulkRegistering, setIsBulkRegistering] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [selectedGroup, setSelectedGroup] = useState<string>('');
+  const [selectedGroupId, setSelectedGroupId] = useState<string>('');
+
+  // Fetch Groups from DB
+  const groupsQuery = useMemoFirebase(() => {
+    if (!firestore) return null;
+    return collection(firestore, 'menuItemGroups');
+  }, [firestore]);
+  const { data: groups, isLoading: isGroupsLoading } = useCollection<MenuItemGroup>(groupsQuery);
 
   // Fetch Categories from DB
   const categoriesQuery = useMemoFirebase(() => {
@@ -62,13 +69,12 @@ export default function AdminCategoriesPage() {
 
   useEffect(() => {
     if (isEditing) {
-      setSelectedGroup(isEditing.group || '');
+      setSelectedGroupId(isEditing.groupId || '');
     } else if (isAdding) {
-      setSelectedGroup('');
+      setSelectedGroupId('');
     }
   }, [isEditing, isAdding]);
 
-  // Calculate usage per category with robust matching (trimmed)
   const categoryUsage = useMemo(() => {
     const counts: Record<string, number> = {};
     menuItems?.forEach(item => {
@@ -77,6 +83,12 @@ export default function AdminCategoriesPage() {
     });
     return counts;
   }, [menuItems]);
+
+  const groupLookup = useMemo(() => {
+    const map: Record<string, string> = {};
+    groups?.forEach(g => { map[g.id] = g.name; });
+    return map;
+  }, [groups]);
 
   const displayCategories = useMemo((): DisplayCategory[] => {
     const dbCatNames = new Set(categories?.map(c => c.name.trim().toLowerCase()) || []);
@@ -88,7 +100,6 @@ export default function AdminCategoriesPage() {
       itemCount: categoryUsage[c.name.trim()] || 0
     }));
     
-    // Add "orphan" categories found in products but missing from DB
     itemCatNames.forEach(name => {
       if (name && !dbCatNames.has(name.trim().toLowerCase())) {
         list.push({
@@ -101,12 +112,10 @@ export default function AdminCategoriesPage() {
     });
 
     return list.filter(c => 
-      c.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (c.group && c.group.toLowerCase().includes(searchTerm.toLowerCase()))
+      c.name.toLowerCase().includes(searchTerm.toLowerCase())
     ).sort((a, b) => a.name.localeCompare(b.name));
   }, [categories, categoryUsage, searchTerm]);
 
-  // Orphans currently visible
   const orphanIds = useMemo(() => 
     new Set(displayCategories.filter(c => !c.isFromDb).map(c => c.id)),
     [displayCategories]
@@ -145,7 +154,7 @@ export default function AdminCategoriesPage() {
     const id = (Math.floor(Math.random() * 10000) + 1000).toString();
     try {
       await setDoc(doc(firestore, 'categories', id), { id, name });
-      toast({ title: "Berhasil", description: `Kategori "${name}" telah didaftarkan ke Master.` });
+      toast({ title: "Berhasil", description: `Kategori "${name}" telah didaftarkan.` });
     } catch (error) {
       toast({ variant: "destructive", title: "Gagal", description: "Gagal mendaftarkan kategori." });
     }
@@ -164,40 +173,12 @@ export default function AdminCategoriesPage() {
         }
       });
       await batch.commit();
-      toast({ title: "Berhasil", description: `${selectedIds.size} kategori baru telah didaftarkan.` });
+      toast({ title: "Berhasil", description: `${selectedIds.size} kategori baru didaftarkan.` });
       setSelectedIds(new Set());
     } catch (error) {
-      toast({ variant: "destructive", title: "Gagal", description: "Gagal mendaftarkan kategori secara masal." });
+      toast({ variant: "destructive", title: "Gagal", description: "Gagal mendaftarkan masal." });
     } finally {
       setIsBulkRegistering(false);
-    }
-  };
-
-  const handleClearUnused = async () => {
-    if (!firestore || !categories) return;
-    setIsSeeding(true);
-    try {
-      const batch = writeBatch(firestore);
-      let removedCount = 0;
-      
-      categories.forEach(cat => {
-        const count = categoryUsage[cat.name.trim()] || 0;
-        if (count === 0) {
-          batch.delete(doc(firestore, 'categories', cat.id));
-          removedCount++;
-        }
-      });
-
-      if (removedCount > 0) {
-        await batch.commit();
-        toast({ title: "Berhasil", description: `${removedCount} kategori kosong telah dihapus.` });
-      } else {
-        toast({ title: "Info", description: "Tidak ada kategori kosong untuk dihapus." });
-      }
-    } catch (error) {
-      toast({ variant: "destructive", title: "Gagal", description: "Gagal membersihkan kategori." });
-    } finally {
-      setIsSeeding(false);
     }
   };
 
@@ -211,7 +192,8 @@ export default function AdminCategoriesPage() {
     const categoryData: Category = {
       id: isEditing?.id || (Math.floor(Math.random() * 1000) + 1000).toString(),
       name: categoryName,
-      group: selectedGroup,
+      groupId: selectedGroupId,
+      group: groupLookup[selectedGroupId] || '', // Maintain for backward compatibility
     };
 
     try {
@@ -224,29 +206,7 @@ export default function AdminCategoriesPage() {
     }
   };
 
-  const handleSeedCategories = async () => {
-    if (!firestore) return;
-    setIsSeeding(true);
-    try {
-      const uniqueCategories = Array.from(new Set(initialProducts.map(p => p.category.trim())));
-      const batch = writeBatch(firestore);
-      
-      uniqueCategories.forEach((catName, index) => {
-        const id = (index + 101).toString();
-        const catRef = doc(firestore, 'categories', id);
-        batch.set(catRef, { id, name: catName });
-      });
-
-      await batch.commit();
-      toast({ title: "Berhasil", description: `${uniqueCategories.length} kategori default telah ditambahkan.` });
-    } catch (error) {
-      toast({ variant: "destructive", title: "Gagal", description: "Gagal memproses kategori default." });
-    } finally {
-      setIsSeeding(false);
-    }
-  };
-
-  if (isLoading || isItemsLoading) {
+  if (isLoading || isItemsLoading || isGroupsLoading) {
     return <div className="flex h-full items-center justify-center p-24"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
   }
 
@@ -259,31 +219,8 @@ export default function AdminCategoriesPage() {
         </div>
         <div className="flex flex-wrap gap-2">
           {selectedIds.size > 0 && (
-            <Button 
-              variant="default" 
-              size="sm" 
-              onClick={handleBulkRegister} 
-              disabled={isBulkRegistering}
-              className="bg-orange-600 hover:bg-orange-700 shadow-sm animate-in fade-in slide-in-from-right-2"
-            >
-              {isBulkRegistering ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckSquare className="mr-2 h-4 w-4" />}
+            <Button size="sm" onClick={handleBulkRegister} disabled={isBulkRegistering}>
               Daftarkan Terpilih ({selectedIds.size})
-            </Button>
-          )}
-          <Button 
-            variant="outline" 
-            size="sm" 
-            onClick={handleClearUnused} 
-            disabled={isSeeding || !categories?.length}
-            className="border-destructive/20 text-destructive hover:bg-destructive/5"
-          >
-            {isSeeding ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Eraser className="mr-2 h-4 w-4" />}
-            Bersihkan yang Kosong
-          </Button>
-          {(!categories || categories.length === 0) && (
-            <Button variant="outline" size="sm" onClick={handleSeedCategories} disabled={isSeeding}>
-              {isSeeding ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCcw className="mr-2 h-4 w-4" />}
-              Ambil dari Menu
             </Button>
           )}
           <Dialog open={isAdding} onOpenChange={setIsAdding}>
@@ -292,10 +229,9 @@ export default function AdminCategoriesPage() {
                 <Plus className="mr-2 h-4 w-4" /> Tambah Kategori
               </Button>
             </DialogTrigger>
-            <DialogContent className="sm:max-w-[425px]">
+            <DialogContent>
               <DialogHeader>
                 <DialogTitle>Tambah Kategori Baru</DialogTitle>
-                <DialogDescription>Masukkan nama kategori dan pilih grup kategori.</DialogDescription>
               </DialogHeader>
               <form onSubmit={handleSave} className="space-y-4">
                 <div className="grid gap-4 py-4">
@@ -304,19 +240,14 @@ export default function AdminCategoriesPage() {
                     <Input id="name" name="name" placeholder="Contoh: Nasi & Lauk" required />
                   </div>
                   <div className="grid gap-2">
-                    <Label htmlFor="group">Grup Kategori</Label>
-                    <Select value={selectedGroup} onValueChange={setSelectedGroup}>
+                    <Label htmlFor="group">Pilih Grup (Master Grup)</Label>
+                    <Select value={selectedGroupId} onValueChange={setSelectedGroupId}>
                       <SelectTrigger>
                         <SelectValue placeholder="Pilih Grup" />
                       </SelectTrigger>
                       <SelectContent>
-                        {CATEGORY_GROUPS.map((group) => (
-                          <SelectItem key={group.value} value={group.value}>
-                            <div className="flex flex-col text-left">
-                              <span className="font-bold text-sm">{group.value}</span>
-                              <span className="text-[10px] text-muted-foreground whitespace-normal leading-tight">{group.description}</span>
-                            </div>
-                          </SelectItem>
+                        {groups?.map((g) => (
+                          <SelectItem key={g.id} value={g.id}>{g.name}</SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
@@ -334,7 +265,7 @@ export default function AdminCategoriesPage() {
       <div className="relative max-w-sm">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
         <Input
-          placeholder="Cari kategori atau grup..."
+          placeholder="Cari kategori..."
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
           className="pl-10"
@@ -357,19 +288,19 @@ export default function AdminCategoriesPage() {
                 <TableHead>Nama Kategori</TableHead>
                 <TableHead>Grup Kategori</TableHead>
                 <TableHead className="text-center">Jumlah Menu</TableHead>
-                <TableHead>Status Master</TableHead>
                 <TableHead className="text-right">Aksi</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {displayCategories.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center py-12 text-muted-foreground">
-                    Belum ada kategori. {(!categories || categories.length === 0) && "Klik 'Ambil dari Menu' untuk memulai."}
+                  <TableCell colSpan={6} className="text-center py-12 text-muted-foreground">
+                    Belum ada kategori.
                   </TableCell>
                 </TableRow>
               ) : (
                 displayCategories.map((category, index) => {
+                  const groupName = groupLookup[category.groupId || ''] || category.group || 'Belum diset';
                   return (
                     <TableRow key={category.id} className={!category.isFromDb ? "bg-destructive/5" : ""}>
                       <TableCell>
@@ -388,42 +319,22 @@ export default function AdminCategoriesPage() {
                         </div>
                       </TableCell>
                       <TableCell>
-                        {category.group ? (
-                          <div className="flex items-center gap-1.5">
-                            <Layers className="h-3 w-3 text-muted-foreground" />
-                            <Badge variant="secondary" className="font-normal text-[10px] bg-blue-50 text-blue-700 border-blue-100 hover:bg-blue-50">
-                              {category.group}
-                            </Badge>
-                          </div>
-                        ) : (
-                          <span className="text-[10px] text-muted-foreground italic">Belum diset</span>
-                        )}
+                        <div className="flex items-center gap-1.5">
+                          <Layers className="h-3 w-3 text-muted-foreground" />
+                          <Badge variant="secondary" className="font-normal text-[10px] bg-blue-50 text-blue-700">
+                            {groupName}
+                          </Badge>
+                        </div>
                       </TableCell>
                       <TableCell className="text-center">
                         <span className={`inline-flex items-center justify-center min-w-[2rem] px-2 py-0.5 rounded-full text-xs font-bold ${category.itemCount > 0 ? 'bg-primary/10 text-primary' : 'bg-destructive/10 text-destructive'}`}>
                           {category.itemCount}
                         </span>
                       </TableCell>
-                      <TableCell>
-                        {category.isFromDb ? (
-                          <Badge variant="outline" className="text-green-600 border-green-200 bg-green-50 gap-1 text-[10px]">
-                            <CheckCircle2 className="h-3 w-3" /> Terdaftar
-                          </Badge>
-                        ) : (
-                          <Badge variant="destructive" className="gap-1 animate-pulse text-[10px]">
-                            <AlertCircle className="h-3 w-3" /> Belum Terdaftar
-                          </Badge>
-                        )}
-                      </TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-2">
                           {!category.isFromDb ? (
-                            <Button 
-                              size="sm" 
-                              variant="secondary" 
-                              className="h-8 text-xs font-bold"
-                              onClick={() => handleRegisterOrphan(category.name)}
-                            >
+                            <Button size="sm" variant="secondary" onClick={() => handleRegisterOrphan(category.name)}>
                               Daftarkan
                             </Button>
                           ) : (
@@ -434,10 +345,9 @@ export default function AdminCategoriesPage() {
                                     <Pencil className="h-4 w-4" />
                                   </Button>
                                 </DialogTrigger>
-                                <DialogContent className="sm:max-w-[425px]">
+                                <DialogContent>
                                   <DialogHeader>
                                     <DialogTitle>Edit Kategori</DialogTitle>
-                                    <DialogDescription>Ubah rincian kategori.</DialogDescription>
                                   </DialogHeader>
                                   <form onSubmit={handleSave} className="space-y-4">
                                     <div className="grid gap-4 py-4">
@@ -447,18 +357,13 @@ export default function AdminCategoriesPage() {
                                       </div>
                                       <div className="grid gap-2">
                                         <Label htmlFor="edit-group">Grup Kategori</Label>
-                                        <Select value={selectedGroup} onValueChange={setSelectedGroup}>
+                                        <Select value={selectedGroupId} onValueChange={setSelectedGroupId}>
                                           <SelectTrigger>
                                             <SelectValue placeholder="Pilih Grup" />
                                           </SelectTrigger>
                                           <SelectContent>
-                                            {CATEGORY_GROUPS.map((group) => (
-                                              <SelectItem key={group.value} value={group.value}>
-                                                <div className="flex flex-col text-left">
-                                                  <span className="font-bold text-sm">{group.value}</span>
-                                                  <span className="text-[10px] text-muted-foreground whitespace-normal leading-tight">{group.description}</span>
-                                                </div>
-                                              </SelectItem>
+                                            {groups?.map((g) => (
+                                              <SelectItem key={g.id} value={g.id}>{g.name}</SelectItem>
                                             ))}
                                           </SelectContent>
                                         </Select>

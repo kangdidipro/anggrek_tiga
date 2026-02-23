@@ -1,3 +1,4 @@
+
 {
   "entities": {
     "Customer": {
@@ -36,6 +37,30 @@
         "deliveryAddress"
       ]
     },
+    "MenuItemGroup": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "MenuItemGroup",
+      "type": "object",
+      "description": "Represents a high-level grouping for menu item categories (e.g., 'Makanan Utama', 'Minuman').",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the group."
+        },
+        "name": {
+          "type": "string",
+          "description": "Name of the group."
+        },
+        "description": {
+          "type": "string",
+          "description": "Description of what kind of items belong here."
+        }
+      },
+      "required": [
+        "id",
+        "name"
+      ]
+    },
     "MenuItemCategory": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "title": "MenuItemCategory",
@@ -49,6 +74,10 @@
         "name": {
           "type": "string",
           "description": "The name of the menu item category."
+        },
+        "groupId": {
+          "type": "string",
+          "description": "Reference to MenuItemGroup."
         }
       },
       "required": [
@@ -64,7 +93,7 @@
       "properties": {
         "id": {
           "type": "string",
-          "description": "Unique identifier for the MenuItem entity (e.g., SKU: RpSKU-1)."
+          "description": "Unique identifier for the MenuItem entity."
         },
         "name": {
           "type": "string",
@@ -72,108 +101,62 @@
         },
         "description": {
           "type": "string",
-          "description": "A brief description or additional details about the menu item."
+          "description": "A brief description."
         },
         "price": {
           "type": "number",
-          "description": "The current selling price of the menu item."
+          "description": "The price."
         },
-        "menuItemCategoryId": {
+        "category": {
           "type": "string",
-          "description": "Reference to MenuItemCategory. (Relationship: MenuItemCategory 1:N MenuItem)"
+          "description": "The category name (denormalized)."
+        },
+        "vendor": {
+          "type": "string",
+          "description": "The vendor code."
+        },
+        "stock": {
+          "type": "number",
+          "description": "Available stock."
         }
       },
       "required": [
         "id",
         "name",
         "price",
-        "menuItemCategoryId"
+        "category",
+        "vendor"
       ]
     },
     "Order": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "title": "Order",
       "type": "object",
-      "description": "Represents a complete customer order, including details like customer, payment, and total amount.",
+      "description": "Represents a complete customer order.",
       "properties": {
         "id": {
-          "type": "string",
-          "description": "Unique identifier for the Order entity."
+          "type": "string"
         },
         "customerId": {
-          "type": "string",
-          "description": "Reference to Customer. (Relationship: Customer 1:N Order)"
+          "type": "string"
         },
         "orderDateTime": {
           "type": "string",
-          "description": "The date and time when the order was placed.",
           "format": "date-time"
         },
-        "deliveryAddressSnapshot": {
-          "type": "string",
-          "description": "A snapshot of the delivery address at the time the order was placed, for historical accuracy."
-        },
-        "paymentMethod": {
-          "type": "string",
-          "description": "The selected payment method for the order (e.g., 'QRIS', 'COD')."
-        },
-        "deliveryFee": {
-          "type": "number",
-          "description": "The fixed delivery fee applied to this order."
-        },
         "totalAmount": {
-          "type": "number",
-          "description": "The total calculated amount for the order, including items and delivery fee."
+          "type": "number"
         },
         "status": {
-          "type": "string",
-          "description": "The current status of the order (e.g., 'Pending', 'Confirmed', 'Delivered', 'Cancelled')."
+          "type": "string"
         }
       },
       "required": [
         "id",
         "customerId",
         "orderDateTime",
-        "deliveryAddressSnapshot",
-        "paymentMethod",
-        "deliveryFee",
         "totalAmount",
         "status"
-      ]
-    },
-    "OrderLineItem": {
-      "$schema": "http://json-schema.org/draft-07/schema#",
-      "title": "OrderLineItem",
-      "type": "object",
-      "description": "Represents a specific item and its quantity within a customer's order.",
-      "properties": {
-        "id": {
-          "type": "string",
-          "description": "Unique identifier for the OrderLineItem entity."
-        },
-        "orderId": {
-          "type": "string",
-          "description": "Reference to Order. (Relationship: Order 1:N OrderLineItem)"
-        },
-        "menuItemId": {
-          "type": "string",
-          "description": "Reference to MenuItem. (Relationship: MenuItem 1:N OrderLineItem)"
-        },
-        "quantity": {
-          "type": "number",
-          "description": "The quantity of the menu item ordered."
-        },
-        "unitPriceSnapshot": {
-          "type": "number",
-          "description": "The price of the menu item at the time it was ordered, for historical accuracy."
-        }
-      },
-      "required": [
-        "id",
-        "orderId",
-        "menuItemId",
-        "quantity",
-        "unitPriceSnapshot"
       ]
     }
   },
@@ -186,13 +169,23 @@
   "firestore": {
     "structure": [
       {
-        "path": "/menuItemCategories/{menuItemCategoryId}",
+        "path": "/menuItemGroups/{groupId}",
+        "definition": {
+          "entityName": "MenuItemGroup",
+          "schema": {
+            "$ref": "#/backend/entities/MenuItemGroup"
+          },
+          "description": "Collection for top-level menu groups (Makanan, Minuman, Snack)."
+        }
+      },
+      {
+        "path": "/categories/{categoryId}",
         "definition": {
           "entityName": "MenuItemCategory",
           "schema": {
             "$ref": "#/backend/entities/MenuItemCategory"
           },
-          "description": "Master collection for all menu item categories (e.g., 'Nasi', 'Bakso'). This is a publicly readable collection to display the menu structure. It enables secure list operations for all users."
+          "description": "Master collection for menu categories."
         }
       },
       {
@@ -202,40 +195,30 @@
           "schema": {
             "$ref": "#/backend/entities/MenuItem"
           },
-          "description": "Master collection for all individual food or takjil items. This is a publicly readable collection for menu display. It enables secure list operations for all users."
+          "description": "Collection for all individual takjil items."
         }
       },
       {
-        "path": "/orders/{orderId}",
+        "path": "/customers/{userId}",
         "definition": {
-          "entityName": "Order",
+          "entityName": "Customer",
           "schema": {
-            "$ref": "#/backend/entities/Order"
+            "$ref": "#/backend/entities/Customer"
           },
-          "description": "Collection for all customer orders. Each order document includes denormalized customer details (name, email, phoneNumber, deliveryAddressSnapshot) from the Customer entity, and `orderCreatorUid` (if placed by an authenticated user) to achieve authorization independence and support QAPs. The `status` field is used for explicit state modeling."
+          "description": "Public customer profile collection."
         }
       },
       {
-        "path": "/orders/{orderId}/lineItems/{lineItemId}",
+        "path": "/settings/{settingId}",
         "definition": {
-          "entityName": "OrderLineItem",
+          "entityName": "Setting",
           "schema": {
-            "$ref": "#/backend/entities/OrderLineItem"
+            "type": "object"
           },
-          "description": "Subcollection detailing individual items within a specific order. Each document includes `orderId`, `menuItemId`, `quantity`, `unitPriceSnapshot`, and denormalizes `orderCreatorUid` from its parent Order document for authorization independence."
-        }
-      },
-      {
-        "path": "/admin_users/{uid}",
-        "definition": {
-          "entityName": "User",
-          "schema": {
-            "$ref": "#/backend/entities/User"
-          },
-          "description": "Collection for defining users with 'admin' roles. The document ID corresponds to the user's `uid`. The existence of a document in this collection grants admin privileges, adhering to the DBAC principle. This path implies a generic 'User' entity for schema reference, even if not explicitly provided in the input, to satisfy schema requirements."
+          "description": "System settings like inventory params and mail config."
         }
       }
     ],
-    "reasoning": "The Firestore structure is designed following the core principles of Authorization Independence, Structural Segregation, and Access Modeling to ensure security, scalability, and debuggability. All public data, such as menu item categories and individual menu items, are placed in top-level collections (`/menuItemCategories` and `/menuItems`) allowing for straightforward public read access and efficient list queries (QAPs). For transactional data like orders, a top-level collection (`/orders`) is used to accommodate both authenticated and anonymous users. Each `Order` document explicitly denormalizes all necessary customer details (name, email, phone, and delivery address snapshot) directly within itself. This is critical for **Authorization Independence** as it eliminates the need for `get()` calls to a separate `Customer` collection from within security rules for order-related operations. If an order is placed by an authenticated user, their `request.auth.uid` is stored as `orderCreatorUid` on the `Order` document, enabling simple, path-based ownership rules for individual users (e.g., a user can only read their own orders). Order line items are structured as a subcollection (`/orders/{orderId}/lineItems`). To maintain **Authorization Independence** at this nested level, each `OrderLineItem` document also denormalizes the `orderCreatorUid` from its parent `Order` document. This ensures that security rules for line items do not need to perform a `get()` operation on the parent `Order` to determine access rights. This design allows for robust security rules where `list` operations (QAPs) are naturally secure. For `/menuItemCategories` and `/menuItems`, `list` is secure because all data is public. For `/orders`, users can query their own orders using `orderCreatorUid`, and administrators (defined in `/admin_users`) can list all orders. Denormalization of `orderCreatorUid` to `lineItems` makes listing specific order line items secure without complex `get()` lookups. Roles are managed via the `/admin_users` collection, adhering to the DBAC principle."
+    "reasoning": "The structure maintains clear separation between master data (Groups, Categories, Items) which are mostly public read, and transactional data (Orders) which are private to owners or admins. System settings are split into public (inventory) and private (mail) documents via rules."
   }
 }
