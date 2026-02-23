@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useRef, useMemo } from 'react';
@@ -7,13 +6,14 @@ import { collection, doc, deleteDoc, setDoc, writeBatch, updateDoc } from 'fireb
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Loader2, Plus, Pencil, Trash2, RefreshCcw, FileUp, FileDown, Search, ExternalLink, Copy, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
+import { Loader2, Plus, Pencil, Trash2, RefreshCcw, FileUp, FileDown, Search, ExternalLink, Copy, ArrowUpDown, ArrowUp, ArrowDown, X, Phone, User, Mail, Hash, ShieldCheck } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Switch } from '@/components/ui/switch';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import type { Vendor, Product } from '@/lib/types';
 import * as XLSX from 'xlsx';
 import { saveAs } from 'file-saver';
@@ -43,7 +43,15 @@ export default function AdminVendorsPage() {
   const [isImporting, setIsImporting] = useState(false);
   const [isExcelImporting, setIsExcelImporting] = useState(false);
   const [isBulkDeleting, setIsBulkDeleting] = useState(false);
+  
+  // Filter states
   const [searchTerm, setSearchTerm] = useState('');
+  const [nameFilter, setNameFilter] = useState('');
+  const [codeFilter, setCodeFilter] = useState('');
+  const [emailFilter, setEmailFilter] = useState('');
+  const [phoneFilter, setPhoneFilter] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
+
   const [sortConfig, setSortConfig] = useState<SortConfig>({ key: 'name', direction: 'asc' });
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -72,22 +80,37 @@ export default function AdminVendorsPage() {
 
   const getSortIcon = (key: keyof Vendor) => {
     if (sortConfig.key !== key) return <ArrowUpDown className="ml-2 h-4 w-4 opacity-50" />;
-    return sortConfig.direction === 'asc' ? <ArrowUp className="ml-2 h-4 w-4" /> : <ArrowDown className="ml-2 h-4 w-4" />;
+    return sortConfig.direction === 'asc' ? <ArrowUp className="ml-2 h-4 w-4 text-primary" /> : <ArrowDown className="ml-2 h-4 w-4 text-primary" />;
   };
 
   const filteredVendors = useMemo(() => {
     if (!vendors) return [];
-    let result = vendors.filter(vendor => 
-      vendor.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-      vendor.code.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (vendor.email && vendor.email.toLowerCase().includes(searchTerm.toLowerCase())) ||
-      (vendor.phoneNumber && vendor.phoneNumber.toLowerCase().includes(searchTerm.toLowerCase()))
-    );
+    
+    let result = vendors.filter(vendor => {
+      const search = searchTerm.toLowerCase();
+      const matchesGlobal = searchTerm === '' || 
+        vendor.name.toLowerCase().includes(search) || 
+        vendor.code.toLowerCase().includes(search) ||
+        (vendor.email && vendor.email.toLowerCase().includes(search)) ||
+        (vendor.phoneNumber && vendor.phoneNumber.toLowerCase().includes(search));
+      
+      const matchesName = nameFilter === '' || vendor.name.toLowerCase().includes(nameFilter.toLowerCase());
+      const matchesCode = codeFilter === '' || vendor.code.toLowerCase().includes(codeFilter.toLowerCase());
+      const matchesEmail = emailFilter === '' || (vendor.email && vendor.email.toLowerCase().includes(emailFilter.toLowerCase()));
+      const matchesPhone = phoneFilter === '' || (vendor.phoneNumber && vendor.phoneNumber.toLowerCase().includes(phoneFilter.toLowerCase()));
+      
+      const isVendorActive = vendor.isActive !== false;
+      const matchesStatus = statusFilter === 'all' || 
+        (statusFilter === 'active' && isVendorActive) || 
+        (statusFilter === 'inactive' && !isVendorActive);
+
+      return matchesGlobal && matchesName && matchesCode && matchesEmail && matchesPhone && matchesStatus;
+    });
 
     if (sortConfig.key) {
       result.sort((a, b) => {
-        const valA = (a[sortConfig.key!] || '').toString().toLowerCase();
-        const valB = (b[sortConfig.key!] || '').toString().toLowerCase();
+        const valA = (a[sortConfig.key!] ?? '').toString().toLowerCase();
+        const valB = (b[sortConfig.key!] ?? '').toString().toLowerCase();
 
         if (valA < valB) return sortConfig.direction === 'asc' ? -1 : 1;
         if (valA > valB) return sortConfig.direction === 'asc' ? 1 : -1;
@@ -96,10 +119,20 @@ export default function AdminVendorsPage() {
     }
 
     return result;
-  }, [vendors, searchTerm, sortConfig]);
+  }, [vendors, searchTerm, nameFilter, codeFilter, emailFilter, phoneFilter, statusFilter, sortConfig]);
+
+  const resetFilters = () => {
+    setSearchTerm('');
+    setNameFilter('');
+    setCodeFilter('');
+    setEmailFilter('');
+    setPhoneFilter('');
+    setStatusFilter('all');
+    setSortConfig({ key: 'name', direction: 'asc' });
+  };
 
   const toggleSelectAll = () => {
-    if (selectedIds.size === filteredVendors.length) {
+    if (selectedIds.size === filteredVendors.length && filteredVendors.length > 0) {
       setSelectedIds(new Set());
     } else {
       setSelectedIds(new Set(filteredVendors.map(v => v.id)));
@@ -353,6 +386,9 @@ export default function AdminVendorsPage() {
             ref={fileInputRef}
             onChange={handleExcelUpload}
           />
+          <Button variant="outline" size="sm" onClick={resetFilters}>
+            <X className="mr-2 h-4 w-4" /> Reset Filter
+          </Button>
           <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()} disabled={isExcelImporting}>
             {isExcelImporting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileUp className="mr-2 h-4 w-4" />}
             Import Excel
@@ -433,20 +469,97 @@ export default function AdminVendorsPage() {
         </div>
       </div>
 
-      <div className="relative max-w-sm">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-        <Input
-          placeholder="Cari nama, kode, email, atau no hp..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          className="pl-10"
-        />
+      <Card className="p-4 border-primary/10 shadow-sm">
+        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4 items-end">
+          <div className="space-y-2">
+            <Label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Nama Mitra</Label>
+            <div className="relative">
+              <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Nama..."
+                value={nameFilter}
+                onChange={(e) => setNameFilter(e.target.value)}
+                className="pl-10 h-9 text-sm"
+              />
+            </div>
+          </div>
+          <div className="space-y-2">
+            <Label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Kode Mitra</Label>
+            <div className="relative">
+              <Hash className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Kode..."
+                value={codeFilter}
+                onChange={(e) => setCodeFilter(e.target.value)}
+                className="pl-10 h-9 text-sm"
+              />
+            </div>
+          </div>
+          <div className="space-y-2">
+            <Label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Email</Label>
+            <div className="relative">
+              <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Email..."
+                value={emailFilter}
+                onChange={(e) => setEmailFilter(e.target.value)}
+                className="pl-10 h-9 text-sm"
+              />
+            </div>
+          </div>
+          <div className="space-y-2">
+            <Label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">No HP</Label>
+            <div className="relative">
+              <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="No HP..."
+                value={phoneFilter}
+                onChange={(e) => setPhoneFilter(e.target.value)}
+                className="pl-10 h-9 text-sm"
+              />
+            </div>
+          </div>
+          <div className="space-y-2">
+            <Label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Status</Label>
+            <div className="relative">
+              <ShieldCheck className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground z-10" />
+              <Select value={statusFilter} onValueChange={setStatusFilter}>
+                <SelectTrigger className="pl-10 h-9 text-sm">
+                  <SelectValue placeholder="Status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Semua Status</SelectItem>
+                  <SelectItem value="active">Aktif</SelectItem>
+                  <SelectItem value="inactive">Non-Aktif</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <div className="space-y-2">
+            <Label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Pencarian Global</Label>
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Cari apa saja..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-10 h-9 text-sm"
+              />
+            </div>
+          </div>
+        </div>
+      </Card>
+
+      <div className="flex items-center gap-2 text-sm text-muted-foreground px-1">
+        <span>Total Terfilter:</span>
+        <span className="font-bold text-foreground bg-primary/10 px-2 py-0.5 rounded">{filteredVendors.length}</span>
+        <span className="text-[10px] uppercase tracking-tighter">dari {vendors?.length || 0} Mitra</span>
       </div>
 
       <Card>
         <CardContent className="p-0 overflow-auto">
           <Table>
-            <TableHeader>
+            <TableHeader className="bg-muted/30">
               <TableRow>
                 <TableHead className="w-[50px]">
                   <Checkbox 
@@ -455,42 +568,45 @@ export default function AdminVendorsPage() {
                     aria-label="Pilih semua"
                   />
                 </TableHead>
-                <TableHead className="w-[60px]">No.</TableHead>
-                <TableHead className="cursor-pointer hover:bg-muted/50" onClick={() => handleSort('name')}>
-                  <div className="flex items-center">
+                <TableHead className="w-[60px] text-[10px] font-bold uppercase tracking-widest">No.</TableHead>
+                <TableHead className="cursor-pointer hover:bg-muted/50 transition-colors" onClick={() => handleSort('name')}>
+                  <div className="flex items-center text-[10px] font-bold uppercase tracking-widest">
                     Nama Mitra {getSortIcon('name')}
                   </div>
                 </TableHead>
-                <TableHead className="cursor-pointer hover:bg-muted/50" onClick={() => handleSort('code')}>
-                  <div className="flex items-center">
+                <TableHead className="cursor-pointer hover:bg-muted/50 transition-colors" onClick={() => handleSort('code')}>
+                  <div className="flex items-center text-[10px] font-bold uppercase tracking-widest">
                     Kode {getSortIcon('code')}
                   </div>
                 </TableHead>
-                <TableHead className="cursor-pointer hover:bg-muted/50" onClick={() => handleSort('email')}>
-                  <div className="flex items-center">
+                <TableHead className="cursor-pointer hover:bg-muted/50 transition-colors" onClick={() => handleSort('email')}>
+                  <div className="flex items-center text-[10px] font-bold uppercase tracking-widest">
                     Email {getSortIcon('email')}
                   </div>
                 </TableHead>
-                <TableHead className="cursor-pointer hover:bg-muted/50" onClick={() => handleSort('phoneNumber')}>
-                  <div className="flex items-center">
+                <TableHead className="cursor-pointer hover:bg-muted/50 transition-colors" onClick={() => handleSort('phoneNumber')}>
+                  <div className="flex items-center text-[10px] font-bold uppercase tracking-widest">
                     No HP {getSortIcon('phoneNumber')}
                   </div>
                 </TableHead>
-                <TableHead>Status Aktif</TableHead>
-                <TableHead>Link Pesanan</TableHead>
-                <TableHead className="text-right">Aksi</TableHead>
+                <TableHead className="text-[10px] font-bold uppercase tracking-widest">Status Aktif</TableHead>
+                <TableHead className="text-[10px] font-bold uppercase tracking-widest">Link Pesanan</TableHead>
+                <TableHead className="text-right text-[10px] font-bold uppercase tracking-widest">Aksi</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {filteredVendors.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={9} className="text-center py-12 text-muted-foreground">
-                    {searchTerm ? 'Tidak ada mitra yang cocok dengan pencarian.' : 'Belum ada mitra yang terdaftar.'}
+                    <div className="flex flex-col items-center gap-2">
+                      <Search className="h-8 w-8 opacity-20" />
+                      <p>{searchTerm || nameFilter || codeFilter || emailFilter || phoneFilter || statusFilter !== 'all' ? 'Tidak ada mitra yang cocok dengan pencarian.' : 'Belum ada mitra yang terdaftar.'}</p>
+                    </div>
                   </TableCell>
                 </TableRow>
               ) : (
                 filteredVendors.map((vendor, index) => (
-                  <TableRow key={vendor.id} className={selectedIds.has(vendor.id) ? 'bg-muted/50' : ''}>
+                  <TableRow key={vendor.id} className={selectedIds.has(vendor.id) ? 'bg-muted/50' : 'hover:bg-primary/5 transition-colors'}>
                     <TableCell>
                       <Checkbox 
                         checked={selectedIds.has(vendor.id)}
@@ -498,11 +614,16 @@ export default function AdminVendorsPage() {
                         aria-label={`Pilih ${vendor.name}`}
                       />
                     </TableCell>
-                    <TableCell className="text-muted-foreground font-mono text-xs">{index + 1}</TableCell>
-                    <TableCell className="font-medium">{vendor.name}</TableCell>
-                    <TableCell className="font-mono font-bold">{vendor.code}</TableCell>
-                    <TableCell>{vendor.email || '-'}</TableCell>
-                    <TableCell>{vendor.phoneNumber || '-'}</TableCell>
+                    <TableCell className="text-muted-foreground font-mono text-[10px]">{index + 1}</TableCell>
+                    <TableCell className="font-medium">
+                      <div className="flex items-center gap-2">
+                        <User className="h-4 w-4 text-primary/70" />
+                        <span className="uppercase font-bold text-xs tracking-tight">{vendor.name}</span>
+                      </div>
+                    </TableCell>
+                    <TableCell className="font-mono font-bold text-xs">{vendor.code}</TableCell>
+                    <TableCell className="text-xs italic text-muted-foreground">{vendor.email || '-'}</TableCell>
+                    <TableCell className="text-xs font-mono font-bold text-blue-600">{vendor.phoneNumber || '-'}</TableCell>
                     <TableCell>
                       <div className="flex items-center gap-2">
                         <Switch 
@@ -516,13 +637,13 @@ export default function AdminVendorsPage() {
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-2">
-                        <Button variant="outline" size="sm" asChild>
+                        <Button variant="outline" size="sm" asChild className="h-8 text-[10px] font-bold">
                           <Link href={`/mitra/${vendor.code}`} target="_blank">
                             <ExternalLink className="h-3 w-3 mr-2" />
                             Buka
                           </Link>
                         </Button>
-                        <Button variant="ghost" size="sm" onClick={() => copyToClipboard(vendor.code)}>
+                        <Button variant="ghost" size="sm" onClick={() => copyToClipboard(vendor.code)} className="h-8 w-8 p-0">
                           <Copy className="h-3 w-3" />
                         </Button>
                       </div>
