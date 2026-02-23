@@ -209,7 +209,7 @@ export default function AdminCategoriesPage() {
     const categoryName = (formData.get('name') as string).trim();
     
     const categoryData: Category = {
-      id: isEditing?.id || (Math.floor(Math.random() * 10000) + 1000).toString(),
+      id: isEditing?.id || (Math.floor(Math.random() * 1000) + 1000).toString(),
       name: categoryName,
       group: selectedGroup,
     };

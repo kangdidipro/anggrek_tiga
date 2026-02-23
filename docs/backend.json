@@ -42,7 +42,11 @@
       "properties": {
         "id": { "type": "string" },
         "name": { "type": "string" },
-        "group": { "type": "string" }
+        "group": { 
+          "type": "string",
+          "enum": ["Makanan Utama/Berat", "Minuman & Es Krim", "Snack/Camilan"],
+          "description": "The logical grouping for this category."
+        }
       },
       "required": ["id", "name"]
     },
