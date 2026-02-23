@@ -5,14 +5,14 @@ import { useFirestore, useUser, useCollection, useMemoFirebase, errorEmitter, Fi
 import { collectionGroup, getDocs, query, collection, writeBatch, doc, updateDoc, arrayUnion } from 'firebase/firestore';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Loader2, FileDown, CalendarIcon, FileText, Mail, Search, LayoutGrid, ArrowUpDown, ArrowUp, ArrowDown, Filter, Trash2, Phone, User, ChevronLeft, ChevronRight, Send, X, BarChart3, PieChart as PieChartIcon, Table as TableIcon, Package, Truck, Share2, MapPin, Clock, TrendingUp } from 'lucide-react';
+import { Loader2, FileDown, CalendarIcon, FileText, Mail, Search, LayoutGrid, ArrowUpDown, ArrowUp, ArrowDown, Filter, Trash2, Phone, User, ChevronLeft, ChevronRight, Send, X, BarChart3, PieChart as PieChartIcon, Table as TableIcon, Package, Truck, Share2, MapPin, Clock, TrendingUp, ShoppingBag } from 'lucide-react';
 import { formatPrice, getVendorFromSku } from '@/lib/utils';
 import * as XLSX from 'xlsx';
 import { saveAs } from 'file-saver';
 import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
-import { format, parseISO, subDays, startOfDay, endOfDay } from 'date-fns';
+import { format, parseISO, subDays, startOfDay, endOfDay, isSameDay } from 'date-fns';
 import { id } from 'date-fns/locale';
 import { useToast } from '@/hooks/use-toast';
 import jsPDF from 'jspdf';
@@ -235,6 +235,22 @@ export default function AdminSummaryPage() {
     if (!groupsData) return ["Makanan Utama/Berat", "Minuman & Es Krim", "Snack/Camilan"];
     return groupsData.map((g: any) => g.name);
   }, [groupsData]);
+
+  // Statistics for the last 7 days for the quick-filter bar
+  const last7DaysStats = useMemo(() => {
+    const stats = [];
+    const now = new Date();
+    for (let i = 0; i < 7; i++) {
+      const d = subDays(now, i);
+      const dayOrders = orders.filter(o => isSameDay(new Date(o.orderDateTime), d));
+      stats.push({
+        date: d,
+        count: dayOrders.length,
+        total: dayOrders.reduce((sum, o) => sum + o.totalAmount, 0)
+      });
+    }
+    return stats;
+  }, [orders]);
 
   const deliveryDashboardLink = useMemo(() => {
     const params = new URLSearchParams();
@@ -948,6 +964,38 @@ export default function AdminSummaryPage() {
                     </TabsTrigger>
                 </TabsList>
             </Tabs>
+        </div>
+
+        {/* 7-Day Summary Row for Quick Filter */}
+        <div className="flex overflow-x-auto gap-4 pb-2 px-1 scrollbar-hide">
+          {last7DaysStats.map((stat, i) => {
+            const isActive = date && isSameDay(stat.date, date);
+            return (
+              <Card 
+                key={i} 
+                className={cn(
+                  "flex-shrink-0 min-w-[140px] cursor-pointer transition-all hover:border-primary/50 shadow-sm",
+                  isActive ? "border-primary bg-primary/5 ring-1 ring-primary" : "bg-card border-primary/10"
+                )}
+                onClick={() => setDate(stat.date)}
+              >
+                <CardContent className="p-3 text-center space-y-1">
+                  <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
+                    {format(stat.date, 'eee, d MMM', { locale: id })}
+                  </p>
+                  <div className="flex items-center justify-center gap-1.5 py-1">
+                    <div className="h-6 w-6 rounded-full bg-primary/10 flex items-center justify-center">
+                      <ShoppingBag className="h-3 w-3 text-primary" />
+                    </div>
+                    <span className="text-sm font-bold">{stat.count} <span className="text-[10px] font-normal text-muted-foreground">Ord</span></span>
+                  </div>
+                  <p className={cn("text-xs font-bold", isActive ? "text-primary" : "text-green-600")}>
+                    {formatPrice(stat.total).replace('Rp', 'Rp ')}
+                  </p>
+                </CardContent>
+              </Card>
+            );
+          })}
         </div>
 
         <Card className="border-primary/10 shadow-sm">
