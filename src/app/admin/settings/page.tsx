@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Loader2, Mail, Database, Trash2, Save, AlertTriangle, Send, Info, Download, Upload, FileJson, Package, Skull, Truck, MessageSquare, Code, Play, Key, Globe, AlertCircle, XCircle } from 'lucide-react';
+import { Loader2, Mail, Database, Trash2, Save, AlertTriangle, Send, Info, Download, Upload, FileJson, Package, Skull, Truck, MessageSquare, Code, Play, Key, LayoutGrid, Eye, EyeOff } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { sendSmtpEmail, sendWhatsAppWebhook, type SmtpConfig } from '@/app/actions';
@@ -22,7 +22,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Tabs as TabsUI, TabsContent as TabsContentUI, TabsList as TabsListUI, TabsTrigger as TabsTriggerUI } from '@/components/ui/tabs';
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
 
 const TABLES = [
@@ -44,7 +44,6 @@ export default function AdminSettingsPage() {
   const [isSavingParams, setIsSavingParams] = useState(false);
   const [isBackingUp, setIsBackingUp] = useState(false);
   const [isRestoring, setIsRestoring] = useState(false);
-  const [showPayload, setShowPayload] = useState(false);
   const restoreFileInputRef = useRef<HTMLInputElement>(null);
 
   const [confirmInput, setConfirmInput] = useState('');
@@ -63,6 +62,7 @@ export default function AdminSettingsPage() {
   const [deliveryFee, setDeliveryFee] = useState<number>(2500);
   const [whatsappWebhookUrl, setWhatsappWebhookUrl] = useState<string>('');
   const [whatsappApiToken, setWhatsappApiToken] = useState<string>('');
+  const [menuDisplayMode, setMenuDisplayMode] = useState<string>('category');
   const [testPhone, setTestPhone] = useState<string>('6281234567890');
 
   const mailDocRef = useMemoFirebase(() => {
@@ -80,7 +80,8 @@ export default function AdminSettingsPage() {
     adminFee?: number, 
     deliveryFee?: number, 
     whatsappWebhookUrl?: string,
-    whatsappApiToken?: string 
+    whatsappApiToken?: string,
+    menuDisplayMode?: string
   }>(paramsDocRef);
 
   useEffect(() => {
@@ -102,6 +103,7 @@ export default function AdminSettingsPage() {
       setDeliveryFee(savedParams.deliveryFee ?? 2500);
       setWhatsappWebhookUrl(savedParams.whatsappWebhookUrl || '');
       setWhatsappApiToken(savedParams.whatsappApiToken || '');
+      setMenuDisplayMode(savedParams.menuDisplayMode || 'category');
     }
   }, [savedParams]);
 
@@ -132,7 +134,7 @@ export default function AdminSettingsPage() {
     if (!firestore) return;
     
     setIsSavingParams(true);
-    const data = { defaultStock, adminFee, deliveryFee, whatsappWebhookUrl, whatsappApiToken };
+    const data = { defaultStock, adminFee, deliveryFee, whatsappWebhookUrl, whatsappApiToken, menuDisplayMode };
     try {
       await setDoc(doc(firestore, 'settings', 'inventory'), data, { merge: true });
       toast({
@@ -205,7 +207,7 @@ export default function AdminSettingsPage() {
 
     setIsTestingWebhook(true);
     const dummyPayload = {
-      to: testPhone, // sendWhatsAppWebhook will convert this to JID format
+      to: testPhone,
       text: "Halo! Ini adalah pesan percobaan dari sistem TakjilKu untuk memastikan koneksi WhatsApp API sudah aktif.",
       orderId: "TEST-123",
       customerName: "Tes Admin"
@@ -372,6 +374,41 @@ export default function AdminSettingsPage() {
             <CardContent>
               <form onSubmit={handleSaveParams} className="space-y-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-2xl">
+                  {/* Menu Display Settings */}
+                  <div className="space-y-2 p-4 border rounded-lg bg-orange-50/50 border-orange-200 col-span-1 md:col-span-2">
+                    <Label className="font-bold flex items-center gap-2 text-orange-700">
+                      <LayoutGrid className="h-4 w-4" /> Tampilan Menu Pelanggan
+                    </Label>
+                    <Select value={menuDisplayMode} onValueChange={setMenuDisplayMode}>
+                      <SelectTrigger className="bg-background">
+                        <SelectValue placeholder="Pilih Mode Tampilan" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="group">
+                          <div className="flex items-center gap-2">
+                            <LayoutGrid className="h-4 w-4" />
+                            <span>Berdasarkan Grup Kategori (Makanan Utama, Minuman, Snack)</span>
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="category">
+                          <div className="flex items-center gap-2">
+                            <Eye className="h-4 w-4" />
+                            <span>Berdasarkan Kategori (Master Kategori)</span>
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="none">
+                          <div className="flex items-center gap-2">
+                            <EyeOff className="h-4 w-4" />
+                            <span>Tidak Menampilkan (Daftar Langsung)</span>
+                          </div>
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <p className="text-[10px] text-muted-foreground mt-1">
+                      * Mengatur bagaimana menu takjil dikelompokkan pada halaman utama pelanggan.
+                    </p>
+                  </div>
+
                   <div className="space-y-2 p-4 border rounded-lg bg-muted/10">
                     <Label htmlFor="default-stock" className="font-bold flex items-center gap-2"><Package className="h-4 w-4 text-primary" /> Angka Stok Default</Label>
                     <Input id="default-stock" type="number" value={defaultStock} onChange={(e) => setDefaultStock(Number(e.target.value))} />

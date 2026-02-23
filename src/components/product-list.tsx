@@ -10,21 +10,13 @@ import { Search } from 'lucide-react';
 type ProductListProps = {
   products: Product[];
   vendors: Vendor[];
+  categories: any[];
+  displayMode: string;
 };
 
-function groupProductsByCategory(products: Product[]): Record<string, Product[]> {
-  return products.reduce((acc, product) => {
-    const { category } = product;
-    if (!acc[category]) {
-      acc[category] = [];
-    }
-    acc[category].push(product);
-    return acc;
-  }, {} as Record<string, Product[]>);
-}
-
-export default function ProductList({ products, vendors }: ProductListProps) {
+export default function ProductList({ products, vendors, categories, displayMode }: ProductListProps) {
   const [searchTerm, setSearchTerm] = useState('');
+  const [activeTab, setActiveTab] = useState<string>('Semua');
   
   const vendorLookup = useMemo(() => {
     const lookup: Record<string, { name: string, isActive: boolean }> = {};
@@ -37,24 +29,55 @@ export default function ProductList({ products, vendors }: ProductListProps) {
     return lookup;
   }, [vendors]);
 
+  const categoryLookup = useMemo(() => {
+    const lookup: Record<string, any> = {};
+    categories.forEach(c => {
+      lookup[c.name.trim().toLowerCase()] = c;
+    });
+    return lookup;
+  }, [categories]);
+
   const filteredProducts = useMemo(() => 
     products.filter(product =>
       product.name.toLowerCase().includes(searchTerm.toLowerCase())
     ), [products, searchTerm]);
 
-  const productsByCategory = useMemo(() => groupProductsByCategory(filteredProducts), [filteredProducts]);
-  // Add 'Semua' to the list of categories
-  const categories = useMemo(() => ['Semua', ...Object.keys(productsByCategory)], [productsByCategory]);
-  
-  // Set default tab to 'Semua'
-  const [activeTab, setActiveTab] = useState<string>('Semua');
+  const productsGrouped = useMemo(() => {
+    const grouped: Record<string, Product[]> = {};
+    
+    filteredProducts.forEach(product => {
+      let key = 'Semua';
+      
+      if (displayMode === 'group') {
+        const catInfo = categoryLookup[product.category.trim().toLowerCase()];
+        key = catInfo?.group || 'Snack/Camilan'; // Default group if not set
+      } else if (displayMode === 'category') {
+        key = product.category;
+      } else {
+        key = 'Semua';
+      }
+
+      if (!grouped[key]) grouped[key] = [];
+      grouped[key].push(product);
+    });
+
+    return grouped;
+  }, [filteredProducts, displayMode, categoryLookup]);
+
+  const tabs = useMemo(() => {
+    if (displayMode === 'none') return ['Semua'];
+    return ['Semua', ...Object.keys(productsGrouped).filter(k => k !== 'Semua')].sort((a, b) => {
+      if (a === 'Semua') return -1;
+      if (b === 'Semua') return 1;
+      return a.localeCompare(b);
+    });
+  }, [productsGrouped, displayMode]);
 
   useEffect(() => {
-    // If active tab is not available after filtering, set it to 'Semua'
-    if (!categories.includes(activeTab)) {
+    if (!tabs.includes(activeTab)) {
       setActiveTab('Semua');
     }
-  }, [categories, activeTab]);
+  }, [tabs, activeTab]);
 
   return (
     <>
@@ -70,62 +93,72 @@ export default function ProductList({ products, vendors }: ProductListProps) {
       </div>
 
       {filteredProducts.length > 0 ? (
-        <Tabs 
-          value={activeTab} 
-          onValueChange={setActiveTab}
-          defaultValue="Semua"
-          className="w-full"
-        >
-          <TabsList className="flex flex-wrap h-auto bg-transparent gap-2 justify-center py-2 mb-8 border-none ring-0">
-            {categories.map((category) => {
-              // Calculate count for each category
-              const count = category === 'Semua' 
-                ? filteredProducts.length 
-                : (productsByCategory[category]?.length || 0);
+        displayMode === 'none' ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6 md:gap-8 pt-4">
+            {filteredProducts.map((product) => (
+              <ProductCard 
+                key={product.id} 
+                product={product} 
+                vendorName={vendorLookup[product.vendor]?.name || product.vendor} 
+                isVendorActive={vendorLookup[product.vendor]?.isActive ?? true}
+              />
+            ))}
+          </div>
+        ) : (
+          <Tabs 
+            value={activeTab} 
+            onValueChange={setActiveTab}
+            defaultValue="Semua"
+            className="w-full"
+          >
+            <TabsList className="flex flex-wrap h-auto bg-transparent gap-2 justify-center py-2 mb-8 border-none ring-0">
+              {tabs.map((tab) => {
+                const count = tab === 'Semua' 
+                  ? filteredProducts.length 
+                  : (productsGrouped[tab]?.length || 0);
 
-              return (
-                <TabsTrigger 
-                  key={category} 
-                  value={category}
-                  className="rounded-full border border-primary/20 bg-card px-4 py-1.5 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:border-primary shadow-sm hover:bg-primary/5 transition-all text-xs md:text-sm h-auto"
-                >
-                  {category} 
-                  <span className="ml-1 opacity-70 font-mono text-[10px]">({count})</span>
-                </TabsTrigger>
-              );
-            })}
-          </TabsList>
+                return (
+                  <TabsTrigger 
+                    key={tab} 
+                    value={tab}
+                    className="rounded-full border border-primary/20 bg-card px-4 py-1.5 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:border-primary shadow-sm hover:bg-primary/5 transition-all text-xs md:text-sm h-auto"
+                  >
+                    {tab} 
+                    <span className="ml-1 opacity-70 font-mono text-[10px]">({count})</span>
+                  </TabsTrigger>
+                );
+              })}
+            </TabsList>
 
-          {/* Content for "Semua" tab */}
-          <TabsContent value="Semua">
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6 md:gap-8 pt-4">
-              {filteredProducts.map((product) => (
-                <ProductCard 
-                  key={product.id} 
-                  product={product} 
-                  vendorName={vendorLookup[product.vendor]?.name || product.vendor} 
-                  isVendorActive={vendorLookup[product.vendor]?.isActive ?? true}
-                />
-              ))}
-            </div>
-          </TabsContent>
-
-          {/* Content for other category tabs */}
-          {Object.keys(productsByCategory).map((category) => (
-            <TabsContent key={category} value={category}>
+            <TabsContent value="Semua">
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6 md:gap-8 pt-4">
-                {productsByCategory[category].map((product) => (
+                {filteredProducts.map((product) => (
                   <ProductCard 
                     key={product.id} 
                     product={product} 
-                    vendorName={vendorLookup[product.vendor]?.name || product.vendor}
+                    vendorName={vendorLookup[product.vendor]?.name || product.vendor} 
                     isVendorActive={vendorLookup[product.vendor]?.isActive ?? true}
                   />
                 ))}
               </div>
             </TabsContent>
-          ))}
-        </Tabs>
+
+            {Object.keys(productsGrouped).map((tab) => tab !== 'Semua' && (
+              <TabsContent key={tab} value={tab}>
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6 md:gap-8 pt-4">
+                  {productsGrouped[tab].map((product) => (
+                    <ProductCard 
+                      key={product.id} 
+                      product={product} 
+                      vendorName={vendorLookup[product.vendor]?.name || product.vendor}
+                      isVendorActive={vendorLookup[product.vendor]?.isActive ?? true}
+                    />
+                  ))}
+                </div>
+              </TabsContent>
+            ))}
+          </Tabs>
+        )
       ) : (
         <div className="text-center text-muted-foreground mt-8">
           <p>Tidak ada produk yang cocok dengan pencarian Anda.</p>

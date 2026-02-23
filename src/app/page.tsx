@@ -1,7 +1,7 @@
 'use client';
 
-import { useFirestore, useCollection, useMemoFirebase } from '@/firebase';
-import { collection } from 'firebase/firestore';
+import { useFirestore, useCollection, useMemoFirebase, useDoc } from '@/firebase';
+import { collection, doc } from 'firebase/firestore';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import Recommendations from '@/components/recommendations';
 import ProductList from '@/components/product-list';
@@ -23,10 +23,22 @@ export default function Home() {
     return collection(firestore, 'vendors');
   }, [firestore]);
 
+  const categoriesQuery = useMemoFirebase(() => {
+    if (!firestore) return null;
+    return collection(firestore, 'categories');
+  }, [firestore]);
+
+  const settingsDocRef = useMemoFirebase(() => {
+    if (!firestore) return null;
+    return doc(firestore, 'settings', 'inventory');
+  }, [firestore]);
+
   const { data: products, isLoading: isProductsLoading } = useCollection<Product>(menuItemsQuery);
   const { data: vendors, isLoading: isVendorsLoading } = useCollection<Vendor>(vendorsQuery);
+  const { data: categories, isLoading: isCategoriesLoading } = useCollection<any>(categoriesQuery);
+  const { data: settings, isLoading: isSettingsLoading } = useDoc<any>(settingsDocRef);
 
-  const isLoading = isProductsLoading || isVendorsLoading;
+  const isLoading = isProductsLoading || isVendorsLoading || isCategoriesLoading || isSettingsLoading;
 
   return (
     <div className="flex flex-col gap-12 md:gap-16">
@@ -85,7 +97,12 @@ export default function Home() {
                   Pilih dari beragam hidangan lezat kami, mulai dari makanan utama hingga kue-kue manis.
                 </p>
             </div>
-            <ProductList products={products} vendors={vendors || []} />
+            <ProductList 
+              products={products} 
+              vendors={vendors || []} 
+              categories={categories || []}
+              displayMode={settings?.menuDisplayMode || 'category'}
+            />
           </section>
         </>
       ) : (
