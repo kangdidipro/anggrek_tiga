@@ -1,8 +1,7 @@
-
 'use client';
 
 import { useState } from 'react';
-import { useFirestore, useCollection, useMemoFirebase } from '@/firebase';
+import { useFirestore, useCollection, useMemoFirebase, errorEmitter, FirestorePermissionError } from '@/firebase';
 import { collection, doc, deleteDoc, setDoc } from 'firebase/firestore';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -37,7 +36,7 @@ export default function AdminGroupsPage() {
     g.name.toLowerCase().includes(searchTerm.toLowerCase())
   ).sort((a, b) => a.name.localeCompare(b.name));
 
-  const handleSave = async (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSave = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!firestore) return;
 
@@ -48,24 +47,37 @@ export default function AdminGroupsPage() {
       description: (formData.get('description') as string).trim(),
     };
 
-    try {
-      await setDoc(doc(firestore, 'menuItemGroups', groupData.id), groupData, { merge: true });
-      toast({ title: "Berhasil", description: "Grup telah disimpan." });
-      setIsEditing(null);
-      setIsAdding(false);
-    } catch (error) {
-      toast({ variant: "destructive", title: "Gagal", description: "Tidak dapat menyimpan grup." });
-    }
+    const groupRef = doc(firestore, 'menuItemGroups', groupData.id);
+
+    setDoc(groupRef, groupData, { merge: true })
+      .then(() => {
+        toast({ title: "Berhasil", description: "Grup telah disimpan." });
+        setIsEditing(null);
+        setIsAdding(false);
+      })
+      .catch(async (serverError) => {
+        errorEmitter.emit('permission-error', new FirestorePermissionError({
+          path: groupRef.path,
+          operation: isEditing ? 'update' : 'create',
+          requestResourceData: groupData
+        }));
+      });
   };
 
-  const handleDelete = async (id: string) => {
+  const handleDelete = (id: string) => {
     if (!firestore) return;
-    try {
-      await deleteDoc(doc(firestore, 'menuItemGroups', id));
-      toast({ title: "Berhasil", description: "Grup telah dihapus." });
-    } catch (error) {
-      toast({ variant: "destructive", title: "Gagal", description: "Tidak dapat menghapus grup." });
-    }
+    const groupRef = doc(firestore, 'menuItemGroups', id);
+    
+    deleteDoc(groupRef)
+      .then(() => {
+        toast({ title: "Berhasil", description: "Grup telah dihapus." });
+      })
+      .catch(async (error) => {
+        errorEmitter.emit('permission-error', new FirestorePermissionError({
+          path: groupRef.path,
+          operation: 'delete'
+        }));
+      });
   };
 
   if (isLoading) {
