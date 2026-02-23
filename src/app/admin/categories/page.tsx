@@ -1,12 +1,13 @@
+
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useFirestore, useCollection, useMemoFirebase } from '@/firebase';
 import { collection, doc, deleteDoc, setDoc, writeBatch } from 'firebase/firestore';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Loader2, Plus, Pencil, Trash2, Search, Tag, RefreshCcw, Eraser, AlertCircle, CheckCircle2, CheckSquare } from 'lucide-react';
+import { Loader2, Plus, Pencil, Trash2, Search, Tag, RefreshCcw, Eraser, AlertCircle, CheckCircle2, CheckSquare, Layers } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
@@ -15,16 +16,24 @@ import { products as initialProducts } from '@/lib/products';
 import type { Product } from '@/lib/types';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 interface Category {
   id: string;
   name: string;
+  group?: string;
 }
 
 interface DisplayCategory extends Category {
   isFromDb: boolean;
   itemCount: number;
 }
+
+const CATEGORY_GROUPS = [
+  { value: 'Makanan Utama/Berat', description: 'Nasi goreng, ayam geprek, mie, dll.' },
+  { value: 'Minuman & Es Krim', description: 'Kopi, jus, bubble tea, es teh.' },
+  { value: 'Snack/Camilan', description: 'Makanan ringan.' },
+];
 
 export default function AdminCategoriesPage() {
   const firestore = useFirestore();
@@ -35,6 +44,7 @@ export default function AdminCategoriesPage() {
   const [isBulkRegistering, setIsBulkRegistering] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [selectedGroup, setSelectedGroup] = useState<string>('');
 
   // Fetch Categories from DB
   const categoriesQuery = useMemoFirebase(() => {
@@ -49,6 +59,14 @@ export default function AdminCategoriesPage() {
     return collection(firestore, 'menuItems');
   }, [firestore]);
   const { data: menuItems, isLoading: isItemsLoading } = useCollection<Product>(menuItemsQuery);
+
+  useEffect(() => {
+    if (isEditing) {
+      setSelectedGroup(isEditing.group || '');
+    } else if (isAdding) {
+      setSelectedGroup('');
+    }
+  }, [isEditing, isAdding]);
 
   // Calculate usage per category with robust matching (trimmed)
   const categoryUsage = useMemo(() => {
@@ -83,7 +101,8 @@ export default function AdminCategoriesPage() {
     });
 
     return list.filter(c => 
-      c.name.toLowerCase().includes(searchTerm.toLowerCase())
+      c.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (c.group && c.group.toLowerCase().includes(searchTerm.toLowerCase()))
     ).sort((a, b) => a.name.localeCompare(b.name));
   }, [categories, categoryUsage, searchTerm]);
 
@@ -192,6 +211,7 @@ export default function AdminCategoriesPage() {
     const categoryData: Category = {
       id: isEditing?.id || (Math.floor(Math.random() * 10000) + 1000).toString(),
       name: categoryName,
+      group: selectedGroup,
     };
 
     try {
@@ -275,13 +295,31 @@ export default function AdminCategoriesPage() {
             <DialogContent className="sm:max-w-[425px]">
               <DialogHeader>
                 <DialogTitle>Tambah Kategori Baru</DialogTitle>
-                <DialogDescription>Masukkan nama kategori baru.</DialogDescription>
+                <DialogDescription>Masukkan nama kategori dan pilih grup kategori.</DialogDescription>
               </DialogHeader>
               <form onSubmit={handleSave} className="space-y-4">
                 <div className="grid gap-4 py-4">
                   <div className="grid gap-2">
                     <Label htmlFor="name">Nama Kategori</Label>
                     <Input id="name" name="name" placeholder="Contoh: Nasi & Lauk" required />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="group">Grup Kategori</Label>
+                    <Select value={selectedGroup} onValueChange={setSelectedGroup}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Pilih Grup" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {CATEGORY_GROUPS.map((group) => (
+                          <SelectItem key={group.value} value={group.value}>
+                            <div className="flex flex-col text-left">
+                              <span className="font-bold text-sm">{group.value}</span>
+                              <span className="text-[10px] text-muted-foreground whitespace-normal leading-tight">{group.description}</span>
+                            </div>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
                 </div>
                 <DialogFooter>
@@ -296,7 +334,7 @@ export default function AdminCategoriesPage() {
       <div className="relative max-w-sm">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
         <Input
-          placeholder="Cari kategori..."
+          placeholder="Cari kategori atau grup..."
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
           className="pl-10"
@@ -317,6 +355,7 @@ export default function AdminCategoriesPage() {
                 </TableHead>
                 <TableHead className="w-[60px]">No.</TableHead>
                 <TableHead>Nama Kategori</TableHead>
+                <TableHead>Grup Kategori</TableHead>
                 <TableHead className="text-center">Jumlah Menu</TableHead>
                 <TableHead>Status Master</TableHead>
                 <TableHead className="text-right">Aksi</TableHead>
@@ -325,7 +364,7 @@ export default function AdminCategoriesPage() {
             <TableBody>
               {displayCategories.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center py-12 text-muted-foreground">
+                  <TableCell colSpan={7} className="text-center py-12 text-muted-foreground">
                     Belum ada kategori. {(!categories || categories.length === 0) && "Klik 'Ambil dari Menu' untuk memulai."}
                   </TableCell>
                 </TableRow>
@@ -348,6 +387,18 @@ export default function AdminCategoriesPage() {
                           {category.name}
                         </div>
                       </TableCell>
+                      <TableCell>
+                        {category.group ? (
+                          <div className="flex items-center gap-1.5">
+                            <Layers className="h-3 w-3 text-muted-foreground" />
+                            <Badge variant="secondary" className="font-normal text-[10px] bg-blue-50 text-blue-700 border-blue-100 hover:bg-blue-50">
+                              {category.group}
+                            </Badge>
+                          </div>
+                        ) : (
+                          <span className="text-[10px] text-muted-foreground italic">Belum diset</span>
+                        )}
+                      </TableCell>
                       <TableCell className="text-center">
                         <span className={`inline-flex items-center justify-center min-w-[2rem] px-2 py-0.5 rounded-full text-xs font-bold ${category.itemCount > 0 ? 'bg-primary/10 text-primary' : 'bg-destructive/10 text-destructive'}`}>
                           {category.itemCount}
@@ -355,11 +406,11 @@ export default function AdminCategoriesPage() {
                       </TableCell>
                       <TableCell>
                         {category.isFromDb ? (
-                          <Badge variant="outline" className="text-green-600 border-green-200 bg-green-50 gap-1">
+                          <Badge variant="outline" className="text-green-600 border-green-200 bg-green-50 gap-1 text-[10px]">
                             <CheckCircle2 className="h-3 w-3" /> Terdaftar
                           </Badge>
                         ) : (
-                          <Badge variant="destructive" className="gap-1 animate-pulse">
+                          <Badge variant="destructive" className="gap-1 animate-pulse text-[10px]">
                             <AlertCircle className="h-3 w-3" /> Belum Terdaftar
                           </Badge>
                         )}
@@ -386,13 +437,31 @@ export default function AdminCategoriesPage() {
                                 <DialogContent className="sm:max-w-[425px]">
                                   <DialogHeader>
                                     <DialogTitle>Edit Kategori</DialogTitle>
-                                    <DialogDescription>Ubah nama kategori.</DialogDescription>
+                                    <DialogDescription>Ubah rincian kategori.</DialogDescription>
                                   </DialogHeader>
                                   <form onSubmit={handleSave} className="space-y-4">
                                     <div className="grid gap-4 py-4">
                                       <div className="grid gap-2">
                                         <Label htmlFor="edit-name">Nama Kategori</Label>
                                         <Input id="edit-name" name="name" defaultValue={category.name} required />
+                                      </div>
+                                      <div className="grid gap-2">
+                                        <Label htmlFor="edit-group">Grup Kategori</Label>
+                                        <Select value={selectedGroup} onValueChange={setSelectedGroup}>
+                                          <SelectTrigger>
+                                            <SelectValue placeholder="Pilih Grup" />
+                                          </SelectTrigger>
+                                          <SelectContent>
+                                            {CATEGORY_GROUPS.map((group) => (
+                                              <SelectItem key={group.value} value={group.value}>
+                                                <div className="flex flex-col text-left">
+                                                  <span className="font-bold text-sm">{group.value}</span>
+                                                  <span className="text-[10px] text-muted-foreground whitespace-normal leading-tight">{group.description}</span>
+                                                </div>
+                                              </SelectItem>
+                                            ))}
+                                          </SelectContent>
+                                        </Select>
                                       </div>
                                     </div>
                                     <DialogFooter>

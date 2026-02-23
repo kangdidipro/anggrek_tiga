@@ -41,7 +41,8 @@
       "description": "Represents a product category.",
       "properties": {
         "id": { "type": "string" },
-        "name": { "type": "string" }
+        "name": { "type": "string" },
+        "group": { "type": "string" }
       },
       "required": ["id", "name"]
     },
