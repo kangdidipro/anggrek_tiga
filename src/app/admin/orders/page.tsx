@@ -351,7 +351,6 @@ export default function AdminOrdersPage() {
   };
 
   const handlePrintReceipt = async (order: Order, vendorCode?: string) => {
-    // Increased height to 350mm to ensure content is not cut off
     const docPdf = new jsPDF({
       orientation: 'portrait',
       unit: 'mm',
@@ -374,8 +373,6 @@ export default function AdminOrdersPage() {
       : order.items;
     
     const subtotal = itemsToPrint.reduce((sum, item) => sum + (item.priceAtOrder * item.quantity), 0);
-    
-    // Use stored delivery fee or fallback to default
     const calculatedDeliveryFee = order.deliveryFee || 2500;
     const totalToPrint = vendorCode ? subtotal : (subtotal + calculatedDeliveryFee);
 
@@ -548,11 +545,12 @@ export default function AdminOrdersPage() {
       {Object.keys(groupedData).length === 0 ? (
           <p className="text-center text-muted-foreground py-12">Tidak ada order untuk filter yang dipilih.</p>
       ) : (
-        Object.entries(groupedData).map(([groupKey, groupOrders]) => (
+        Object.entries(groupedData).map(([groupKey, groupOrders], gIdx) => (
             <div key={groupKey} className="mb-8">
                 {/* Only show heading if NOT grouped by orderId (because orderId IS the card itself) */}
                 {groupBy !== 'orderId' && (
                   <h2 className="text-xl font-bold mb-4 bg-primary/10 p-2 rounded px-4 text-primary flex items-center gap-2">
+                      <span className="text-muted-foreground font-mono text-sm mr-1">{gIdx + 1}.</span>
                       {groupBy === 'subOrderId' ? (
                         <><Store className="h-5 w-5" /> Sub-Order #{groupKey}</>
                       ) : groupBy === 'vendor' ? (
@@ -564,8 +562,9 @@ export default function AdminOrdersPage() {
                 )}
                 
                 <Accordion type="single" collapsible className="w-full space-y-4">
-                  {groupOrders.map((order) => {
+                  {groupOrders.map((order, oIdx) => {
                       const targetVendorInSubOrder = groupBy === 'subOrderId' ? groupKey.split('-').pop() : null;
+                      const orderNum = groupBy === 'orderId' ? (gIdx + 1) : (oIdx + 1);
 
                       return (
                         <AccordionItem value={order.id} key={order.id} className="border-b-0">
@@ -573,13 +572,18 @@ export default function AdminOrdersPage() {
                             <CardHeader className="p-4">
                                     <AccordionTrigger className="w-full p-0 hover:no-underline">
                                         <div className="flex justify-between items-center w-full">
-                                            <div className="text-left">
-                                                <CardTitle className="text-base md:text-lg">
-                                                    Order #{order.id}
-                                                </CardTitle>
-                                                <CardDescription className="text-xs md:text-sm">
-                                                    {new Date(order.orderDateTime).toLocaleString('id-ID')} | {order.paymentMethod}
-                                                </CardDescription>
+                                            <div className="text-left flex items-start gap-3">
+                                                <div className="h-6 w-6 rounded-full bg-primary/10 flex items-center justify-center text-[10px] font-bold text-primary shrink-0 border border-primary/20 mt-1">
+                                                  {orderNum}
+                                                </div>
+                                                <div>
+                                                  <CardTitle className="text-base md:text-lg">
+                                                      Order #{order.id}
+                                                  </CardTitle>
+                                                  <CardDescription className="text-xs md:text-sm">
+                                                      {new Date(order.orderDateTime).toLocaleString('id-ID')} | {order.paymentMethod}
+                                                  </CardDescription>
+                                                </div>
                                             </div>
                                             <div className="text-right flex flex-col items-end gap-1">
                                                 <p className="font-semibold text-base md:text-lg text-primary">
