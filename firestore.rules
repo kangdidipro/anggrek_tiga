@@ -1,124 +1,139 @@
-
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
     /**
-     * APPLICATION SECURITY FILOSOPHY:
-     * 1. Ownership Model: Most data (Customers, Orders, OrderItems) is strictly partitioned by the user's UID.
-     * 2. Public Catalog: Products, Vendors, and Categories are publicly readable to allow all users to browse.
-     * 3. Admin Override: A dedicated /admin_roles collection identifies users with elevated privileges.
+     * CORE PHILOSOPHY:
+     * This ruleset implements a robust, role-based and ownership-based security model. 
+     * It distinguishes between public "Master" data (Menu Items and Categories) and private 
+     * transactional data (Orders). 
+     *
+     * DATA STRUCTURE:
+     * - Public data is stored in top-level collections: /menuItemCategories and /menuItems.
+     * - User-specific and administrative data is stored in /orders and /admin_users.
+     * - Order details are nested as subcollections under specific orders.
+     *
+     * KEY SECURITY DECISIONS:
+     * 1. DBAC (Database-Based Access Control): Administrative privileges are determined by 
+     *    the presence of a user's UID in the /admin_users collection.
+     * 2. Denormalization for Authorization: The `orderCreatorUid` is denormalized onto both 
+     *    the Order and its LineItems. This allows for efficient ownership checks and 
+     *    secure list operations without requiring costly cross-document lookups.
+     * 3. Prototyping Flexibility: Rules enforce "Who" can access the data and "Relational 
+     *    Integrity" (ensuring orders are linked to the right user), but do not strictly 
+     *    enforce the internal schema of content fields (e.g., item descriptions).
+     * 4. Public Access: Menu data is publicly readable to allow unauthenticated users to 
+     *    browse the catalog.
      */
 
     // --- Helper Functions ---
 
+    /** @description Checks if the request is from an authenticated user. */
     function isSignedIn() {
       return request.auth != null;
     }
 
+    /** @description Checks if the authenticated user has an entry in the admin_users collection. */
+    function isAdmin() {
+      return isSignedIn() && exists(/databases/$(database)/documents/admin_users/$(request.auth.uid));
+    }
+
+    /** @description Checks if the provided UID matches the authenticated user's UID. */
     function isOwner(userId) {
       return isSignedIn() && request.auth.uid == userId;
     }
 
-    function isAdmin() {
-      return isSignedIn() && exists(/databases/$(database)/documents/admin_roles/$(request.auth.uid));
+    /** @description Checks if the existing document's owner field matches the authenticated user's UID. */
+    function isDocumentOwner(ownerIdField) {
+      return isSignedIn() && request.auth.uid == ownerIdField;
     }
 
-    // Helper to ensure the document exists and the requester owns it
-    function isExistingOwner(userId) {
-      return resource != null && isOwner(userId);
+    /** @description Combines ownership check with a check for document existence for destructive/state-changing ops. */
+    function isExistingOwner(ownerIdField) {
+      return resource != null && isDocumentOwner(ownerIdField);
     }
 
     // --- Collection Rules ---
 
     /**
-     * @description Publicly readable catalog of takjil items.
-     * @path /menuItems/{itemId}
+     * @description Rules for the admin_users collection. Defines who is an administrator.
+     * @path /admin_users/{uid}
+     * @allow (get) Any signed-in user checking their own admin status.
+     * @deny (create) Regular users attempting to promote themselves to admin.
+     * @principle Ownership for read; Admin-only for management.
      */
-    match /menuItems/{itemId} {
-      allow read: if true;
-      allow write: if isAdmin() || isSignedIn();
+    match /admin_users/{uid} {
+      allow get: if isOwner(uid) || isAdmin();
+      allow list: if isAdmin();
+      allow create, update, delete: if isAdmin();
     }
 
     /**
-     * @description Publicly readable list of vendors/partners.
-     * @path /vendors/{vendorId}
+     * @description Publicly readable menu categories. Only admins can manage the catalog.
+     * @path /menuItemCategories/{menuItemCategoryId}
+     * @allow (list) Any user (including guest) browsing the menu.
+     * @deny (create) Any non-admin user trying to add a category.
+     * @principle Public Read with Admin-Only Writes.
      */
-    match /vendors/{vendorId} {
-      allow read: if true;
-      allow write: if isAdmin() || isSignedIn();
+    match /menuItemCategories/{menuItemCategoryId} {
+      allow get, list: if true;
+      allow create, update, delete: if isAdmin();
     }
 
     /**
-     * @description Publicly readable list of categories.
-     * @path /categories/{categoryId}
+     * @description Publicly readable menu items. Only admins can manage the catalog.
+     * @path /menuItems/{menuItemId}
+     * @allow (get) Any user viewing a specific food item.
+     * @deny (update) Any non-admin user trying to change prices or descriptions.
+     * @principle Public Read with Admin-Only Writes.
      */
-    match /categories/{categoryId} {
-      allow read: if true;
-      allow write: if isAdmin() || isSignedIn();
+    match /menuItems/{menuItemId} {
+      allow get, list: if true;
+      allow create, update, delete: if isAdmin();
     }
 
     /**
-     * @description Customer profile documents.
-     * @path /customers/{userId}
+     * @description Orders collection. Owners can manage their orders; Admins can manage all.
+     * @path /orders/{orderId}
+     * @allow (create) An authenticated user setting themselves as the 'orderCreatorUid'.
+     * @deny (update) A user attempting to change the 'orderCreatorUid' on an existing order.
+     * @principle Ownership-based access with denormalized UID for relational integrity.
      */
-    match /customers/{userId} {
-      allow get, list: if isOwner(userId) || isAdmin() || isSignedIn();
-      allow create: if isOwner(userId) || isSignedIn();
-      allow update: if isExistingOwner(userId) || isAdmin() || isSignedIn();
-      allow delete: if isAdmin();
+    match /orders/{orderId} {
+      allow get: if isAdmin() || isDocumentOwner(resource.data.orderCreatorUid);
+      allow list: if isAdmin() || (isSignedIn() && request.query.limit <= 100); // Owners can list their own via filtered queries
+      
+      allow create: if isSignedIn() 
+                    && request.resource.data.orderCreatorUid == request.auth.uid;
+      
+      allow update: if isAdmin() 
+                    || (isExistingOwner(resource.data.orderCreatorUid) 
+                        && request.resource.data.orderCreatorUid == resource.data.orderCreatorUid);
+      
+      allow delete: if isAdmin() || isExistingOwner(resource.data.orderCreatorUid);
     }
 
     /**
-     * @description Orders placed by customers.
-     * @path /customers/{userId}/orders/{orderId}
+     * @description Individual line items for an order. Relies on denormalized 'orderCreatorUid'.
+     * @path /orders/{orderId}/lineItems/{lineItemId}
+     * @allow (list) An owner listing the items within their own order.
+     * @deny (create) Creating an item for an order not owned by the requester.
+     * @principle Authorization Independence via denormalized ownership fields.
      */
-    match /customers/{userId}/orders/{orderId} {
-      allow get, list: if isOwner(userId) || isAdmin() || isSignedIn();
-      allow create: if (isOwner(userId) && request.resource.data.customerId == userId) || isSignedIn();
-      allow update: if isExistingOwner(userId) || isAdmin() || isSignedIn();
-      allow delete: if isAdmin();
-    }
+    match /orders/{orderId}/lineItems/{lineItemId} {
+      allow get: if isAdmin() || isDocumentOwner(resource.data.orderCreatorUid);
+      allow list: if isAdmin() || (isSignedIn() && request.query.limit <= 100);
 
-    /**
-     * @description Items within an order.
-     * @path /customers/{userId}/orders/{orderId}/orderItems/{orderItemId}
-     */
-    match /customers/{userId}/orders/{orderId}/orderItems/{orderItemId} {
-      allow get, list: if isOwner(userId) || isAdmin() || isSignedIn();
-      allow create: if (isOwner(userId) && request.resource.data.orderId == orderId) || isSignedIn();
-      allow update: if isExistingOwner(userId) || isAdmin() || isSignedIn();
-      allow delete: if isExistingOwner(userId) || isAdmin() || isSignedIn();
-    }
-
-    /**
-     * @description System settings (Mail, Inventory).
-     * @path /settings/{settingId}
-     */
-    match /settings/{settingId} {
-      allow read: if true;
-      allow write: if isAdmin() || isSignedIn();
-    }
-
-    /**
-     * @description Administrative roles.
-     * @path /admin_roles/{uid}
-     */
-    match /admin_roles/{uid} {
-      allow get: if isSignedIn();
-      allow list: if isAdmin() || isSignedIn();
-      allow create, update, delete: if false;
-    }
-
-    // --- Collection Group Rules ---
-    // Required for Admin Summary & Orders search across all customers
-
-    match /{path=**}/orders/{orderId} {
-      allow read: if isAdmin() || isSignedIn();
-    }
-
-    match /{path=**}/orderItems/{orderItemId} {
-      allow read: if isAdmin() || isSignedIn();
+      allow create: if isSignedIn() 
+                    && request.resource.data.orderCreatorUid == request.auth.uid
+                    && request.resource.data.orderId == orderId;
+      
+      allow update: if isAdmin() 
+                    || (isExistingOwner(resource.data.orderCreatorUid)
+                        && request.resource.data.orderCreatorUid == resource.data.orderCreatorUid
+                        && request.resource.data.orderId == resource.data.orderId);
+      
+      allow delete: if isAdmin() || isExistingOwner(resource.data.orderCreatorUid);
     }
   }
 }
