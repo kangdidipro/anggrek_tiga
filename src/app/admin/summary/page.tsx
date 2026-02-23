@@ -21,7 +21,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
 import { cn } from '@/lib/utils';
-import type { Vendor } from '@/lib/types';
+import type { Vendor, Product } from '@/lib/types';
 import { Badge } from '@/components/ui/badge';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -39,6 +39,9 @@ import {
   ResponsiveContainer,
   AreaChart,
   Area,
+  Line,
+  LineChart,
+  Legend
 } from 'recharts';
 import {
   AlertDialog,
@@ -175,6 +178,25 @@ export default function AdminSummaryPage() {
   }, [firestore]);
   const { data: customersData } = useCollection<Customer>(customersQuery);
 
+  // Queries for Category Groups Mapping
+  const categoriesQuery = useMemoFirebase(() => {
+    if (!firestore) return null;
+    return collection(firestore, 'categories');
+  }, [firestore]);
+  const { data: categoriesData } = useCollection<any>(categoriesQuery);
+
+  const groupsQuery = useMemoFirebase(() => {
+    if (!firestore) return null;
+    return collection(firestore, 'menuItemGroups');
+  }, [firestore]);
+  const { data: groupsData } = useCollection<any>(groupsQuery);
+
+  const menuItemsQuery = useMemoFirebase(() => {
+    if (!firestore) return null;
+    return collection(firestore, 'menuItems');
+  }, [firestore]);
+  const { data: allMenuItems } = useCollection<Product>(menuItemsQuery);
+
   const vendorLookup = useMemo(() => {
     const map: Record<string, string> = {};
     vendorsData?.forEach(v => {
@@ -190,6 +212,29 @@ export default function AdminSummaryPage() {
     });
     return map;
   }, [customersData]);
+
+  const skuToGroupLookup = useMemo(() => {
+    const lookup: Record<string, string> = {};
+    if (!allMenuItems || !categoriesData || !groupsData) return lookup;
+
+    const catToGroup: Record<string, string> = {};
+    categoriesData.forEach(cat => {
+      const group = groupsData.find(g => g.id === cat.groupId || g.name === cat.group)?.name || "Lainnya";
+      catToGroup[cat.name.trim().toLowerCase()] = group;
+    });
+
+    allMenuItems.forEach(item => {
+      const group = catToGroup[item.category.trim().toLowerCase()] || "Lainnya";
+      lookup[item.sku] = group;
+    });
+
+    return lookup;
+  }, [allMenuItems, categoriesData, groupsData]);
+
+  const activeCategoryGroups = useMemo(() => {
+    if (!groupsData) return ["Makanan Utama/Berat", "Minuman & Es Krim", "Snack/Camilan"];
+    return groupsData.map((g: any) => g.name);
+  }, [groupsData]);
 
   const deliveryDashboardLink = useMemo(() => {
     const params = new URLSearchParams();
@@ -466,12 +511,14 @@ export default function AdminSummaryPage() {
     const now = new Date();
     const startDate = startOfDay(subDays(now, days));
 
-    const dateMap: Record<string, number> = {};
+    const dateMap: Record<string, any> = {};
     
     // Initialize map with all dates in range to avoid gaps
     for (let i = 0; i <= days; i++) {
       const d = subDays(now, i);
-      dateMap[format(d, 'yyyy-MM-dd')] = 0;
+      const key = format(d, 'yyyy-MM-dd');
+      dateMap[key] = { amount: 0 };
+      activeCategoryGroups.forEach(g => { dateMap[key][g] = 0; });
     }
 
     orders.forEach(order => {
@@ -479,19 +526,30 @@ export default function AdminSummaryPage() {
       if (orderDate >= startDate) {
         const dateKey = format(orderDate, 'yyyy-MM-dd');
         if (dateMap[dateKey] !== undefined) {
-          dateMap[dateKey] += order.totalAmount;
+          dateMap[dateKey].amount += order.totalAmount;
+          
+          // Add per group breakdown
+          order.items.forEach(item => {
+            const groupName = skuToGroupLookup[item.sku] || "Lainnya";
+            if (dateMap[dateKey][groupName] !== undefined) {
+              dateMap[dateKey][groupName] += (item.quantity * item.priceAtOrder);
+            } else {
+              // Handle dynamically created groups if any
+              dateMap[dateKey][groupName] = (item.quantity * item.priceAtOrder);
+            }
+          });
         }
       }
     });
 
     return Object.entries(dateMap)
-      .map(([dateStr, amount]) => ({
+      .map(([dateStr, values]) => ({
         date: dateStr,
         formattedDate: format(parseISO(dateStr), 'dd MMM', { locale: id }),
-        amount
+        ...values
       }))
       .sort((a, b) => a.date.localeCompare(b.date));
-  }, [orders, trendRange]);
+  }, [orders, trendRange, activeCategoryGroups, skuToGroupLookup]);
 
   const chartDataMitra = useMemo(() => {
     const map: Record<string, number> = {};
@@ -1143,7 +1201,7 @@ export default function AdminSummaryPage() {
                         <TrendingUp className="h-5 w-5 text-primary" />
                         Trend Penjualan Harian
                       </CardTitle>
-                      <CardDescription>Grafik total omzet bruto harian dari seluruh pesanan.</CardDescription>
+                      <CardDescription>Grafik omzet bruto harian dengan rincian per Grup Kategori.</CardDescription>
                     </div>
                     <div className="flex gap-1 bg-muted p-1 rounded-md">
                       {[
@@ -1164,15 +1222,9 @@ export default function AdminSummaryPage() {
                       ))}
                     </div>
                   </CardHeader>
-                  <CardContent className="h-[300px]">
+                  <CardContent className="h-[400px]">
                     <ResponsiveContainer width="100%" height="100%">
-                      <AreaChart data={trendData}>
-                        <defs>
-                          <linearGradient id="colorAmount" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.3}/>
-                            <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0}/>
-                          </linearGradient>
-                        </defs>
+                      <LineChart data={trendData}>
                         <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
                         <XAxis 
                           dataKey="formattedDate" 
@@ -1188,18 +1240,31 @@ export default function AdminSummaryPage() {
                           tickFormatter={(value) => `Rp ${value/1000}k`} 
                         />
                         <RechartsTooltip 
-                          formatter={(value: any) => [formatPrice(value), 'Total Penjualan']}
+                          formatter={(value: any, name: string) => [formatPrice(value), name === 'amount' ? 'Total Omzet' : name]}
                           contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
                         />
-                        <Area 
+                        <Legend />
+                        <Line 
                           type="monotone" 
                           dataKey="amount" 
+                          name="Total Omzet"
                           stroke="hsl(var(--primary))" 
-                          fillOpacity={1} 
-                          fill="url(#colorAmount)" 
-                          strokeWidth={2}
+                          strokeWidth={3}
+                          dot={{ r: 4, strokeWidth: 2 }}
+                          activeDot={{ r: 6 }}
                         />
-                      </AreaChart>
+                        {activeCategoryGroups.map((group, idx) => (
+                          <Line 
+                            key={group}
+                            type="monotone"
+                            dataKey={group}
+                            name={group}
+                            stroke={CHART_COLORS[idx % CHART_COLORS.length]}
+                            strokeWidth={2}
+                            dot={{ r: 3 }}
+                          />
+                        ))}
+                      </LineChart>
                     </ResponsiveContainer>
                   </CardContent>
                 </Card>
