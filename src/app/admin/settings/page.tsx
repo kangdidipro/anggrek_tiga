@@ -23,6 +23,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Tabs as TabsUI, TabsContent as TabsContentUI, TabsList as TabsListUI, TabsTrigger as TabsTriggerUI } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Checkbox } from '@/components/ui/checkbox';
 import { cn } from '@/lib/utils';
 
 const TABLES = [
@@ -65,6 +66,12 @@ export default function AdminSettingsPage() {
   const [menuDisplayMode, setMenuDisplayMode] = useState<string>('category');
   const [testPhone, setTestPhone] = useState<string>('6281234567890');
 
+  // Visibility toggles
+  const [showActiveMenu, setShowActiveMenu] = useState<boolean>(true);
+  const [showInactiveMenu, setShowInactiveMenu] = useState<boolean>(false);
+  const [showActiveVendor, setShowActiveVendor] = useState<boolean>(true);
+  const [showInactiveVendor, setShowInactiveVendor] = useState<boolean>(false);
+
   const mailDocRef = useMemoFirebase(() => {
     if (!firestore) return null;
     return doc(firestore, 'settings', 'mail');
@@ -81,7 +88,11 @@ export default function AdminSettingsPage() {
     deliveryFee?: number, 
     whatsappWebhookUrl?: string,
     whatsappApiToken?: string,
-    menuDisplayMode?: string
+    menuDisplayMode?: string,
+    showActiveMenu?: boolean,
+    showInactiveMenu?: boolean,
+    showActiveVendor?: boolean,
+    showInactiveVendor?: boolean
   }>(paramsDocRef);
 
   useEffect(() => {
@@ -104,6 +115,10 @@ export default function AdminSettingsPage() {
       setWhatsappWebhookUrl(savedParams.whatsappWebhookUrl || '');
       setWhatsappApiToken(savedParams.whatsappApiToken || '');
       setMenuDisplayMode(savedParams.menuDisplayMode || 'category');
+      setShowActiveMenu(savedParams.showActiveMenu ?? true);
+      setShowInactiveMenu(savedParams.showInactiveMenu ?? false);
+      setShowActiveVendor(savedParams.showActiveVendor ?? true);
+      setShowInactiveVendor(savedParams.showInactiveVendor ?? false);
     }
   }, [savedParams]);
 
@@ -134,7 +149,18 @@ export default function AdminSettingsPage() {
     if (!firestore) return;
     
     setIsSavingParams(true);
-    const data = { defaultStock, adminFee, deliveryFee, whatsappWebhookUrl, whatsappApiToken, menuDisplayMode };
+    const data = { 
+      defaultStock, 
+      adminFee, 
+      deliveryFee, 
+      whatsappWebhookUrl, 
+      whatsappApiToken, 
+      menuDisplayMode,
+      showActiveMenu,
+      showInactiveMenu,
+      showActiveVendor,
+      showInactiveVendor
+    };
     try {
       await setDoc(doc(firestore, 'settings', 'inventory'), data, { merge: true });
       toast({
@@ -375,7 +401,7 @@ export default function AdminSettingsPage() {
               <form onSubmit={handleSaveParams} className="space-y-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-2xl">
                   {/* Menu Display Settings */}
-                  <div className="space-y-2 p-4 border rounded-lg bg-orange-50/50 border-orange-200 col-span-1 md:col-span-2">
+                  <div className="space-y-4 p-4 border rounded-lg bg-orange-50/50 border-orange-200 col-span-1 md:col-span-2">
                     <Label className="font-bold flex items-center gap-2 text-orange-700">
                       <LayoutGrid className="h-4 w-4" /> Tampilan Menu Pelanggan
                     </Label>
@@ -404,8 +430,29 @@ export default function AdminSettingsPage() {
                         </SelectItem>
                       </SelectContent>
                     </Select>
-                    <p className="text-[10px] text-muted-foreground mt-1">
-                      * Mengatur bagaimana menu takjil dikelompokkan pada halaman utama pelanggan.
+                    
+                    {/* Visibility Filters */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2 border-t border-orange-200/50">
+                      <div className="flex items-center space-x-2">
+                        <Checkbox id="showActiveMenu" checked={showActiveMenu} onCheckedChange={(checked) => setShowActiveMenu(!!checked)} />
+                        <label htmlFor="showActiveMenu" className="text-xs font-medium leading-none cursor-pointer">Tampilkan Menu Aktif</label>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <Checkbox id="showInactiveMenu" checked={showInactiveMenu} onCheckedChange={(checked) => setShowInactiveMenu(!!checked)} />
+                        <label htmlFor="showInactiveMenu" className="text-xs font-medium leading-none cursor-pointer">Tampilkan Menu Tidak Aktif</label>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <Checkbox id="showActiveVendor" checked={showActiveVendor} onCheckedChange={(checked) => setShowActiveVendor(!!checked)} />
+                        <label htmlFor="showActiveVendor" className="text-xs font-medium leading-none cursor-pointer">Tampilkan Mitra Aktif</label>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <Checkbox id="showInactiveVendor" checked={showInactiveVendor} onCheckedChange={(checked) => setShowInactiveVendor(!!checked)} />
+                        <label htmlFor="showInactiveVendor" className="text-xs font-medium leading-none cursor-pointer">Tampilkan Mitra Tidak Aktif</label>
+                      </div>
+                    </div>
+
+                    <p className="text-[10px] text-muted-foreground mt-1 italic">
+                      * Menu "Tidak Aktif" adalah menu yang statusnya diset OFF oleh Admin atau Mitra.
                     </p>
                   </div>
 

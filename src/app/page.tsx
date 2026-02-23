@@ -102,6 +102,7 @@ export default function Home() {
               vendors={vendors || []} 
               categories={categories || []}
               displayMode={settings?.menuDisplayMode || 'category'}
+              displaySettings={settings}
             />
           </section>
         </>

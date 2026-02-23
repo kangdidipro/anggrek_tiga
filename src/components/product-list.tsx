@@ -12,9 +12,15 @@ type ProductListProps = {
   vendors: Vendor[];
   categories: any[];
   displayMode: string;
+  displaySettings?: {
+    showActiveMenu?: boolean;
+    showInactiveMenu?: boolean;
+    showActiveVendor?: boolean;
+    showInactiveVendor?: boolean;
+  };
 };
 
-export default function ProductList({ products, vendors, categories, displayMode }: ProductListProps) {
+export default function ProductList({ products, vendors, categories, displayMode, displaySettings }: ProductListProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [activeTab, setActiveTab] = useState<string>('Semua');
   
@@ -37,10 +43,34 @@ export default function ProductList({ products, vendors, categories, displayMode
     return lookup;
   }, [categories]);
 
-  const filteredProducts = useMemo(() => 
-    products.filter(product =>
-      product.name.toLowerCase().includes(searchTerm.toLowerCase())
-    ), [products, searchTerm]);
+  const filteredProducts = useMemo(() => {
+    // Visibility settings from Admin
+    const showActiveMenu = displaySettings?.showActiveMenu ?? true;
+    const showInactiveMenu = displaySettings?.showInactiveMenu ?? false;
+    const showActiveVendor = displaySettings?.showActiveVendor ?? true;
+    const showInactiveVendor = displaySettings?.showInactiveVendor ?? false;
+
+    return products.filter(product => {
+      // 1. Search filter
+      if (searchTerm && !product.name.toLowerCase().includes(searchTerm.toLowerCase())) {
+        return false;
+      }
+
+      const vendor = vendorLookup[product.vendor];
+      const isVendorActive = vendor?.isActive ?? true;
+      const isProductActive = product.isActive !== false;
+
+      // 2. Filter by Product Activity
+      if (isProductActive && !showActiveMenu) return false;
+      if (!isProductActive && !showInactiveMenu) return false;
+
+      // 3. Filter by Vendor Activity
+      if (isVendorActive && !showActiveVendor) return false;
+      if (!isVendorActive && !showInactiveVendor) return false;
+
+      return true;
+    });
+  }, [products, searchTerm, vendorLookup, displaySettings]);
 
   const productsGrouped = useMemo(() => {
     const grouped: Record<string, Product[]> = {};
@@ -161,7 +191,7 @@ export default function ProductList({ products, vendors, categories, displayMode
         )
       ) : (
         <div className="text-center text-muted-foreground mt-8">
-          <p>Tidak ada produk yang cocok dengan pencarian Anda.</p>
+          <p>Tidak ada produk yang cocok dengan pengaturan tampilan atau pencarian Anda.</p>
         </div>
       )}
     </>
