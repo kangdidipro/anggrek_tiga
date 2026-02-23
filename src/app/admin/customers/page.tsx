@@ -180,6 +180,7 @@ export default function AdminCustomersPage() {
           <Table>
             <TableHeader className="bg-muted/30">
               <TableRow>
+                <TableHead className="w-[60px] text-[10px] font-bold uppercase tracking-widest">No.</TableHead>
                 <TableHead className="cursor-pointer hover:bg-muted/50 transition-colors" onClick={() => handleSort('name')}>
                   <div className="flex items-center text-[10px] font-bold uppercase tracking-widest">
                     Nama Pelanggan {getSortIcon('name')}
@@ -205,7 +206,7 @@ export default function AdminCustomersPage() {
             <TableBody>
               {filteredCustomers.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={4} className="text-center py-20 text-muted-foreground">
+                  <TableCell colSpan={5} className="text-center py-20 text-muted-foreground">
                     <div className="flex flex-col items-center gap-2">
                       <Search className="h-8 w-8 opacity-20" />
                       <p>Tidak ada data pelanggan yang cocok.</p>
@@ -213,8 +214,9 @@ export default function AdminCustomersPage() {
                   </TableCell>
                 </TableRow>
               ) : (
-                filteredCustomers.map((customer) => (
+                filteredCustomers.map((customer, index) => (
                   <TableRow key={customer.id} className="hover:bg-primary/5 transition-colors">
+                    <TableCell className="text-muted-foreground font-mono text-[10px]">{index + 1}</TableCell>
                     <TableCell className="font-medium">
                       <div className="flex items-center gap-3">
                         <div className="h-9 w-9 rounded-full bg-primary/10 flex items-center justify-center shrink-0 border border-primary/20">
