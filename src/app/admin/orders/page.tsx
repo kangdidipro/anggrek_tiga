@@ -5,14 +5,14 @@ import { useFirestore, useUser, errorEmitter, FirestorePermissionError, useColle
 import { collectionGroup, getDocs, query, writeBatch, doc, updateDoc, arrayUnion, collection } from 'firebase/firestore';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Loader2, FileDown, CalendarIcon, Trash2, FileText, Mail, Search, Clock, CheckCircle2, Printer, LayoutGrid, Store } from 'lucide-react';
+import { Loader2, FileDown, CalendarIcon, Trash2, FileText, Mail, Search, Clock, CheckCircle2, Printer, LayoutGrid, Store, TrendingUp, ShoppingBag } from 'lucide-react';
 import { formatPrice, getVendorFromSku } from '@/lib/utils';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import * as XLSX from 'xlsx';
 import { saveAs } from 'file-saver';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
-import { format } from 'date-fns';
+import { format, subDays, isSameDay } from 'date-fns';
 import { id } from 'date-fns/locale';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
@@ -31,6 +31,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import { cn } from '@/lib/utils';
 
 interface StatusLog {
   status: string;
@@ -107,6 +108,22 @@ export default function AdminOrdersPage() {
     return ['all', ...Array.from(vendorSet)];
   }, [orders]);
 
+  // Statistics for the last 7 days
+  const last7DaysStats = useMemo(() => {
+    const stats = [];
+    const now = new Date();
+    for (let i = 0; i < 7; i++) {
+      const d = subDays(now, i);
+      const dayOrders = orders.filter(o => isSameDay(new Date(o.orderDateTime), d));
+      stats.push({
+        date: d,
+        count: dayOrders.length,
+        total: dayOrders.reduce((sum, o) => sum + o.totalAmount, 0)
+      });
+    }
+    return stats;
+  }, [orders]);
+
   useEffect(() => {
     const fetchOrders = async () => {
       if (!firestore || isUserLoading || !user) return;
@@ -152,7 +169,7 @@ export default function AdminOrdersPage() {
   const filteredOrders = useMemo(() => {
     return orders.filter(order => {
         const orderDate = new Date(order.orderDateTime);
-        const dateMatch = date ? orderDate.toDateString() === date.toDateString() : true;
+        const dateMatch = date ? isSameDay(orderDate, date) : true;
         const vendorMatch = vendorFilter === 'all' ? true : order.items.some(item => item.vendor === vendorFilter);
         
         const search = searchTerm.toLowerCase();
@@ -481,10 +498,50 @@ export default function AdminOrdersPage() {
 
   return (
     <div className="space-y-6">
+      {/* 7-Day Summary Row */}
+      <div className="flex overflow-x-auto gap-4 pb-4 px-1 scrollbar-hide">
+        {last7DaysStats.map((stat, i) => {
+          const isActive = date && isSameDay(stat.date, date);
+          return (
+            <Card 
+              key={i} 
+              className={cn(
+                "flex-shrink-0 min-w-[140px] cursor-pointer transition-all hover:border-primary/50 shadow-sm",
+                isActive ? "border-primary bg-primary/5 ring-1 ring-primary" : "bg-card border-primary/10"
+              )}
+              onClick={() => setDate(stat.date)}
+            >
+              <CardContent className="p-3 text-center space-y-1">
+                <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
+                  {format(stat.date, 'eee, d MMM', { locale: id })}
+                </p>
+                <div className="flex items-center justify-center gap-1.5 py-1">
+                  <div className="h-6 w-6 rounded-full bg-primary/10 flex items-center justify-center">
+                    <ShoppingBag className="h-3 w-3 text-primary" />
+                  </div>
+                  <span className="text-sm font-bold">{stat.count} <span className="text-[10px] font-normal text-muted-foreground">Ord</span></span>
+                </div>
+                <p className={cn("text-xs font-bold", isActive ? "text-primary" : "text-green-600")}>
+                  {formatPrice(stat.total).replace('Rp', 'Rp ')}
+                </p>
+              </CardContent>
+            </Card>
+          );
+        })}
+      </div>
+
       <Card>
         <CardHeader>
-          <CardTitle>List Order</CardTitle>
-          <CardDescription>Daftar semua pesanan yang masuk.</CardDescription>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle>List Order</CardTitle>
+              <CardDescription>Daftar semua pesanan yang masuk.</CardDescription>
+            </div>
+            <div className="bg-primary/5 px-3 py-1.5 rounded-lg border border-primary/10 flex items-center gap-2">
+              <TrendingUp className="h-4 w-4 text-primary" />
+              <span className="text-xs font-bold text-primary uppercase">Hari Ini: {formatPrice(last7DaysStats[0]?.total || 0)}</span>
+            </div>
+          </div>
         </CardHeader>
         <CardContent className="space-y-4">
             <div className="flex flex-wrap gap-4 items-center">
