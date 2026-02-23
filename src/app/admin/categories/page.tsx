@@ -7,16 +7,16 @@ import { collection, doc, deleteDoc, setDoc, writeBatch } from 'firebase/firesto
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Loader2, Plus, Pencil, Trash2, Search, Tag, RefreshCcw, Eraser, AlertCircle, CheckCircle2, CheckSquare, Layers } from 'lucide-react';
+import { Loader2, Plus, Pencil, Trash2, Search, Tag, Layers, ArrowUpDown, ArrowUp, ArrowDown, X } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { products as initialProducts } from '@/lib/products';
-import type { Product } from '@/lib/types';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { cn } from '@/lib/utils';
+import type { Product } from '@/lib/types';
 
 interface Category {
   id: string;
@@ -35,14 +35,24 @@ interface DisplayCategory extends Category {
   itemCount: number;
 }
 
+type SortConfig = {
+  key: 'name' | 'group' | 'itemCount';
+  direction: 'asc' | 'desc';
+};
+
 export default function AdminCategoriesPage() {
   const firestore = useFirestore();
   const { toast } = useToast();
   const [isEditing, setIsEditing] = useState<Category | null>(null);
   const [isAdding, setIsAdding] = useState(false);
-  const [isSeeding, setIsSeeding] = useState(false);
   const [isBulkRegistering, setIsBulkRegistering] = useState(false);
+  
+  // Filter states
   const [searchTerm, setSearchTerm] = useState('');
+  const [nameFilter, setNameFilter] = useState('');
+  const [groupFilter, setGroupFilter] = useState('');
+  const [sortConfig, setSortConfig] = useState<SortConfig>({ key: 'name', direction: 'asc' });
+
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [selectedGroupId, setSelectedGroupId] = useState<string>('');
 
@@ -90,11 +100,24 @@ export default function AdminCategoriesPage() {
     return map;
   }, [groups]);
 
+  const handleSort = (key: 'name' | 'group' | 'itemCount') => {
+    let direction: 'asc' | 'desc' = 'asc';
+    if (sortConfig.key === key && sortConfig.direction === 'asc') {
+      direction = 'desc';
+    }
+    setSortConfig({ key, direction });
+  };
+
+  const getSortIcon = (key: 'name' | 'group' | 'itemCount') => {
+    if (sortConfig.key !== key) return <ArrowUpDown className="ml-2 h-4 w-4 opacity-50" />;
+    return sortConfig.direction === 'asc' ? <ArrowUp className="ml-2 h-4 w-4 text-primary" /> : <ArrowDown className="ml-2 h-4 w-4 text-primary" />;
+  };
+
   const displayCategories = useMemo((): DisplayCategory[] => {
     const dbCatNames = new Set(categories?.map(c => c.name.trim().toLowerCase()) || []);
     const itemCatNames = Object.keys(categoryUsage);
     
-    const list: DisplayCategory[] = (categories || []).map(c => ({
+    let list: DisplayCategory[] = (categories || []).map(c => ({
       ...c,
       isFromDb: true,
       itemCount: categoryUsage[c.name.trim()] || 0
@@ -111,10 +134,45 @@ export default function AdminCategoriesPage() {
       }
     });
 
-    return list.filter(c => 
-      c.name.toLowerCase().includes(searchTerm.toLowerCase())
-    ).sort((a, b) => a.name.localeCompare(b.name));
-  }, [categories, categoryUsage, searchTerm]);
+    // Apply Filters
+    let result = list.filter(c => {
+      const gName = groupLookup[c.groupId || ''] || c.group || 'Belum diset';
+      
+      const matchesGlobal = searchTerm === '' || 
+        c.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        gName.toLowerCase().includes(searchTerm.toLowerCase());
+      
+      const matchesName = nameFilter === '' || c.name.toLowerCase().includes(nameFilter.toLowerCase());
+      const matchesGroup = groupFilter === '' || gName.toLowerCase().includes(groupFilter.toLowerCase());
+
+      return matchesGlobal && matchesName && matchesGroup;
+    });
+
+    // Apply Sorting
+    if (sortConfig.key) {
+      result.sort((a, b) => {
+        let valA: any = '';
+        let valB: any = '';
+
+        if (sortConfig.key === 'name') {
+          valA = a.name.toLowerCase();
+          valB = b.name.toLowerCase();
+        } else if (sortConfig.key === 'group') {
+          valA = (groupLookup[a.groupId || ''] || a.group || 'Belum diset').toLowerCase();
+          valB = (groupLookup[b.groupId || ''] || b.group || 'Belum diset').toLowerCase();
+        } else if (sortConfig.key === 'itemCount') {
+          valA = a.itemCount;
+          valB = b.itemCount;
+        }
+
+        if (valA < valB) return sortConfig.direction === 'asc' ? -1 : 1;
+        if (valA > valB) return sortConfig.direction === 'asc' ? 1 : -1;
+        return 0;
+      });
+    }
+
+    return result;
+  }, [categories, categoryUsage, searchTerm, nameFilter, groupFilter, sortConfig, groupLookup]);
 
   const orphanIds = useMemo(() => 
     new Set(displayCategories.filter(c => !c.isFromDb).map(c => c.id)),
@@ -137,6 +195,13 @@ export default function AdminCategoriesPage() {
       newSelected.add(id);
     }
     setSelectedIds(newSelected);
+  };
+
+  const resetFilters = () => {
+    setSearchTerm('');
+    setNameFilter('');
+    setGroupFilter('');
+    setSortConfig({ key: 'name', direction: 'asc' });
   };
 
   const handleDelete = async (id: string) => {
@@ -223,6 +288,9 @@ export default function AdminCategoriesPage() {
               Daftarkan Terpilih ({selectedIds.size})
             </Button>
           )}
+          <Button variant="outline" size="sm" onClick={resetFilters}>
+            <X className="mr-2 h-4 w-4" /> Reset Filter
+          </Button>
           <Dialog open={isAdding} onOpenChange={setIsAdding}>
             <DialogTrigger asChild>
               <Button size="sm">
@@ -262,20 +330,54 @@ export default function AdminCategoriesPage() {
         </div>
       </div>
 
-      <div className="relative max-w-sm">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-        <Input
-          placeholder="Cari kategori..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          className="pl-10"
-        />
+      <Card className="p-4 border-primary/10 shadow-sm">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+          <div className="space-y-2">
+            <Label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Cari Kategori</Label>
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Nama kategori..."
+                value={nameFilter}
+                onChange={(e) => setNameFilter(e.target.value)}
+                className="pl-10 h-9 text-sm"
+              />
+            </div>
+          </div>
+          <div className="space-y-2">
+            <Label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Cari Grup</Label>
+            <div className="relative">
+              <Layers className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Nama grup..."
+                value={groupFilter}
+                onChange={(e) => setGroupFilter(e.target.value)}
+                className="pl-10 h-9 text-sm"
+              />
+            </div>
+          </div>
+          <div className="space-y-2">
+            <Label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Pencarian Global</Label>
+            <Input
+              placeholder="Cari apa saja..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="h-9 text-sm"
+            />
+          </div>
+        </div>
+      </Card>
+
+      <div className="flex items-center gap-2 text-sm text-muted-foreground px-1">
+        <span>Total Terfilter:</span>
+        <span className="font-bold text-foreground bg-primary/10 px-2 py-0.5 rounded">{displayCategories.length}</span>
+        <span className="text-[10px] uppercase tracking-tighter">dari {categories?.length || 0} Kategori Master</span>
       </div>
 
       <Card>
         <CardContent className="p-0 overflow-auto">
           <Table>
-            <TableHeader>
+            <TableHeader className="bg-muted/30">
               <TableRow>
                 <TableHead className="w-[50px]">
                   <Checkbox 
@@ -284,25 +386,40 @@ export default function AdminCategoriesPage() {
                     disabled={orphanIds.size === 0}
                   />
                 </TableHead>
-                <TableHead className="w-[60px]">No.</TableHead>
-                <TableHead>Nama Kategori</TableHead>
-                <TableHead>Grup Kategori</TableHead>
-                <TableHead className="text-center">Jumlah Menu</TableHead>
-                <TableHead className="text-right">Aksi</TableHead>
+                <TableHead className="w-[60px] text-[10px] font-bold uppercase tracking-widest">No.</TableHead>
+                <TableHead className="cursor-pointer hover:bg-muted/50 transition-colors" onClick={() => handleSort('name')}>
+                  <div className="flex items-center text-[10px] font-bold uppercase tracking-widest">
+                    Nama Kategori {getSortIcon('name')}
+                  </div>
+                </TableHead>
+                <TableHead className="cursor-pointer hover:bg-muted/50 transition-colors" onClick={() => handleSort('group')}>
+                  <div className="flex items-center text-[10px] font-bold uppercase tracking-widest">
+                    Grup Kategori {getSortIcon('group')}
+                  </div>
+                </TableHead>
+                <TableHead className="text-center cursor-pointer hover:bg-muted/50 transition-colors" onClick={() => handleSort('itemCount')}>
+                  <div className="flex items-center justify-center text-[10px] font-bold uppercase tracking-widest">
+                    Jumlah Menu {getSortIcon('itemCount')}
+                  </div>
+                </TableHead>
+                <TableHead className="text-right text-[10px] font-bold uppercase tracking-widest">Aksi</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {displayCategories.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={6} className="text-center py-12 text-muted-foreground">
-                    Belum ada kategori.
+                    <div className="flex flex-col items-center gap-2">
+                      <Search className="h-8 w-8 opacity-20" />
+                      <p>Tidak ada kategori yang cocok.</p>
+                    </div>
                   </TableCell>
                 </TableRow>
               ) : (
                 displayCategories.map((category, index) => {
                   const groupName = groupLookup[category.groupId || ''] || category.group || 'Belum diset';
                   return (
-                    <TableRow key={category.id} className={!category.isFromDb ? "bg-destructive/5" : ""}>
+                    <TableRow key={category.id} className={cn("hover:bg-primary/5 transition-colors", !category.isFromDb && "bg-destructive/5")}>
                       <TableCell>
                         {!category.isFromDb && (
                           <Checkbox 
@@ -311,11 +428,11 @@ export default function AdminCategoriesPage() {
                           />
                         )}
                       </TableCell>
-                      <TableCell className="text-muted-foreground font-mono text-xs">{index + 1}</TableCell>
+                      <TableCell className="text-muted-foreground font-mono text-[10px]">{index + 1}</TableCell>
                       <TableCell className="font-medium">
                         <div className="flex items-center gap-2">
                           <Tag className="h-4 w-4 text-primary/70" />
-                          {category.name}
+                          <span className="uppercase font-bold text-xs tracking-tight">{category.name}</span>
                         </div>
                       </TableCell>
                       <TableCell>
@@ -334,7 +451,7 @@ export default function AdminCategoriesPage() {
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-2">
                           {!category.isFromDb ? (
-                            <Button size="sm" variant="secondary" onClick={() => handleRegisterOrphan(category.name)}>
+                            <Button size="sm" variant="secondary" onClick={() => handleRegisterOrphan(category.name)} className="h-8 text-[10px] font-bold">
                               Daftarkan
                             </Button>
                           ) : (
